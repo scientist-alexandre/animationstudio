@@ -1205,7 +1205,10 @@
                 smokeShape *= smoothstep(0.2, 0.9, y) * smoothstep(2.5, 1.2, y);
                 
                 // Ruídos Orgânicos Diferenciados
-                vec2 nUV = vTextureCoord * 1.5;
+                // O ruído usa as coordenadas locais já embrulhadas de p. Assim, uma
+                // chama/fumaça que cruza 0/1 recebe exatamente o mesmo detalhe nos
+                // dois lados do panorama, sem uma segunda emenda dentro do efeito.
+                vec2 nUV = vec2(p.x * 0.55 + 2.0, y * 0.7 + 2.0);
                 float noiseT = uTime * 2.0;
                 float n = texture2D(uNoise, nUV + vec2(0.0, noiseT * 0.5)).r * 0.6 + texture2D(uNoise, nUV * 2.0 - vec2(0.0, noiseT)).r * 0.3;
                 float sn = texture2D(uNoise, nUV * 0.8 + vec2(uTime * 0.1, noiseT * 0.3)).r;
@@ -1292,7 +1295,17 @@
             uniform vec3 uColor;
 
             float sampleNoise(vec2 uv) {
-                return texture2D(uNoise, mod(uv, 4.0)).r;
+                return texture2D(uNoise, fract(uv)).r;
+            }
+
+            // Ruído cilíndrico: cos/sin têm o mesmo valor em x=0 e x=1.
+            // Cada oitava continua perfeitamente na costura equiretangular.
+            float seamlessNoise(vec2 uv, float scale, float offset) {
+                float a = uv.x * 6.28318530718;
+                vec2 ring = vec2(cos(a), sin(a)) * scale;
+                vec2 q = ring + vec2(uv.y * scale * 0.73 + offset,
+                                     uv.y * scale * 1.17 - offset);
+                return sampleNoise(q);
             }
 
             void main() {
@@ -1300,26 +1313,26 @@
                 vec2 uv = vTextureCoord;
                 
                 // Distorção de ruído para variar a densidade espacial
-                float distortion = sampleNoise(uv * 1.2 + uTime * 0.05) * 0.4;
+                float distortion = seamlessNoise(uv, 1.2, uTime * 0.05) * 0.4;
                 
                 // Efeito de Ondas Brutais (Undulation)
                 // Criamos oscilações em frequências diferentes para gerar o movimento de "ondas"
                 float waveX = sin(uv.y * 3.5 + uTime * 1.5) * 0.5;
-                float waveY = cos(uv.x * 2.5 + uTime * 1.2) * 0.4;
+                float waveY = cos(uv.x * 6.28318530718 + uTime * 1.2) * 0.4;
                 
                 float rise = uTime; 
                 float drift = uTime * 0.6; 
                 
                 // FIX: Garantir que o drift horizontal não quebre a continuidade
                 uv.x = fract(uv.x);
-                vec2 pUV = vec2(uv.x * 15.0 + drift + distortion + waveX, 
-                                uv.y * 5.0 + rise + distortion + waveY);
+                vec2 pUV = vec2(uv.x, uv.y + rise * 0.08 + distortion * 0.04 + waveX * 0.02);
+                float motion = drift + waveY * 0.08;
                 
-                float n = sampleNoise(pUV * 2.0 + 0.33) * 0.25;
-                n += sampleNoise(pUV * 4.0 + 0.66) * 0.125;
-                n += sampleNoise(pUV * 8.0) * 0.0625;
-                n += sampleNoise(pUV * 16.0) * 0.03125;
-                n += sampleNoise(pUV * 32.0) * 0.0156;
+                float n = seamlessNoise(pUV, 2.0, motion + 0.33) * 0.25;
+                n += seamlessNoise(pUV, 4.0, motion + 0.66) * 0.125;
+                n += seamlessNoise(pUV, 8.0, motion) * 0.0625;
+                n += seamlessNoise(pUV, 16.0, motion) * 0.03125;
+                n += seamlessNoise(pUV, 32.0, motion) * 0.0156;
                 
                 n = pow(n * 1.6, 1.1); 
                 
@@ -1351,9 +1364,8 @@
                 // FIX: Vinheta em ambiente 360 deve afetar apenas os polos (Y) 
                 // para não criar uma mancha preta fixa na visão do usuário
                 float distY = abs(vTextureCoord.y - 0.5) * 2.0;
-                float distX = abs(vTextureCoord.x - 0.5) * 2.0;
                 // No 3D, a vinheta funciona melhor como um escurecimento de teto/chão
-                float dist = length(vec2(distX * 0.2, distY)); 
+                float dist = distY;
                 
                 // Cálculo de vinheta mais robusto
                 // O uSize agora empurra o início do escurecimento
@@ -1403,12 +1415,12 @@
                 vec3 bloomColor = vec3(0.0);
                 if (uBloom > 0.001) {
                     vec2 radius = px * (4.0 + uBloom * 6.0);
-                    bloomColor += texture2D(uSampler, vTextureCoord + vec2( radius.x, 0.0)).rgb;
-                    bloomColor += texture2D(uSampler, vTextureCoord + vec2(-radius.x, 0.0)).rgb;
+                    bloomColor += texture2D(uSampler, vec2(fract(vTextureCoord.x + radius.x), vTextureCoord.y)).rgb;
+                    bloomColor += texture2D(uSampler, vec2(fract(vTextureCoord.x - radius.x), vTextureCoord.y)).rgb;
                     bloomColor += texture2D(uSampler, vTextureCoord + vec2(0.0,  radius.y)).rgb;
                     bloomColor += texture2D(uSampler, vTextureCoord + vec2(0.0, -radius.y)).rgb;
-                    bloomColor += texture2D(uSampler, vTextureCoord + radius).rgb;
-                    bloomColor += texture2D(uSampler, vTextureCoord - radius).rgb;
+                    bloomColor += texture2D(uSampler, vec2(fract(vTextureCoord.x + radius.x), vTextureCoord.y + radius.y)).rgb;
+                    bloomColor += texture2D(uSampler, vec2(fract(vTextureCoord.x - radius.x), vTextureCoord.y - radius.y)).rgb;
                     bloomColor /= 6.0;
                     bloomColor *= smoothstep(0.55, 1.0, luminance(bloomColor)) * uBloom;
                 }
@@ -1424,7 +1436,10 @@
                 color.b -= uTemperature * 0.12;
                 color = pow(max(color, vec3(0.0)), vec3(1.0 / max(uGamma, 0.01)));
                 color += bloomColor;
-                color += (random(gl_FragCoord.xy) - 0.5) * uGrain;
+                float grainAngle = vTextureCoord.x * 6.28318530718;
+                vec2 grainUV = vec2(cos(grainAngle), sin(grainAngle)) * 173.0
+                             + vec2(vTextureCoord.y * 251.0, uTime * 37.719);
+                color += (random(grainUV) - 0.5) * uGrain;
                 color *= 1.0 - (0.5 + 0.5 * sin(gl_FragCoord.y * 3.14159)) * uScanlines * 0.22;
                 
                 gl_FragColor = vec4(clamp(color, 0.0, 1.0), tex.a);
@@ -1537,8 +1552,43 @@
                 const sprite = new PIXI.Sprite(particleTextures.soft);
                 sprite.anchor.set(0.5);
                 sprite.visible = false;
+                // Cópias panorâmicas: quando o sprite atravessa uma borda, a mesma
+                // partícula continua na borda oposta em vez de ser recortada.
+                sprite._wrapLeft = new PIXI.Sprite(particleTextures.soft);
+                sprite._wrapRight = new PIXI.Sprite(particleTextures.soft);
+                sprite._wrapLeft.anchor.set(0.5);
+                sprite._wrapRight.anchor.set(0.5);
+                sprite._wrapLeft.visible = sprite._wrapRight.visible = false;
                 particleContainer.addChild(sprite);
+                particleContainer.addChild(sprite._wrapLeft);
+                particleContainer.addChild(sprite._wrapRight);
                 particlePool.push(sprite);
+            }
+        }
+
+        function syncPanoramaParticleCopies(sprite, W) {
+            const left = sprite._wrapLeft, right = sprite._wrapRight;
+            if (!left || !right) return;
+            [left, right].forEach(copy => {
+                copy.texture = sprite.texture;
+                copy.position.set(sprite.x, sprite.y);
+                copy.scale.copyFrom(sprite.scale);
+                copy.rotation = sprite.rotation;
+                copy.alpha = sprite.alpha;
+                copy.tint = sprite.tint;
+                copy.blendMode = sprite.blendMode;
+                copy.renderable = sprite.renderable;
+                copy.visible = false;
+            });
+            if (!sprite.visible) return;
+            const halfExtent = Math.max(Math.abs(sprite.width), Math.abs(sprite.height)) * 0.55;
+            if (sprite.x - halfExtent < 0) {
+                right.x = sprite.x + W;
+                right.visible = true;
+            }
+            if (sprite.x + halfExtent > W) {
+                left.x = sprite.x - W;
+                left.visible = true;
             }
         }
 
@@ -1600,7 +1650,11 @@
                         const len=(layer.presetKey==='lightning'?(H*.55):(W*.16))*(.68+r*.55)*scale;
                         const sx=cx+(particleRandom(b,14,frame)-.5)*(layer.width||.1)*W;
                         const sy=cy+(particleRandom(b,15,frame)-.5)*(layer.height||.1)*H;
-                        drawLightningBolt(g,sx,sy,sx+Math.cos(angle)*len,sy+Math.sin(angle)*len,(layer.seed||1)+frame*97+b*31,scale,0x65aaff,.82,true);
+                        // Desenha também nos panoramas vizinhos; o canvas recorta o
+                        // excedente e deixa o raio contínuo na costura 0/360 graus.
+                        [-W, 0, W].forEach(wrapX => {
+                            drawLightningBolt(g,sx+wrapX,sy,sx+wrapX+Math.cos(angle)*len,sy+Math.sin(angle)*len,(layer.seed||1)+frame*97+b*31,scale,0x65aaff,.82,true);
+                        });
                     }
                 }
                 lightningContainer.addChild(g);
@@ -1645,7 +1699,10 @@
 
             const desiredTotal = entries.reduce((sum, entry) => sum + entry.desiredCount, 0);
             if (!desiredTotal) {
-                particlePool.forEach(sprite => { sprite.visible = false; sprite.renderable = false; sprite.alpha = 0; });
+                particlePool.forEach(sprite => {
+                    sprite.visible = false; sprite.renderable = false; sprite.alpha = 0;
+                    if (sprite._wrapLeft) sprite._wrapLeft.visible = sprite._wrapRight.visible = false;
+                });
                 return;
             }
 
@@ -1670,6 +1727,7 @@
                     sprite.alpha = 0;
                     sprite.visible = false;
                     sprite.renderable = false;
+                    if (sprite._wrapLeft) sprite._wrapLeft.visible = sprite._wrapRight.visible = false;
                     return;
                 }
                 sprite.renderable = true;
@@ -1685,7 +1743,9 @@
                     const cycleTime = ((time % cycle) + cycle) % cycle;
                     age = cycleTime - (p.startDelay || 0) - r0 * (p.emissionWindow ?? .12);
                     if (age < 0 || age > life) {
-                        sprite.alpha = 0; sprite.visible = false; sprite.renderable = false; return;
+                        sprite.alpha = 0; sprite.visible = false; sprite.renderable = false;
+                        if (sprite._wrapLeft) sprite._wrapLeft.visible = sprite._wrapRight.visible = false;
+                        return;
                     }
                 } else {
                     age = ((time + r0 * life) % life + life) % life;
@@ -1739,6 +1799,7 @@
                 sprite.tint = mixParticleColor(p.colorStart, p.colorEnd, phase);
                 sprite.blendMode = blendModes[p.blend] ?? PIXI.BLEND_MODES.NORMAL;
                 sprite.visible = y > -size * 3 && y < H + size * 3 && sprite.alpha > .001;
+                syncPanoramaParticleCopies(sprite, W);
             });
         }
 
