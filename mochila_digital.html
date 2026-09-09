@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mochila Digital</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            background-color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: -webkit-fill-available;
+            margin: 0;
+            padding: 40px 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Estilos da Mochila (Página Inicial) */
+        #mochilaView {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 1000px;
+            padding: 20px;
+        }
+
+        .mochila-header {
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .notebook-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 25px;
+            width: 100%;
+        }
+
+        .notebook-card {
+            background: #fff;
+            height: 280px;
+            border-radius: 10px 20px 20px 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 20px;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border-left: 15px solid #2c3e50;
+            position: relative;
+        }
+
+        .notebook-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 8px 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .notebook-card h3 {
+            margin: 0;
+            color: #333;
+            font-size: 1.2rem;
+            word-wrap: break-word;
+        }
+
+        .notebook-page {
+            width: 95vw;
+            max-width: 800px;
+            min-height: 1000px;
+            background-color: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            padding-top: 40px;
+            padding-bottom: 15px;
+            box-sizing: border-box;
+            transition: background-image 0.3s;
+        }
+
+        /* Linha Vertical (Margem) para caderno pautado */
+        .notebook-page.lined-bg::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 80px;
+            width: 2px;
+            background-color: #ffb3b3;
+        }
+
+        .header {
+            margin-left: 100px;
+            margin-right: 40px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            color: #777;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .content {
+            width: 100%;
+            height: auto;
+            padding-left: 100px;
+            padding-right: 40px;
+            box-sizing: border-box;
+            color: #333;
+            font-size: 18px;
+            outline: none;
+            min-height: 893px;
+            word-wrap: break-word;
+        }
+
+        /* Linhas azuis para caderno pautado */
+        .notebook-page.lined-bg .content {
+            background-image: linear-gradient(transparent, transparent 30px, #add8e6 30px);
+            background-size: 100% 31px;
+            line-height: 31px;
+        }
+        
+        /* Ajuste de padding para página em branco */
+        .notebook-page.blank-bg .content {
+            padding-left: 40px;
+        }
+
+        /* Camada para escrita manual */
+        #writingCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            cursor: crosshair;
+            touch-action: none;
+            image-rendering: -webkit-optimize-contrast;
+            will-change: transform;
+        }
+
+        /* =========================================
+           INTERFACE PROFISSIONAL (Estilo Procreate)
+           ========================================= */
+        
+        /* Barra Superior Flutuante */
+        .pro-top-bar {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.6);
+            z-index: 200; /* Aumentado para ficar sempre na frente da barra lateral */
+            width: 90%;
+            max-width: 800px;
+            gap: 15px;
+        }
+
+        .pro-btn {
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            font-size: 16px;
+            color: #333;
+            transition: all 0.2s ease;
+            font-family: 'Segoe UI', sans-serif;
+            font-weight: 500;
+        }
+
+        .pro-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .pro-btn.icon-only {
+            padding: 8px;
+            border-radius: 50%;
+        }
+
+        /* Menu Arquivo Flutuante */
+        .menu-wrapper {
+            position: relative;
+        }
+
+        .pro-menu {
+            display: none;
+            position: absolute;
+            top: 50px;
+            left: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,1);
+            width: 220px;
+            overflow: hidden;
+            z-index: 101;
+            padding: 8px 0;
+        }
+
+        .pro-menu button {
+            width: 100%;
+            padding: 12px 20px;
+            border: none;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+
+        .pro-menu button:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: rgba(0,0,0,0.1);
+            margin: 8px 0;
+        }
+
+        /* Navegação de Páginas */
+        .pro-page-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            background: rgba(0,0,0,0.03);
+            padding: 4px 8px;
+            border-radius: 12px;
+        }
+
+        /* Paleta de Cores */
+        .pro-color-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #colorPicker {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 32px;
+            height: 32px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            border-radius: 50%;
+            padding: 0;
+        }
+
+        #colorPicker::-webkit-color-swatch {
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        #colorPicker::-moz-color-swatch {
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Paleta de Ferramentas Lateral */
+        .pro-toolbar {
+            position: fixed;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 12px 8px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.6);
+            z-index: 100;
+        }
+
+        .tool-btn {
+            background: transparent;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tool-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+            transform: scale(1.1);
+        }
+
+        .tool-btn.active {
+            background: #e0e0e0;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+            transform: scale(1.05);
+        }
+
+        .toolbar-divider {
+            width: 60%;
+            height: 2px;
+            background: rgba(0,0,0,0.1);
+            margin: 5px auto;
+            border-radius: 2px;
+        }
+
+        #imageTransformLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+
+        .image-box {
+            position: absolute;
+            border: 2px dashed #0078d7;
+            cursor: move;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            border: 2px solid #0078d7;
+            border-radius: 50%;
+        }
+
+        .handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        .handle.rot { top: -30px; left: 50%; transform: translateX(-50%); cursor: grab; background: #0078d7; }
+        .handle.rot::after { content: ''; position: absolute; top: 12px; left: 50%; width: 2px; height: 15px; background: #0078d7; transform: translateX(-50%); }
+
+        .img-confirm-btn {
+            position: absolute;
+            bottom: -50px;
+            left: calc(50% - 50px);
+            transform: translateX(-50%);
+            background: #27ae60;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .img-cancel-btn {
+            position: absolute;
+            bottom: -50px;
+            left: calc(50% + 50px);
+            transform: translateX(-50%);
+            background: #e74c3c;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: none;
+            cursor: pointer;
+        }
+
+        @media print {
+            body { background-color: white; padding: 0; display: block; }
+            .notebook-page { box-shadow: none; width: 100%; }
+            .pro-top-bar, .pro-toolbar { display: none; }
+        }
+
+        @media (max-width: 850px) {
+            body { padding: 10px 0; }
+            
+            .pro-top-bar {
+                top: 10px;
+                width: 95%;
+                padding: 5px 10px;
+                gap: 5px;
+            }
+
+            .pro-toolbar {
+                left: 10px;
+                padding: 8px 4px;
+            }
+
+            .tool-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 18px;
+            }
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 100px; /* Espaço para a barra superior flutuante */
+            padding-bottom: 40px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mochilaView">
+        <div class="mochila-header">
+            <h1>🎒 Minha Mochila</h1>
+            <p>Selecione um caderno para estudar ou crie um novo.</p>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 10px;">
+                <button class="btn" onclick="createNewNotebook()" style="background: #2c3e50; color: white;">+ Novo Caderno</button>
+                <button class="btn" onclick="exportMochila()">💾 Salvar Mochila</button>
+                <button class="btn" onclick="importMochila()">📂 Abrir Mochila</button>
+            </div>
+        </div>
+        <div class="notebook-grid" id="notebookGrid"></div>
+    </div>
+
+    <!-- NOVA INTERFACE DO CADERNO (Estilo Procreate) -->
+    <div id="notebookView" style="display: none; width: 100%; min-height: 100vh; position: absolute; top: 0; left: 0; background-color: #e0e0e0;">
+        
+        <!-- Barra Superior Flutuante -->
+        <div class="pro-top-bar">
+            <!-- Menu Principal -->
+            <div class="menu-wrapper">
+                <button class="pro-btn icon-only" id="menuBtn" onclick="toggleMenu()" title="Menu">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </button>
+                <div id="fileMenu" class="pro-menu">
+                    <button onclick="goToMochila()">🎒 Voltar para a Mochila</button>
+                    <button onclick="exportMochila()">💾 Salvar Mochila</button>
+                    <button onclick="importMochila()">📂 Abrir Mochila</button>
+                    <button onclick="exportNotebookToPDF()">📄 Exportar como PDF</button>
+                    <div class="menu-divider"></div>
+                    <button onclick="addNewPage()">📄 Nova Folha</button>
+                    <button onclick="deleteCurrentPage()">🗑️ Deletar Folha</button>
+                    <button id="menuBgToggleBtn" onclick="togglePageBackground()">📝 Fundo: Pautado</button>
+                    <button onclick="triggerImageImport()">🖼️ Inserir Imagem</button>
+                </div>
+            </div>
+
+            <!-- Navegação de Páginas -->
+            <div class="pro-page-nav">
+                <button class="pro-btn icon-only" onclick="prevPage()" style="padding: 4px 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                </button>
+                <span id="pageInfo">1 / 1</span>
+                <button class="pro-btn icon-only" onclick="nextPage()" style="padding: 4px 8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+            </div>
+
+            <!-- Paleta de Cores e Importação Rápida -->
+            <div class="pro-color-picker">
+                <input type="color" id="colorPicker" value="#00008b" oninput="updateToolColor(this.value)">
+                <button class="pro-btn icon-only" onclick="resetColors()" title="Resetar Cores" style="font-size: 18px;">🔄</button>
+            </div>
+        </div>
+
+        <!-- Paleta Vertical de Ferramentas -->
+        <div class="pro-toolbar">
+            <button class="tool-btn active" id="penBtn" onclick="setPen()" title="Caneta">🖋️</button>
+            <button class="tool-btn" id="highlighterBtn" onclick="setHighlighter()" title="Marcador">🖍️</button>
+            <button class="tool-btn" id="eraserBtn" onclick="setEraser()" title="Borracha">🧽</button>
+            <div class="toolbar-divider"></div>
+            <button class="tool-btn" onclick="undo()" title="Desfazer">↩️</button>
+            <button class="tool-btn" onclick="redo()" title="Refazer">↪️</button>
+        </div>
+        
+        <input type="file" id="imageInput" accept="image/*" style="display: none;" onchange="handleImageImport(event)">
+
+        <!-- Área da Folha -->
+        <div class="main-container">
+            <div class="notebook-page lined-bg" id="notebookPageElement">
+                <canvas id="writingCanvas"></canvas>
+                <div id="imageTransformLayer">
+                    <div class="image-box" id="activeImageBox">
+                        <img id="previewImg" style="width: 100%; height: 100%; user-select: none; pointer-events: none;">
+                        <div class="handle se" onmousedown="startResize(event)" ontouchstart="startResize(event)"></div>
+                        <div class="handle rot" onmousedown="startRotate(event)" ontouchstart="startRotate(event)"></div>
+                        <button class="img-confirm-btn" onclick="confirmImagePlacement()">✅ Confirmar</button>
+                        <button class="img-cancel-btn" onclick="cancelImagePlacement()">🗑️ Cancelar</button>
+                    </div>
+                </div>
+                <div class="content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('writingCanvas');
+        const ctx = canvas.getContext('2d');
+        const page = document.getElementById('notebookPageElement');
+        const penBtn = document.getElementById('penBtn');
+        const eraserBtn = document.getElementById('eraserBtn');
+        const highlighterBtn = document.getElementById('highlighterBtn');
+        const colorPicker = document.getElementById('colorPicker');
+        const menuBgToggleBtn = document.getElementById('menuBgToggleBtn');
+        
+        // Gerenciamento de Dados e Estado
+        let allNotebooks = [];
+        let activeIdx = -1;
+        let drawing = false;
+        let currentTool = 'pen';
+        let penColor = '#00008b';
+        let highlighterHex = '#ffff00';
+        let highlighterColor = 'rgba(255, 255, 0, 0.5)';
+        
+        let undoStack = [];
+        let redoStack = [];
+        let currentPage = 0;
+
+        // Variáveis de Suavização Profissional do Traço
+        let lastPoint = null;
+        let midPoint = null;
+
+        // Estado da Imagem
+        let imgState = {
+            active: false,
+            x: 100, y: 100,
+            w: 200, h: 200,
+            rotation: 0,
+            imgObj: null
+        };
+
+        window.addEventListener('load', () => {
+            renderMochila();
+            resizeCanvas();
+        });
+
+        function resizeCanvas() {
+            const tempContent = canvas.toDataURL();
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = page.offsetWidth;
+            const cssH = page.offsetHeight;
+
+            canvas.style.width = cssW + 'px';
+            canvas.style.height = cssH + 'px';
+
+            canvas.width = cssW * dpr;
+            canvas.height = cssH * dpr;
+            
+            ctx.resetTransform ? ctx.resetTransform() : ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            if (currentTool === 'pen') setPen();
+            else if (currentTool === 'eraser') setEraser();
+            else if (currentTool === 'highlighter') setHighlighter();
+
+            if (tempContent && tempContent !== 'data:,') {
+                const img = new Image();
+                img.onload = () => {
+                    const op = ctx.globalCompositeOperation;
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.drawImage(img, 0, 0, cssW, cssH);
+                    ctx.globalCompositeOperation = op;
+                };
+                img.src = tempContent;
+            }
+            updatePageInfo();
+        }
+
+        function togglePageBackground() {
+            if (activeIdx === -1) return;
+            const nb = allNotebooks[activeIdx];
+            
+            // Garantir que a página atual é um objeto com informações de fundo
+            if (typeof nb.pages[currentPage] === 'string' || nb.pages[currentPage] === null) {
+                nb.pages[currentPage] = {
+                    data: nb.pages[currentPage],
+                    type: 'lined'
+                };
+            }
+
+            if (page.classList.contains('lined-bg')) {
+                page.classList.remove('lined-bg');
+                page.classList.add('blank-bg');
+                menuBgToggleBtn.innerHTML = '⬜ Fundo: Branco';
+                nb.pages[currentPage].type = 'blank';
+            } else {
+                page.classList.remove('blank-bg');
+                page.classList.add('lined-bg');
+                menuBgToggleBtn.innerHTML = '📝 Fundo: Pautado';
+                nb.pages[currentPage].type = 'lined';
+            }
+            saveCurrentPage();
+            toggleMenu(); // Fecha o menu após a seleção
+        }
+
+        function applyBackgroundType(type) {
+            if (type === 'blank') {
+                page.classList.remove('lined-bg');
+                page.classList.add('blank-bg');
+                menuBgToggleBtn.innerHTML = '⬜ Fundo: Branco';
+            } else {
+                page.classList.remove('blank-bg');
+                page.classList.add('lined-bg');
+                menuBgToggleBtn.innerHTML = '📝 Fundo: Pautado';
+            }
+        }
+
+
+        function triggerImageImport() { document.getElementById('imageInput').click(); }
+
+        function handleImageImport(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    imgState.imgObj = img;
+                    imgState.active = true;
+                    const cssW = page.offsetWidth;
+                    const cssH = page.offsetHeight;
+                    imgState.w = img.width > 400 ? 400 : img.width;
+                    imgState.h = (img.height / img.width) * imgState.w;
+                    imgState.x = (cssW / 2) - (imgState.w / 2);
+                    imgState.y = (cssH / 2) - (imgState.h / 2);
+                    imgState.rotation = 0;
+                    showImageEditor();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showImageEditor() {
+            const layer = document.getElementById('imageTransformLayer');
+            const box = document.getElementById('activeImageBox');
+            const preview = document.getElementById('previewImg');
+            layer.style.display = 'block';
+            preview.src = imgState.imgObj.src;
+            updateImageBox();
+
+            box.onmousedown = startMove;
+            box.ontouchstart = startMove;
+        }
+
+        function updateImageBox() {
+            const box = document.getElementById('activeImageBox');
+            box.style.width = imgState.w + 'px';
+            box.style.height = imgState.h + 'px';
+            box.style.left = imgState.x + 'px';
+            box.style.top = imgState.y + 'px';
+            box.style.transform = `rotate(${imgState.rotation}deg)`;
+        }
+
+        let currentAction = null;
+        let startX, startY, startW, startH, startRot, startMouseX, startMouseY, centerX, centerY;
+
+        function startMove(e) {
+            if(e.target.classList.contains('handle') || e.target.tagName === 'BUTTON') return;
+            if (e.cancelable) e.preventDefault();
+            currentAction = 'move';
+            initInteraction(e);
+        }
+
+        function startResize(e) {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            currentAction = 'resize';
+            initInteraction(e);
+        }
+
+        function startRotate(e) {
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            currentAction = 'rotate';
+            initInteraction(e);
+        }
+
+        function initInteraction(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            startX = imgState.x; startY = imgState.y;
+            startW = imgState.w; startH = imgState.h;
+            startRot = imgState.rotation;
+            startMouseX = clientX; startMouseY = clientY;
+
+            const rect = document.getElementById('activeImageBox').getBoundingClientRect();
+            centerX = rect.left + rect.width / 2;
+            centerY = rect.top + rect.height / 2;
+
+            document.addEventListener('mousemove', doInteraction);
+            document.addEventListener('touchmove', doInteraction, {passive: false});
+            document.addEventListener('mouseup', stopInteraction);
+            document.addEventListener('touchend', stopInteraction);
+        }
+
+        function doInteraction(e) {
+            if (!currentAction) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const dx = clientX - startMouseX;
+            const dy = clientY - startMouseY;
+
+            if (currentAction === 'move') {
+                imgState.x = startX + dx;
+                imgState.y = startY + dy;
+            } else if (currentAction === 'resize') {
+                imgState.w = Math.max(20, startW + dx);
+                imgState.h = Math.max(20, startH + (dx * (startH/startW)));
+            } else if (currentAction === 'rotate') {
+                const angle = Math.atan2(clientY - centerY, clientX - centerX);
+                imgState.rotation = angle * (180 / Math.PI) + 90;
+            }
+            updateImageBox();
+            if (e.cancelable) e.preventDefault();
+        }
+
+        function stopInteraction() {
+            currentAction = null;
+            document.removeEventListener('mousemove', doInteraction);
+            document.removeEventListener('touchmove', doInteraction);
+            document.removeEventListener('mouseup', stopInteraction);
+            document.removeEventListener('touchend', stopInteraction);
+        }
+
+        function confirmImagePlacement() {
+            saveState();
+            ctx.save();
+            ctx.translate(imgState.x + imgState.w / 2, imgState.y + imgState.h / 2);
+            ctx.rotate(imgState.rotation * Math.PI / 180);
+            ctx.drawImage(imgState.imgObj, -imgState.w / 2, -imgState.h / 2, imgState.w, imgState.h);
+            ctx.restore();
+            
+            document.getElementById('imageTransformLayer').style.display = 'none';
+            imgState.active = false;
+            document.getElementById('imageInput').value = '';
+        }
+
+        function cancelImagePlacement() {
+            document.getElementById('imageTransformLayer').style.display = 'none';
+            imgState.active = false;
+            document.getElementById('imageInput').value = '';
+        }
+
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(resizeCanvas, 200);
+        });
+
+        function renderMochila() {
+            const grid = document.getElementById('notebookGrid');
+            const mochilaView = document.getElementById('mochilaView');
+            grid.innerHTML = '';
+            allNotebooks.forEach((nb, index) => {
+                const card = document.createElement('div');
+                card.className = 'notebook-card';
+                card.style.borderLeftColor = nb.color || '#2c3e50';
+                
+                card.onclick = (e) => {
+                    if (e.target.tagName !== 'H3') openNotebook(index);
+                };
+
+                const title = document.createElement('h3');
+                title.contentEditable = true;
+                title.innerText = nb.name;
+                title.spellcheck = false;
+                
+                title.onblur = () => {
+                    allNotebooks[index].name = title.innerText.trim() || "Sem nome";
+                };
+                title.onkeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        title.blur();
+                    }
+                };
+
+                card.appendChild(title);
+                grid.appendChild(card);
+            });
+        }
+
+        function createNewNotebook() {
+            const colors = ['#2c3e50', '#c0392b', '#27ae60', '#2980b9', '#8e44ad', '#f39c12'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            // Inicializa a primeira página com o formato de objeto
+            allNotebooks.push({ name: "Novo Caderno", pages: [{ data: null, type: 'lined' }], color: randomColor });
+            renderMochila();
+
+            const titles = document.querySelectorAll('.notebook-card h3');
+            const lastTitle = titles[titles.length - 1];
+            lastTitle.focus();
+            document.execCommand('selectAll', false, null);
+        }
+
+        function openNotebook(index) {
+            activeIdx = index;
+            currentPage = 0;
+            document.getElementById('mochilaView').style.display = 'none';
+            document.getElementById('notebookView').style.display = 'block';
+            loadPage(0);
+            resizeCanvas();
+        }
+
+        function goToMochila() {
+            saveCurrentPage();
+            document.getElementById('notebookView').style.display = 'none';
+            document.getElementById('mochilaView').style.display = 'flex';
+            toggleMenu();
+            renderMochila();
+        }
+
+        function exportMochila() {
+            saveCurrentPage();
+            const dataStr = JSON.stringify(allNotebooks);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'minha_mochila_digital.json';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function exportNotebookToPDF() {
+            if (activeIdx === -1) return;
+            const { jsPDF } = window.jspdf;
+            saveCurrentPage();
+            const nb = allNotebooks[activeIdx];
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = page.offsetWidth;
+            const cssH = page.offsetHeight;
+            
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'px',
+                format: [cssW, cssH]
+            });
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cssW * dpr;
+            tempCanvas.height = cssH * dpr;
+            const tCtx = tempCanvas.getContext('2d');
+
+            for (let i = 0; i < nb.pages.length; i++) {
+                if (i > 0) pdf.addPage([cssW, cssH], 'p');
+
+                tCtx.resetTransform ? tCtx.resetTransform() : tCtx.setTransform(1, 0, 0, 1, 0, 0);
+                tCtx.scale(dpr, dpr);
+
+                // Normalizar dados da página para compatibilidade com versões antigas
+                let pageData = null;
+                let pageType = 'lined';
+                
+                if (nb.pages[i] !== null) {
+                    if (typeof nb.pages[i] === 'string') {
+                        pageData = nb.pages[i];
+                    } else if (typeof nb.pages[i] === 'object') {
+                        pageData = nb.pages[i].data;
+                        pageType = nb.pages[i].type || 'lined';
+                    }
+                }
+
+                // 1. Fundo Branco
+                tCtx.fillStyle = '#ffffff';
+                tCtx.fillRect(0, 0, cssW, cssH);
+
+                // Desenhar pautas se for folha pautada
+                if (pageType === 'lined') {
+                    // 2. Margem Vermelha
+                    tCtx.strokeStyle = '#ffb3b3';
+                    tCtx.lineWidth = 2;
+                    tCtx.beginPath(); tCtx.moveTo(80, 0); tCtx.lineTo(80, cssH); tCtx.stroke();
+
+                    // 3. Linhas Azuis (Estilo Caderno)
+                    tCtx.strokeStyle = '#add8e6';
+                    tCtx.lineWidth = 1;
+                    const startY = 95; 
+                    for (let y = startY; y < cssH; y += 31) {
+                        tCtx.beginPath(); tCtx.moveTo(0, y); tCtx.lineTo(cssW, y); tCtx.stroke();
+                    }
+                }
+
+                // 4. Desenho do usuário
+                if (pageData) {
+                    const img = await new Promise(resolve => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.src = pageData;
+                    });
+                    tCtx.drawImage(img, 0, 0, cssW, cssH);
+                }
+                pdf.addImage(tempCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, cssW, cssH);
+            }
+
+            pdf.save(`${nb.name.replace(/\s+/g, '_')}.pdf`);
+            toggleMenu();
+        }
+
+        function importMochila() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = event => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        if (Array.isArray(importedData)) {
+                            allNotebooks = importedData;
+                            activeIdx = -1;
+                            document.getElementById('notebookView').style.display = 'none';
+                            document.getElementById('mochilaView').style.display = 'flex';
+                            const menu = document.getElementById('fileMenu');
+                            if (menu.style.display === 'block') toggleMenu();
+                            renderMochila();
+                        }
+                    } catch (err) {
+                        console.error("Erro ao importar o arquivo:", err);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function toggleMenu() {
+            const menu = document.getElementById('fileMenu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function updatePageInfo() {
+            if (activeIdx === -1) return;
+            const nb = allNotebooks[activeIdx];
+            document.getElementById('pageInfo').innerText = `${nb.name} - Página ${currentPage + 1} / ${nb.pages.length}`;
+        }
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function start(e) {
+            if (imgState.active) return;
+            if (e.button !== undefined && e.button !== 0) return;
+            
+            drawing = true;
+            saveState();
+
+            const pos = getPos(e);
+            lastPoint = pos;
+            midPoint = pos;
+
+            ctx.beginPath();
+            if (currentTool !== 'eraser') {
+                ctx.arc(pos.x, pos.y, ctx.lineWidth / 2, 0, Math.PI * 2);
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        }
+
+        function move(e) {
+            if (!drawing) return;
+
+            let events = [e];
+            if (e.getCoalescedEvents && e.getCoalescedEvents().length > 0) {
+                events = e.getCoalescedEvents();
+            }
+
+            for (let ev of events) {
+                const currentPoint = getPos(ev);
+                const currentMid = {
+                    x: (lastPoint.x + currentPoint.x) / 2,
+                    y: (lastPoint.y + currentPoint.y) / 2
+                };
+
+                ctx.beginPath();
+                ctx.moveTo(midPoint.x, midPoint.y);
+                ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, currentMid.x, currentMid.y);
+                ctx.stroke();
+
+                lastPoint = currentPoint;
+                midPoint = currentMid;
+            }
+
+            if (e.cancelable) e.preventDefault();
+        }
+
+        function stop() { 
+            if (drawing) {
+                drawing = false;
+                lastPoint = null;
+                midPoint = null;
+            }
+        }
+
+        // Eventos Unificados
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        window.addEventListener('mouseup', stop);
+
+        canvas.addEventListener('touchstart', start, { passive: false });
+        canvas.addEventListener('touchmove', move, { passive: false });
+        canvas.addEventListener('touchend', stop);
+
+        canvas.addEventListener('pointerdown', start);
+        canvas.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', stop);
+        canvas.addEventListener('pointercancel', stop);
+
+        function setPen() {
+            currentTool = 'pen';
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.lineWidth = 2.0;
+            ctx.strokeStyle = penColor;
+            colorPicker.value = penColor;
+            penBtn.classList.add('active');
+            eraserBtn.classList.remove('active');
+            highlighterBtn.classList.remove('active');
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function setEraser() {
+            currentTool = 'eraser';
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.lineWidth = 25;
+            eraserBtn.classList.add('active');
+            penBtn.classList.remove('active');
+            highlighterBtn.classList.remove('active');
+            canvas.style.cursor = 'cell';
+        }
+
+        function setHighlighter() {
+            currentTool = 'highlighter';
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.lineWidth = 30;
+            ctx.strokeStyle = highlighterColor;
+            colorPicker.value = highlighterHex;
+            highlighterBtn.classList.add('active');
+            penBtn.classList.remove('active');
+            eraserBtn.classList.remove('active');
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function updateToolColor(hex) {
+            if (currentTool === 'pen') {
+                penColor = hex;
+                ctx.strokeStyle = penColor;
+            } else if (currentTool === 'highlighter') {
+                highlighterHex = hex;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                highlighterColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
+                ctx.strokeStyle = highlighterColor;
+            }
+        }
+
+        function resetColors() {
+            penColor = '#00008b';
+            highlighterHex = '#ffff00';
+            highlighterColor = 'rgba(255, 255, 0, 0.5)';
+            
+            if (currentTool === 'pen') {
+                ctx.strokeStyle = penColor;
+                colorPicker.value = penColor;
+            } else if (currentTool === 'highlighter') {
+                ctx.strokeStyle = highlighterColor;
+                colorPicker.value = highlighterHex;
+            }
+        }
+
+        function saveCurrentPage() {
+            if (activeIdx !== -1) {
+                const nb = allNotebooks[activeIdx];
+                const pageType = page.classList.contains('blank-bg') ? 'blank' : 'lined';
+                
+                // Salvar como objeto para preservar o tipo da folha
+                nb.pages[currentPage] = {
+                    data: canvas.toDataURL(),
+                    type: pageType
+                };
+            }
+        }
+
+        function loadPage(index) {
+            const nb = allNotebooks[activeIdx];
+            const img = new Image();
+            const cssW = page.offsetWidth;
+            const cssH = page.offsetHeight;
+
+            img.onload = () => {
+                const op = ctx.globalCompositeOperation;
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.clearRect(0, 0, cssW, cssH);
+                ctx.drawImage(img, 0, 0, cssW, cssH);
+                ctx.globalCompositeOperation = op;
+            };
+
+            let pageData = null;
+            let pageType = 'lined'; // Padrão
+
+            // Tratar compatibilidade com saves antigos (onde a página era só a string do dataURL)
+            if (nb.pages[index] !== null) {
+                if (typeof nb.pages[index] === 'string') {
+                    pageData = nb.pages[index];
+                } else if (typeof nb.pages[index] === 'object') {
+                    pageData = nb.pages[index].data;
+                    pageType = nb.pages[index].type || 'lined';
+                }
+            }
+            
+            applyBackgroundType(pageType);
+
+            if (pageData) {
+                img.src = pageData;
+            } else {
+                ctx.clearRect(0, 0, cssW, cssH);
+            }
+            
+            currentPage = index;
+            updatePageInfo();
+            undoStack = [];
+            redoStack = [];
+        }
+
+        function addNewPage() {
+            saveCurrentPage();
+            // Nova página herda o estilo da página atual
+            const currentType = page.classList.contains('blank-bg') ? 'blank' : 'lined';
+            allNotebooks[activeIdx].pages.push({ data: null, type: currentType });
+            loadPage(allNotebooks[activeIdx].pages.length - 1);
+        }
+
+        function deleteCurrentPage() {
+            if (activeIdx === -1) return;
+            const nb = allNotebooks[activeIdx];
+            const cssW = page.offsetWidth;
+            const cssH = page.offsetHeight;
+            
+            if (nb.pages.length <= 1) {
+                ctx.clearRect(0, 0, cssW, cssH);
+                const currentType = page.classList.contains('blank-bg') ? 'blank' : 'lined';
+                nb.pages[currentPage] = { data: null, type: currentType };
+                return;
+            }
+
+            nb.pages.splice(currentPage, 1);
+            if (currentPage >= nb.pages.length) {
+                currentPage = nb.pages.length - 1;
+            }
+            loadPage(currentPage);
+        }
+
+        function prevPage() {
+            if (currentPage > 0) { saveCurrentPage(); loadPage(currentPage - 1); }
+        }
+
+        function nextPage() {
+            if (currentPage < allNotebooks[activeIdx].pages.length - 1) { saveCurrentPage(); loadPage(currentPage + 1); }
+        }
+
+        function saveState() {
+            undoStack.push(canvas.toDataURL());
+            if (undoStack.length > 30) undoStack.shift();
+            redoStack = [];
+        }
+
+        function applyState(state) {
+            const img = new Image();
+            const cssW = page.offsetWidth;
+            const cssH = page.offsetHeight;
+            img.onload = () => {
+                ctx.save();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.clearRect(0, 0, cssW, cssH);
+                ctx.drawImage(img, 0, 0, cssW, cssH);
+                ctx.restore();
+            };
+            img.src = state;
+        }
+
+        function undo() {
+            if (undoStack.length === 0) return;
+            redoStack.push(canvas.toDataURL());
+            const state = undoStack.pop();
+            applyState(state);
+        }
+
+        function redo() {
+            if (redoStack.length === 0) return;
+            undoStack.push(canvas.toDataURL());
+            const state = redoStack.pop();
+            applyState(state);
+        }
+
+        // Atalhos de teclado
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') undo();
+            if (e.ctrlKey && e.key === 'y') redo();
+        });
+
+        // Lembrete de salvamento periódico
+        setInterval(() => {
+            if (allNotebooks.length > 0) {
+                if (confirm("Deseja salvar a mochila agora para não perder seu progresso?")) {
+                    exportMochila();
+                }
+            }
+        }, 7 * 60 * 1000);
+    </script>
+</body>
+</html>

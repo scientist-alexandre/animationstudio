@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foto para Desenho</title>
+<style>
+:root{
+  --bg:#101216;--top:#171a20;--panel:#1b1f27;--line:#303744;
+  --text:#f3f6fa;--muted:#98a4b3;--accent:#6f98ff;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:Inter,Segoe UI,Arial,sans-serif
+}
+button,input{font:inherit}
+.topbar{
+  height:48px;display:flex;align-items:center;padding:0 10px;
+  background:var(--top);border-bottom:1px solid var(--line)
+}
+.menu{position:relative}
+.menu-btn{
+  padding:9px 14px;border:0;border-radius:7px;background:transparent;
+  color:var(--text);cursor:pointer;font-size:14px
+}
+.menu-btn:hover,.menu.open .menu-btn{background:#282d36}
+.dropdown{
+  display:none;position:absolute;top:40px;left:0;width:235px;padding:7px;
+  background:#20242c;border:1px solid #39414e;border-radius:10px;
+  box-shadow:0 18px 45px #0009;z-index:100
+}
+.menu.open .dropdown{display:block}
+.dropdown button{
+  width:100%;padding:10px 11px;border:0;border-radius:7px;background:transparent;
+  color:var(--text);cursor:pointer;text-align:left;display:flex;
+  justify-content:space-between;gap:14px
+}
+.dropdown button:hover{background:#303743}
+.dropdown button:disabled{opacity:.42;cursor:not-allowed}
+.sep{height:1px;background:#343b47;margin:6px 4px}
+.key{font-size:11px;color:var(--muted)}
+
+.app{
+  height:calc(100vh - 48px);
+  display:grid;grid-template-columns:minmax(0,1fr) 300px
+}
+.viewer{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow:auto;background:#111419;
+  background-image:
+    linear-gradient(45deg,#181c22 25%,transparent 25%),
+    linear-gradient(-45deg,#181c22 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#181c22 75%),
+    linear-gradient(-45deg,transparent 75%,#181c22 75%);
+  background-size:28px 28px;
+  background-position:0 0,0 14px,14px -14px,-14px 0
+}
+#canvas{
+  display:none;max-width:100%;max-height:calc(100vh - 96px);
+  width:auto;height:auto;box-shadow:0 15px 50px #000c;background:#fff
+}
+.empty{text-align:center;color:var(--muted);line-height:1.7}
+.empty strong{display:block;color:#e7ebf1;font-size:18px;margin-bottom:4px}
+.status{
+  position:absolute;left:14px;bottom:13px;padding:7px 10px;
+  border:1px solid #343c49;border-radius:8px;background:#151922e8;
+  color:#c8d2de;font-size:11px;backdrop-filter:blur(8px)
+}
+.busy{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:#080a0e91;z-index:20
+}
+.busy.show{display:flex}
+.busy-card{
+  padding:13px 17px;border:1px solid #3b4452;border-radius:10px;
+  background:#1c2129;box-shadow:0 15px 40px #0008;font-size:13px
+}
+.spin{
+  display:inline-block;width:17px;height:17px;margin-right:9px;
+  border:2px solid #596577;border-top-color:#fff;border-radius:50%;
+  vertical-align:-4px;animation:spin .75s linear infinite
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.sidebar{
+  overflow:auto;background:var(--panel);border-left:1px solid var(--line);
+  padding:17px 15px 22px
+}
+.sidebar h2{margin:0 0 5px;font-size:14px}
+.subtitle{
+  margin:0 0 18px;color:var(--muted);font-size:11px;line-height:1.5
+}
+.preset-card{
+  padding:12px;border:1px solid #4769a8;background:#24324d;
+  border-radius:10px;margin-bottom:18px
+}
+.preset-name{font-size:13px;font-weight:700}
+.preset-desc{margin-top:4px;font-size:10px;color:#bbc8dc;line-height:1.45}
+.control{margin-bottom:16px}
+.control-row{
+  display:flex;justify-content:space-between;gap:10px;
+  margin-bottom:6px;font-size:11px
+}
+.val{color:#c6d0dc}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.section{
+  margin:18px 0 13px;padding-top:15px;border-top:1px solid var(--line);
+  font-size:11px;font-weight:700;color:#dce3ec
+}
+.note{
+  margin-top:17px;padding-top:14px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:10px;line-height:1.55
+}
+#fileInput,#source{display:none}
+@media(max-width:850px){
+  .app{grid-template-columns:minmax(0,1fr) 280px}
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div class="menu" id="fileMenu">
+    <button class="menu-btn" id="fileMenuBtn">Arquivo</button>
+    <div class="dropdown">
+      <button id="uploadBtn">Upload de imagem <span class="key">Ctrl+O</span></button>
+      <div class="sep"></div>
+      <button id="downloadBtn" disabled>Download PNG <span class="key">Ctrl+S</span></button>
+    </div>
+  </div>
+</div>
+
+<input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp">
+<img id="source" alt="">
+
+<div class="app">
+  <main class="viewer">
+    <div class="empty" id="empty">
+      <strong>Nenhuma imagem carregada</strong>
+      Arquivo → Upload de imagem
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="busy" id="busy">
+      <div class="busy-card"><span class="spin"></span>Preparando desenho...</div>
+    </div>
+
+    <div class="status" id="status">Carregando motor gráfico...</div>
+  </main>
+
+  <aside class="sidebar">
+    <h2 id="resetPreset" style="cursor:pointer;user-select:none" title="Resetar ajustes">Reset</h2>
+    
+
+    <div class="preset-card" id="presetCard" style="cursor:pointer">
+      <div class="preset-name">Desenho Manual Colorido</div>
+      
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Cor</span><span class="val" id="colorMixVal">100%</span></div>
+      <input id="colorMix" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Saturação da cor</span><span class="val" id="saturationVal">100%</span></div>
+      <input id="saturation" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Multiplicar traços</span><span class="val" id="strokeMultiplyVal">100%</span></div>
+      <input id="strokeMultiply" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Clareza da pintura</span><span class="val" id="paintLightVal">100%</span></div>
+      <input id="paintLight" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="section">Traço</div>
+
+    <div class="control">
+      <div class="control-row"><span>Força do traço</span><span class="val" id="inkStrengthVal">100%</span></div>
+      <input id="inkStrength" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Espessura</span><span class="val" id="inkWidthVal">100%</span></div>
+      <input id="inkWidth" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Detalhe do desenho</span><span class="val" id="inkDetailVal">100%</span></div>
+      <input id="inkDetail" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="section">Pintura</div>
+
+    <div class="control">
+      <div class="control-row"><span>Suavização</span><span class="val" id="smoothVal">100%</span></div>
+      <input id="smooth" type="range" min="0" max="200" value="100">
+    </div>
+
+    <div class="control">
+      <div class="control-row"><span>Quantidade de tons</span><span class="val" id="tonesVal">100%</span></div>
+      <input id="tones" type="range" min="0" max="200" value="100">
+    </div>
+
+    
+  </aside>
+</div>
+
+<script>
+let CV = null;
+let imageLoaded = false;
+let originalW = 0, originalH = 0;
+let renderTimer = null;
+let inkDirty = true;
+let paintDirty = true;
+
+const MAX_PROCESS_DIM = 1600;
+
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+const source = $('source');
+const fileInput = $('fileInput');
+const statusEl = $('status');
+const busy = $('busy');
+const downloadBtn = $('downloadBtn');
+
+const ctrl = {
+  colorMix:$('colorMix'),
+  saturation:$('saturation'),
+  strokeMultiply:$('strokeMultiply'),
+  paintLight:$('paintLight'),
+  inkStrength:$('inkStrength'),
+  inkWidth:$('inkWidth'),
+  inkDetail:$('inkDetail'),
+  smooth:$('smooth'),
+  tones:$('tones')
+};
+
+let cache = {
+  w:0,h:0,
+  inkCanvas:null,
+  paintCanvas:null
+};
+
+
+function setStatus(text){ statusEl.textContent = text; }
+
+/*
+  Todos os sliders usam 0..200.
+  100 (meio da barra) = o máximo ORIGINAL do V3.
+  200 = faixa extra, acima do máximo original.
+*/
+function slider01(id){
+  return Number(ctrl[id].value) / 100;
+}
+function mapOldMax(id, oldMin, oldMax){
+  const n = slider01(id);
+  if(n <= 1){
+    return oldMin + (oldMax - oldMin) * n;
+  }
+  return oldMax + (oldMax - oldMin) * (n - 1);
+}
+function updatePercentLabel(id){
+  $(id+'Val').textContent = Math.round(Number(ctrl[id].value)) + '%';
+}
+
+
+async function onOpenCvReady(){
+  try{
+    CV = window.cv instanceof Promise ? await window.cv : window.cv;
+    if(!CV || !CV.Mat) throw new Error();
+    setStatus('Motor pronto • Arquivo → Upload de imagem');
+  }catch(err){
+    setStatus('Falha ao carregar OpenCV.js • verifique a internet');
+  }
+}
+
+function toggleMenu(force){
+  const menu=$('fileMenu');
+  if(typeof force==='boolean') menu.classList.toggle('open',force);
+  else menu.classList.toggle('open');
+}
+
+$('fileMenuBtn').onclick=e=>{
+  e.stopPropagation();
+  toggleMenu();
+};
+document.addEventListener('click',()=>toggleMenu(false));
+document.querySelector('.dropdown').onclick=e=>e.stopPropagation();
+
+$('uploadBtn').onclick=()=>{
+  toggleMenu(false);
+  fileInput.value='';
+  fileInput.click();
+};
+
+downloadBtn.onclick=()=>{
+  toggleMenu(false);
+  if(!imageLoaded) return;
+
+  canvas.toBlob(blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='desenho-manual-colorido.png';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  },'image/png');
+};
+
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){
+    e.preventDefault();
+    fileInput.value='';
+    fileInput.click();
+  }
+
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'&&imageLoaded){
+    e.preventDefault();
+    downloadBtn.click();
+  }
+});
+
+fileInput.addEventListener('change',e=>{
+  const file=e.target.files?.[0];
+  if(!file) return;
+
+  if(!file.type.startsWith('image/')){
+    alert('Selecione uma imagem válida.');
+    return;
+  }
+
+  const url=URL.createObjectURL(file);
+
+  source.onload=async()=>{
+    originalW=source.naturalWidth;
+    originalH=source.naturalHeight;
+    URL.revokeObjectURL(url);
+
+    imageLoaded=true;
+    inkDirty=true;
+    paintDirty=true;
+
+    $('empty').style.display='none';
+    canvas.style.display='block';
+    downloadBtn.disabled=false;
+
+    await renderAll();
+  };
+
+  source.src=url;
+});
+
+function quantizeRGB(mat,levels){
+  const step=255/Math.max(1,levels-1);
+  const d=mat.data;
+
+  for(let i=0;i<d.length;i+=3){
+    d[i]=Math.round(d[i]/step)*step;
+    d[i+1]=Math.round(d[i+1]/step)*step;
+    d[i+2]=Math.round(d[i+2]/step)*step;
+  }
+}
+
+function processPaintCanvas(c){
+  const ctx=c.getContext('2d',{willReadFrequently:true});
+  const img=ctx.getImageData(0,0,c.width,c.height);
+  const d=img.data;
+
+  // No ponto 100: saturação = antigo máximo 170%, luz = antigo máximo 125%.
+  const sat = mapOldMax('saturation', 0, 1.70);
+  const light = mapOldMax('paintLight', 0.80, 1.25);
+
+  for(let i=0;i<d.length;i+=4){
+    let r=d[i],g=d[i+1],b=d[i+2];
+    const y=.2126*r+.7152*g+.0722*b;
+
+    r=y+(r-y)*sat;
+    g=y+(g-y)*sat;
+    b=y+(b-y)*sat;
+
+    // Contraste removido. Mantemos apenas a luz.
+    r*=light;
+    g*=light;
+    b*=light;
+
+    d[i]=Math.max(0,Math.min(255,r));
+    d[i+1]=Math.max(0,Math.min(255,g));
+    d[i+2]=Math.max(0,Math.min(255,b));
+  }
+
+  ctx.putImageData(img,0,0);
+}
+
+async function buildPaint(workCanvas){
+  let rgba=null,rgb=null,paint=null;
+
+  try{
+    rgba=CV.imread(workCanvas);
+    rgb=new CV.Mat();
+    CV.cvtColor(rgba,rgb,CV.COLOR_RGBA2RGB);
+
+    paint=new CV.Mat();
+    const sigma = mapOldMax('smooth', 70, 175);
+
+    CV.bilateralFilter(
+      rgb,paint,9,
+      sigma,sigma,
+      CV.BORDER_DEFAULT
+    );
+
+    if(sigma>120){
+      const second=new CV.Mat();
+      CV.bilateralFilter(
+        paint,second,5,
+        sigma*.48,sigma*.48,
+        CV.BORDER_DEFAULT
+      );
+      paint.delete();
+      paint=second;
+    }
+
+    quantizeRGB(paint,Math.max(2,Math.round(mapOldMax('tones',5,18))));
+
+    const out=document.createElement('canvas');
+    out.width=workCanvas.width;
+    out.height=workCanvas.height;
+
+    CV.imshow(out,paint);
+    processPaintCanvas(out);
+
+    cache.paintCanvas=out;
+    paintDirty=false;
+  }finally{
+    [rgba,rgb,paint].forEach(m=>{
+      try{m?.delete()}catch(e){}
+    });
+  }
+}
+
+async function buildInk(workCanvas){
+  let rgba=null,gray=null,blur1=null,blur2=null;
+  let canny1=null,canny2=null,combined=null,kernel=null;
+
+  try{
+    rgba=CV.imread(workCanvas);
+
+    gray=new CV.Mat();
+    CV.cvtColor(rgba,gray,CV.COLOR_RGBA2GRAY);
+
+    /*
+      Duas escalas de Canny:
+      - a primeira pega olhos, boca, nariz e roupa
+      - a segunda pega os contornos maiores
+      Depois misturamos as duas.
+      A camada resultante NÃO depende da cor.
+    */
+    blur1=new CV.Mat();
+    CV.GaussianBlur(
+      gray,blur1,
+      new CV.Size(5,5),
+      0,0,
+      CV.BORDER_DEFAULT
+    );
+
+    blur2=new CV.Mat();
+    CV.GaussianBlur(
+      gray,blur2,
+      new CV.Size(9,9),
+      0,0,
+      CV.BORDER_DEFAULT
+    );
+
+    const detail = mapOldMax('inkDetail',35,75);
+
+    const low1=Math.max(20,105-detail);
+    const high1=Math.max(60,195-detail*1.25);
+
+    const low2=Math.max(25,120-detail*.8);
+    const high2=Math.max(70,215-detail);
+
+    canny1=new CV.Mat();
+    canny2=new CV.Mat();
+
+    CV.Canny(
+      blur1,canny1,
+      low1,high1,
+      3,true
+    );
+
+    CV.Canny(
+      blur2,canny2,
+      low2,high2,
+      3,true
+    );
+
+    combined=new CV.Mat();
+    CV.addWeighted(
+      canny1,.72,
+      canny2,.45,
+      0,
+      combined
+    );
+
+    const widthMapped = mapOldMax('inkWidth',0,2);
+    const width = Math.max(0,Math.min(4,Math.round(widthMapped)));
+
+    if(width>0){
+      const size=width===1?2:3;
+      kernel=CV.getStructuringElement(
+        CV.MORPH_ELLIPSE,
+        new CV.Size(size,size)
+      );
+      CV.dilate(combined,combined,kernel);
+    }
+
+    const edgeRGBA=new CV.Mat();
+    CV.cvtColor(
+      combined,
+      edgeRGBA,
+      CV.COLOR_GRAY2RGBA
+    );
+
+    const edgeCanvas=document.createElement('canvas');
+    edgeCanvas.width=workCanvas.width;
+    edgeCanvas.height=workCanvas.height;
+    CV.imshow(edgeCanvas,edgeRGBA);
+    edgeRGBA.delete();
+
+    const ectx=edgeCanvas.getContext('2d',{willReadFrequently:true});
+    const img=ectx.getImageData(
+      0,0,
+      edgeCanvas.width,
+      edgeCanvas.height
+    );
+
+    const d=img.data;
+    const strength = mapOldMax('inkStrength',0.35,1.0);
+
+    /*
+      Transformação para tinta preta transparente.
+      O RGB fica sempre preto.
+      Somente a transparência vem do detector de borda.
+    */
+    for(let i=0;i<d.length;i+=4){
+      const edge=d[i]/255;
+
+      d[i]=10;
+      d[i+1]=10;
+      d[i+2]=12;
+
+      d[i+3]=Math.max(
+        0,
+        Math.min(
+          255,
+          Math.pow(edge,.72)*255*strength
+        )
+      );
+    }
+
+    ectx.putImageData(img,0,0);
+
+    cache.inkCanvas=edgeCanvas;
+    inkDirty=false;
+  }finally{
+    [rgba,gray,blur1,blur2,canny1,canny2,combined,kernel].forEach(m=>{
+      try{m?.delete()}catch(e){}
+    });
+  }
+}
+
+function compose(){
+  if(!cache.paintCanvas || !cache.inkCanvas) return;
+
+  const w=cache.paintCanvas.width;
+  const h=cache.paintCanvas.height;
+
+  const composed=document.createElement('canvas');
+  composed.width=w;
+  composed.height=h;
+
+  const ctx=composed.getContext('2d');
+
+  /*
+    Fundo em desenho cinza:
+    o slider COR apenas mistura o colorido por cima.
+    O traço será aplicado depois e nunca é alterado.
+  */
+  ctx.drawImage(cache.paintCanvas,0,0);
+
+  const gray=ctx.getImageData(0,0,w,h);
+  const gd=gray.data;
+
+  const mix = Math.max(0,Math.min(1.5,slider01('colorMix')));
+
+  for(let i=0;i<gd.length;i+=4){
+    const r=gd[i],g=gd[i+1],b=gd[i+2];
+    const y=.299*r+.587*g+.114*b;
+
+    const paper=Math.min(255,y*1.05+8);
+
+    gd[i]=paper*(1-mix)+r*mix;
+    gd[i+1]=paper*(1-mix)+g*mix;
+    gd[i+2]=paper*(1-mix)+b*mix;
+  }
+
+  ctx.putImageData(gray,0,0);
+
+  /*
+    O traço entra por último.
+    Isso é o ponto principal desta versão:
+    COR NÃO ALTERA O DESENHO.
+  */
+  ctx.globalCompositeOperation='multiply';
+
+  const mult = slider01('strokeMultiply');
+
+  ctx.globalAlpha = 0.82;
+  ctx.drawImage(cache.inkCanvas,0,0);
+
+  if(mult > 0.01){
+    const inkCtx = cache.inkCanvas.getContext('2d',{willReadFrequently:true});
+    const inkImg = inkCtx.getImageData(0,0,w,h);
+    const id = inkImg.data;
+
+    const sketch = document.createElement('canvas');
+    sketch.width = w;
+    sketch.height = h;
+
+    const sctx = sketch.getContext('2d');
+    sctx.lineCap = 'round';
+    sctx.lineJoin = 'round';
+
+    function rnd(x,y,s){
+      let n = ((x*73856093) ^ (y*19349663) ^ (s*83492791)) >>> 0;
+      n = Math.imul(n ^ (n >>> 16), 2246822519);
+      n = Math.imul(n ^ (n >>> 13), 3266489917);
+      return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+    }
+
+    function alphaAt(x,y){
+      x=Math.max(0,Math.min(w-1,x|0));
+      y=Math.max(0,Math.min(h-1,y|0));
+      return id[(y*w+x)*4+3] / 255;
+    }
+
+    const strength = Math.min(2, mult);
+    const step = Math.max(3, Math.round(8 - strength*2));
+    const density = 0.16 + strength*0.20;
+    const maxSide = 2.0 + strength*3.2;
+    const minLen = 2.0 + strength*1.4;
+    const maxLen = 5.0 + strength*5.8;
+    const angleJitter = 0.35 + strength*0.65;
+
+    for(let y=2;y<h-2;y+=step){
+      for(let x=2;x<w-2;x+=step){
+        const a0 = alphaAt(x,y);
+
+        if(a0 < 0.12) continue;
+        if(rnd(x,y,1) > density) continue;
+
+        const gx = alphaAt(x+1,y) - alphaAt(x-1,y);
+        const gy = alphaAt(x,y+1) - alphaAt(x,y-1);
+
+        let nx = gx;
+        let ny = gy;
+        let mag = Math.hypot(nx,ny);
+
+        if(mag < 0.015){
+          const r = rnd(x,y,2)*Math.PI*2;
+          nx = Math.cos(r);
+          ny = Math.sin(r);
+          mag = 1;
+        }
+
+        nx /= mag;
+        ny /= mag;
+
+        let tx = -ny;
+        let ty = nx;
+
+        const strokes = 1 + Math.floor(rnd(x,y,3) * (2 + strength*3));
+
+        for(let s=0;s<strokes;s++){
+          const sideSign = rnd(x,y,10+s) < 0.5 ? -1 : 1;
+          const side = sideSign * (0.7 + rnd(x,y,20+s)*maxSide);
+
+          const along = (rnd(x,y,30+s)-0.5) * maxLen * 0.8;
+
+          const px = x + nx*side + tx*along;
+          const py = y + ny*side + ty*along;
+
+          const len = minLen + rnd(x,y,40+s)*(maxLen-minLen);
+
+          const jitter = (rnd(x,y,50+s)-0.5) * angleJitter;
+          const cos = Math.cos(jitter);
+          const sin = Math.sin(jitter);
+
+          const jtx = tx*cos - ty*sin;
+          const jty = tx*sin + ty*cos;
+
+          const asym = 0.25 + rnd(x,y,60+s)*0.75;
+
+          const x1 = px - jtx*len*(0.25+0.45*asym);
+          const y1 = py - jty*len*(0.25+0.45*asym);
+          const x2 = px + jtx*len*(0.35+0.55*(1-asym));
+          const y2 = py + jty*len*(0.35+0.55*(1-asym));
+
+          const opacity = 0.07 + rnd(x,y,70+s)*(0.16 + strength*0.05);
+          const widthSketch = 0.35 + rnd(x,y,80+s)*(0.55 + strength*0.12);
+
+          sctx.strokeStyle = `rgba(8,8,10,${opacity})`;
+          sctx.lineWidth = widthSketch;
+
+          sctx.beginPath();
+          sctx.moveTo(x1,y1);
+
+          if(rnd(x,y,90+s) < 0.55){
+            const bend = (rnd(x,y,100+s)-0.5) * 2.2;
+            const mx = (x1+x2)/2 + nx*bend;
+            const my = (y1+y2)/2 + ny*bend;
+            sctx.quadraticCurveTo(mx,my,x2,y2);
+          }else{
+            sctx.lineTo(x2,y2);
+          }
+
+          sctx.stroke();
+
+          if(rnd(x,y,110+s) < 0.22){
+            const tinyLen = len*(0.30 + rnd(x,y,120+s)*0.28);
+            const off = (rnd(x,y,130+s)-0.5)*2.4;
+
+            sctx.globalAlpha = 0.55;
+            sctx.beginPath();
+            sctx.moveTo(
+              px + nx*off - jtx*tinyLen*0.45,
+              py + ny*off - jty*tinyLen*0.45
+            );
+            sctx.lineTo(
+              px + nx*off + jtx*tinyLen*0.55,
+              py + ny*off + jty*tinyLen*0.55
+            );
+            sctx.stroke();
+            sctx.globalAlpha = 1;
+          }
+        }
+      }
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.drawImage(sketch,0,0);
+  }
+
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+
+  canvas.width=originalW;
+  canvas.height=originalH;
+
+  const out=canvas.getContext('2d');
+  out.imageSmoothingEnabled=true;
+  out.imageSmoothingQuality='high';
+  out.clearRect(0,0,originalW,originalH);
+  out.drawImage(
+    composed,
+    0,0,
+    originalW,originalH
+  );
+
+  setStatus(
+    `Desenho Manual Colorido • ${originalW} × ${originalH} • traços ${ctrl.strokeMultiply.value}%`
+  );
+}
+
+async function renderAll(){
+  if(!imageLoaded) return;
+
+  if(!CV){
+    setStatus('Aguardando OpenCV.js...');
+    return;
+  }
+
+  busy.classList.add('show');
+
+  await new Promise(r=>setTimeout(r,25));
+
+  try{
+    const scale=Math.min(
+      1,
+      MAX_PROCESS_DIM/Math.max(originalW,originalH)
+    );
+
+    const w=Math.max(1,Math.round(originalW*scale));
+    const h=Math.max(1,Math.round(originalH*scale));
+
+    cache.w=w;
+    cache.h=h;
+
+    const work=document.createElement('canvas');
+    work.width=w;
+    work.height=h;
+
+    const ctx=work.getContext('2d',{
+      willReadFrequently:true
+    });
+
+    ctx.imageSmoothingEnabled=true;
+    ctx.imageSmoothingQuality='high';
+
+    ctx.drawImage(
+      source,
+      0,0,
+      w,h
+    );
+
+    if(paintDirty){
+      await buildPaint(work);
+    }
+
+    if(inkDirty){
+      await buildInk(work);
+    }
+
+    compose();
+  }catch(err){
+    console.error(err);
+    setStatus('Erro ao processar imagem');
+    alert('Não foi possível processar esta imagem.');
+  }finally{
+    busy.classList.remove('show');
+  }
+}
+
+function scheduleRender(type){
+  if(!imageLoaded) return;
+
+  if(type==='ink'){
+    inkDirty=true;
+  }
+
+  if(type==='paint'){
+    paintDirty=true;
+  }
+
+  clearTimeout(renderTimer);
+
+  renderTimer=setTimeout(
+    renderAll,
+    220
+  );
+}
+
+/*
+  Controles de COR:
+  apenas recompõem a imagem.
+  Não recalculam o contorno.
+*/
+ctrl.colorMix.addEventListener('input',()=>{
+  updatePercentLabel('colorMix');
+  if(imageLoaded && cache.paintCanvas && cache.inkCanvas) compose();
+});
+
+ctrl.strokeMultiply.addEventListener('input',()=>{
+  updatePercentLabel('strokeMultiply');
+  if(imageLoaded && cache.paintCanvas && cache.inkCanvas) compose();
+});
+
+/*
+  Pintura: contraste removido.
+*/
+['saturation','paintLight','smooth','tones'].forEach(id=>{
+  ctrl[id].addEventListener('input',()=>{
+    updatePercentLabel(id);
+    scheduleRender('paint');
+  });
+});
+
+/*
+  Traço principal.
+*/
+['inkStrength','inkWidth','inkDetail'].forEach(id=>{
+  ctrl[id].addEventListener('input',()=>{
+    updatePercentLabel(id);
+    scheduleRender('ink');
+  });
+});
+
+function resetAllControls(){
+  const defaults={
+    colorMix:100,
+    saturation:100,
+    strokeMultiply:100,
+    paintLight:100,
+    inkStrength:100,
+    inkWidth:100,
+    inkDetail:100,
+    smooth:100,
+    tones:100
+  };
+
+  Object.entries(defaults).forEach(([id,value])=>{
+    if(ctrl[id]){
+      ctrl[id].value=value;
+      updatePercentLabel(id);
+    }
+  });
+
+  inkDirty=true;
+  paintDirty=true;
+
+  if(imageLoaded){
+    renderAll();
+  }
+}
+
+$('resetPreset').addEventListener('click',resetAllControls);
+$('presetCard').addEventListener('click',resetAllControls);
+
+</script>
+
+<script async
+src="https://docs.opencv.org/4.x/opencv.js"
+onload="onOpenCvReady()"></script>
+
+</body>
+</html>
