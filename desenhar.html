@@ -1916,7 +1916,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         <div class="bg-control">
             <button class="play-btn bg-action-btn" id="bgImgBtn" title="Importar panorama 3D" aria-label="Importar panorama 3D">🖼️</button>
             <button class="play-btn bg-action-btn" id="clearBgBtn" title="Excluir background 3D" aria-label="Excluir background 3D">✕</button>
-            <input type="file" id="bgInput" accept="image/*" style="display: none;">
+            <input type="file" id="bgInput" accept="image/png,image/jpeg,image/webp,image/gif" style="display: none;">
         </div>
         <div class="bottom-control-stack">
             <div class="frame-control-row">
@@ -2101,6 +2101,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let soloMode = false;
         let isExporting = false;
         let isSaving = false;
+        let currentSavePromise = Promise.resolve();
         let audioClips = [];
         let selectedAudioClipId = null;
         let audioClipSequence = 0;
@@ -2574,6 +2575,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let hasClipboard = false;
         let selectionPath = [];
         let isTransforming = false;
+        // A seleção é parte temporariamente destacada de uma camada específica.
+        // Estes campos impedem que uma troca de frame/camada grave o recorte no destino errado.
+        let selectionFrameRef = null;
+        let selectionLayerIndex = -1;
         let selectionBox = { x: 0, y: 0, w: 0, h: 0, angle: 0, scale: 1 };
         let selectionCorners = []; 
         let transformMode = null; 
@@ -2677,8 +2682,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         async function switchLayer(index) {
-            if (activeLayerIndex === index) return;
-            if (!isHistoryAction) await saveFrameState(currentFrameIndex); 
+            if (index < 0 || index >= layerCount() || activeLayerIndex === index) return;
+            // Recoloca primeiro os pixels destacados na camada de origem.
+            // Antes, saveFrameState() era chamado com o "buraco" do recorte ainda aberto.
+            if (isTransforming) await finishSelection();
+            if (!isHistoryAction && hasUnsavedChanges) await saveFrameState(currentFrameIndex); 
             activeLayerIndex = index;
             ctx.globalCompositeOperation = 'source-over'; 
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
@@ -2688,12 +2696,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             refreshLayerDisplay();
         }
 
-        function toggleLayerVisibility(event, index) { event.stopPropagation(); layersMeta[index].visible = !layersMeta[index].visible; refreshLayerDisplay(); }
+        async function toggleLayerVisibility(event, index) {
+            event.stopPropagation();
+            if (isTransforming && index === activeLayerIndex) await finishSelection();
+            layersMeta[index].visible = !layersMeta[index].visible;
+            refreshLayerDisplay();
+        }
 
         function setLayerOpacity(index, value) {
             layersMeta[index].opacity = Math.max(0, Math.min(1, Number(value)));
             if (layerCanvasEls[index]) layerCanvasEls[index].style.opacity = layersMeta[index].opacity;
-            if (index === activeLayerIndex) mainCanvas.style.opacity = layersMeta[index].opacity;
+            if (index === activeLayerIndex) {
+                mainCanvas.style.opacity = layersMeta[index].opacity;
+                uiCanvas.style.opacity = layersMeta[index].opacity;
+            }
             const valEl = document.getElementById(`layer-opacity-val-${index}`);
             if (valEl) valEl.textContent = Math.round(layersMeta[index].opacity * 100) + '%';
         }
@@ -2717,6 +2733,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         // Insere uma nova camada em branco logo acima da camada ativa (ou no topo)
         async function addLayer() {
             if (isPlaying) return;
+            if (isTransforming) await finishSelection();
             if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
             const insertAt = Math.min(activeLayerIndex + 1, layerCount());
             layersMeta.splice(insertAt, 0, { opacity: 1, visible: true, name: `Camada ${layerCount() + 1}` });
@@ -2733,6 +2750,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         async function deleteLayer(event, index) {
             if (event) event.stopPropagation();
             if (isPlaying) return;
+            if (isTransforming) await finishSelection();
             if (layerCount() <= 1) { showNotification('É preciso manter ao menos 1 camada'); return; }
             if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
             layersMeta.splice(index, 1);
@@ -2751,6 +2769,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (event) event.stopPropagation();
             const target = index + direction;
             if (target < 0 || target >= layerCount()) return;
+            if (isTransforming) await finishSelection();
             if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
             [layersMeta[index], layersMeta[target]] = [layersMeta[target], layersMeta[index]];
             frames.forEach(f => { [f.layers[index], f.layers[target]] = [f.layers[target], f.layers[index]]; });
@@ -2782,6 +2801,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         async function mergeAllLayers() {
             if (isPlaying) return;
+            if (isTransforming) await finishSelection();
             if (layerCount() <= 1) { showNotification('Já existe apenas 1 camada'); return; }
             if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
             const tCtx = sharedUtilCtx;
@@ -2812,6 +2832,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         // em TODOS os frames, mantendo o restante das camadas intocado.
         async function mergeSelectedLayers() {
             if (isPlaying) return;
+            if (isTransforming) await finishSelection();
             if (layerSelectionForMerge.size < 2) { showNotification('Marque ao menos 2 camadas para mesclar'); return; }
             if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
 
@@ -2862,6 +2883,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         async function mergeLayers(event, sourceIdx, targetIdx) {
             if (event) event.stopPropagation(); 
             if (isPlaying) return;
+            if (isTransforming) await finishSelection();
             const wasHistory = isHistoryAction; isHistoryAction = true; 
 
             if (frames[currentFrameIndex] && hasUnsavedChanges) {
@@ -3426,16 +3448,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             sCtx.save(); sCtx.translate(-minX, -minY);
             sCtx.beginPath(); sCtx.moveTo(selectionPath[0].x, selectionPath[0].y);
             selectionPath.forEach(p => sCtx.lineTo(p.x, p.y));
-            sCtx.clip(); sCtx.drawImage(mainCanvas, 0, 0); sCtx.restore();
+            sCtx.closePath(); sCtx.clip(); sCtx.drawImage(mainCanvas, 0, 0); sCtx.restore();
+
+            // Laço vazio não deve abrir uma transformação nem alterar a camada.
+            if (!getOpaqueBounds(selectionCanvas)) {
+                selectionPath = [];
+                uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+                return;
+            }
 
             updateSelectionColorAlpha(); 
 
             ctx.globalCompositeOperation = 'source-over'; 
             ctx.save(); ctx.beginPath(); ctx.moveTo(selectionPath[0].x, selectionPath[0].y);
             selectionPath.forEach(p => ctx.lineTo(p.x, p.y));
-            ctx.clip(); ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height); ctx.restore();
+            ctx.closePath(); ctx.clip(); ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height); ctx.restore();
 
             isTransforming = true;
+            selectionFrameRef = frames[currentFrameIndex];
+            selectionLayerIndex = activeLayerIndex;
             if (currentTool === 'warp') {
                 warpMesh = [];
                 for (let y = 0; y <= WARP_GRID; y++) {
@@ -3456,7 +3487,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
 
             hasUnsavedChanges = true;
-            saveFrameState(currentFrameIndex); 
+            // Não salva aqui: neste momento o recorte está fora de mainCanvas.
+            // A camada só é persistida depois que a seleção for aplicada ou recortada.
             drawTransformUI();
         }
 
@@ -4011,6 +4043,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         function handleCut() {
             if (!isTransforming) return;
             handleCopy(); isTransforming = false; transformMode = null; selectionPath = [];
+            selectionFrameRef = null; selectionLayerIndex = -1;
             uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height); hasUnsavedChanges = true; saveFrameState(currentFrameIndex);
         }
 
@@ -4021,12 +4054,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             sCtx.globalCompositeOperation = 'source-over'; sCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height); sCtx.drawImage(clipboardCanvas, 0, 0);
             selectionBox = { ...clipboardBox }; selectionCorners = clipboardCorners.map(c => ({...c}));
             isTransforming = true; currentTool = 'lasso';
+            selectionFrameRef = frames[currentFrameIndex]; selectionLayerIndex = activeLayerIndex;
             updateSelectionColorAlpha(); // Atualiza a máscara no momento em que cola
             updateToolUI(); drawTransformUI();
         }
 
-        function finishSelection() {
+        async function finishSelection() {
             if (isTransforming) {
+                // Uma seleção nunca pode ser aplicada silenciosamente em outra camada/frame.
+                if (selectionFrameRef !== frames[currentFrameIndex] || selectionLayerIndex !== activeLayerIndex) {
+                    console.warn('Seleção cancelada com destino inconsistente; conteúdo preservado na camada atual.');
+                }
                 ctx.save();
                 ctx.globalCompositeOperation = 'source-over'; 
                 
@@ -4040,7 +4078,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 
                 cleanupLightweightHead3D();
                 isTransforming = false; transformMode = null; draggedWarpPoint = null; warpMesh = []; headSphereMesh = []; isHeadSphereDragging = false; selectionPath = [];
-                uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height); hasUnsavedChanges = true; saveFrameState(currentFrameIndex);
+                selectionFrameRef = null; selectionLayerIndex = -1;
+                uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height); hasUnsavedChanges = true;
+                await saveFrameState(currentFrameIndex);
             }
         }
 
@@ -4051,24 +4091,33 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         workspace.addEventListener('mousedown', (e) => { if(e.target === workspace) finishSelection(); });
 
         async function saveFrameState(index) {
-            if (isSaving || isHistoryAction || !frames[index] || !hasUnsavedChanges) return;
+            if (isSaving) {
+                // Aguarda a gravação em andamento em vez de descartar silenciosamente a solicitação.
+                await currentSavePromise;
+                if (!hasUnsavedChanges) return;
+            }
+            if (isHistoryAction || !frames[index] || !hasUnsavedChanges) return;
+            const frameRef = frames[index];
+            const layerIndex = activeLayerIndex;
             sharedUtilCtx.globalCompositeOperation = 'source-over';
             sharedUtilCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height); sharedUtilCtx.drawImage(mainCanvas, 0, 0);
             
+            hasUnsavedChanges = false;
             isSaving = true;
-            try {
+            currentSavePromise = (async () => { try {
                 const canvasSnapshot = await createImageBitmap(sharedUtilCanvas);
-                const oldData = frames[index].layers[activeLayerIndex];
+                const oldData = frameRef.layers[layerIndex];
                 
-                undoStack.push({ frameRef: frames[index], layer: activeLayerIndex, data: oldData });
+                undoStack.push({ frameRef, layer: layerIndex, data: oldData });
                 redoStack.forEach(action => { if (action.data && action.data.close) action.data.close(); }); redoStack = [];
                 
                 if (undoStack.length > 50) { const discarded = undoStack.shift(); if (discarded.data && discarded.data.close) discarded.data.close(); }
 
-                frames[index].layers[activeLayerIndex] = canvasSnapshot; hasUnsavedChanges = false;
+                frameRef.layers[layerIndex] = canvasSnapshot;
                 
                 requestAnimationFrame(() => { updateSingleThumbnail(index); updateLayerIndicators(); });
-            } catch (err) { console.error("Erro ao salvar frame:", err); } finally { isSaving = false; }
+            } catch (err) { hasUnsavedChanges = true; console.error("Erro ao salvar frame:", err); } finally { isSaving = false; } })();
+            await currentSavePromise;
         }
 
         const brushSizeInput = document.getElementById('brushSize'); const brushOpacityInput = document.getElementById('brushOpacity');
@@ -4142,7 +4191,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         async function loadFrame(index) {
             if (index < 0 || index >= frames.length) return;
-            finishSelection(); 
+            await finishSelection(); 
             const prevIndex = currentFrameIndex;
             if (!isHistoryAction && hasUnsavedChanges && frames[prevIndex] && prevIndex !== index) await saveFrameState(prevIndex);
 
@@ -4169,6 +4218,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const activeMeta = layersMeta[activeLayerIndex];
             mainCanvas.style.visibility = (activeMeta && activeMeta.visible) ? 'visible' : 'hidden';
             mainCanvas.style.opacity = activeMeta ? activeMeta.opacity : 1;
+            uiCanvas.style.visibility = (activeMeta && activeMeta.visible) ? 'visible' : 'hidden';
+            uiCanvas.style.opacity = activeMeta ? activeMeta.opacity : 1;
             bgCanvas.style.visibility = (soloMode) ? 'hidden' : 'visible'; document.getElementById('canvasContainer').style.backgroundColor = (soloMode) ? '#222' : '#ffffff';
             for (let i = 0; i < layerCount(); i++) {
                 const lCanvas = layerCanvasEls[i]; if (!lCanvas) continue;
@@ -4220,50 +4271,88 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             showNotification(`${positions.length} frames invertidos e mantidos selecionados`);
         }
 
+        let isDuplicatingFrames = false;
+
+        async function cloneFrameForDuplicate(index) {
+            const originalFrame = frames[index];
+            if (!originalFrame) return null;
+            const newLayers = await Promise.all(originalFrame.layers.map(layer => layer ? createImageBitmap(layer) : null));
+            return {
+                layers: newLayers,
+                duration: Math.max(1, Number(originalFrame.duration) || 1),
+                // Congela na cópia a aparência 3D exata exibida no frame original.
+                // Se permanecesse interpolado, mudar de posição na timeline alteraria o fundo.
+                camera3D: { ...cameraCopyFromFrame(index) },
+                camera3DKeyframe: true,
+                camera3DInterpolation: originalFrame.camera3DInterpolation !== false
+            };
+        }
+
         async function duplicateFrame() {
-            if (isPlaying) return; 
-            finishSelection(); 
-            await saveFrameState(currentFrameIndex);
+            if (isPlaying || isDuplicatingFrames) return;
+            isDuplicatingFrames = true;
+            const duplicateBtn = document.getElementById('duplicateFrameBtn');
+            if (duplicateBtn) duplicateBtn.disabled = true;
 
-            if (isMultiSelectMode && selectedFrames.size > 0) {
-                const sortedIndices = Array.from(selectedFrames)
-                    .filter(index => Number.isInteger(index) && index >= 0 && index < frames.length)
-                    .sort((a, b) => a - b);
-                if (!sortedIndices.length) { selectedFrames.clear(); renderTimeline(); showNotification('Nenhum frame válido selecionado'); return; }
-                const newFrames = [];
-                for (let idx of sortedIndices) {
-                    const originalFrame = frames[idx];
-                    const newLayers = await Promise.all(originalFrame.layers.map(async (l) => { return l ? await createImageBitmap(l) : null; }));
-                    newFrames.push({ layers: newLayers, duration: originalFrame.duration || 1, camera3D: cameraCopyFromFrame(idx), camera3DKeyframe: false, camera3DInterpolation: true });
-                }
-                const insertPos = frames.length; // SEMPRE NO FINAL
-                frames.push(...newFrames);
-                
-                // Mantém a ferramenta de multiseleção ligada e transfere
-                // a seleção para as cópias recém-criadas.
-                selectedFrames.clear();
-                for (let i = 0; i < newFrames.length; i++) {
-                    selectedFrames.add(insertPos + i);
-                }
-                isMultiSelectMode = true;
-                document.getElementById('multiSelectBtn').classList.add('active');
+            try {
+                // A seleção precisa voltar integralmente à camada antes de copiar seus pixels.
+                await finishSelection();
+                if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
 
-                await loadFrame(insertPos); // Vai para a primeira cópia sem perder a seleção
+                if (isMultiSelectMode && selectedFrames.size > 0) {
+                    const sortedIndices = Array.from(selectedFrames)
+                        .filter(index => Number.isInteger(index) && index >= 0 && index < frames.length)
+                        .sort((a, b) => a - b);
+                    if (!sortedIndices.length) {
+                        selectedFrames.clear(); renderTimeline(); showNotification('Nenhum frame válido selecionado'); return;
+                    }
+
+                    // Captura todas as origens antes de alterar o array de frames.
+                    const newFrames = [];
+                    for (const index of sortedIndices) {
+                        const copy = await cloneFrameForDuplicate(index);
+                        if (copy) newFrames.push(copy);
+                    }
+                    if (!newFrames.length) return;
+
+                    const insertPos = frames.length; // múltiplas cópias continuam agrupadas no final
+                    frames.push(...newFrames);
+
+                    selectedFrames = new Set(newFrames.map((_, offset) => insertPos + offset));
+                    isMultiSelectMode = true;
+                    document.getElementById('multiSelectBtn').classList.add('active');
+
+                    isHistoryAction = true;
+                    await loadFrame(insertPos);
+                    isHistoryAction = false;
+                    renderTimeline();
+
+                    requestAnimationFrame(() => {
+                        const firstSelected = document.getElementById(`thumb-${insertPos}`);
+                        if (firstSelected) firstSelected.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+                    });
+                    showNotification(`${newFrames.length} frames duplicados e mantidos selecionados`);
+                    return;
+                }
+
+                const sourceIndex = currentFrameIndex;
+                const copy = await cloneFrameForDuplicate(sourceIndex);
+                if (!copy) return;
+                const insertPos = sourceIndex + 1;
+                frames.splice(insertPos, 0, copy);
+                isHistoryAction = true;
+                await loadFrame(insertPos);
+                isHistoryAction = false;
                 renderTimeline();
-
-                requestAnimationFrame(() => {
-                    const firstSelected = document.getElementById(`thumb-${insertPos}`);
-                    if (firstSelected) firstSelected.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
-                });
-
-                showNotification(`${newFrames.length} frames duplicados e mantidos selecionados`);
-                return;
+                showNotification('Frame duplicado');
+            } catch (error) {
+                console.error('Erro ao duplicar frame:', error);
+                showNotification('Não foi possível duplicar o frame');
+            } finally {
+                isHistoryAction = false;
+                isDuplicatingFrames = false;
+                if (duplicateBtn) duplicateBtn.disabled = false;
             }
-
-            const newLayers = await Promise.all(frames[currentFrameIndex].layers.map(async (l) => { return l ? await createImageBitmap(l) : null; }));
-            const insertPos = currentFrameIndex + 1; // DUPLICAÇÃO DIRETA: LOGO APÓS O FRAME ATUAL
-            frames.splice(insertPos, 0, { layers: newLayers, duration: frames[currentFrameIndex].duration || 1, camera3D: cameraCopyFromFrame(currentFrameIndex), camera3DKeyframe: false, camera3DInterpolation: true });
-            await loadFrame(insertPos);
         }
 
         onionToggle.addEventListener('change', updateOnionSkin); onionOpacitySlider.addEventListener('input', (e) => onionCanvas.style.opacity = e.target.value / 100);
@@ -5292,11 +5381,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById('deleteCurrentFrameBtn').addEventListener('click', () => deleteFrame(currentFrameIndex)); document.getElementById('addFrameBtn').addEventListener('click', addBlankFrame); document.getElementById('reverseSelectedFramesBtn').addEventListener('click', reverseSelectedFrames); document.getElementById('duplicateFrameBtn').addEventListener('click', duplicateFrame); document.getElementById('copyBtn').onclick = handleCopy; document.getElementById('cutBtn').onclick = handleCut; document.getElementById('pasteBtn').onclick = handlePaste; document.getElementById('undoBtn').onclick = undo; document.getElementById('redoBtn').onclick = redo;
 
         window.addEventListener('keydown', (e) => {
+            const target = e.target;
+            const isEditingText = target && (target.matches('input, textarea, select') || target.isContentEditable);
+            if (isEditingText) return;
             if (e.ctrlKey || e.metaKey) {
                 if (e.key === 'c' || e.key === 'C') handleCopy(); if (e.key === 'v' || e.key === 'V') handlePaste(); if (e.key === 'x' || e.key === 'X') handleCut();
                 if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); if(e.shiftKey) redo(); else undo(); } if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); redo(); }
             }
-            if (e.key === 'Enter') finishSelection(); if (e.key === 'Delete' || e.key === 'Backspace') if(isTransforming) handleCut(); 
+            if (e.key === 'Enter') finishSelection();
+            if ((e.key === 'Delete' || e.key === 'Backspace') && isTransforming) { e.preventDefault(); handleCut(); }
         });
 
         document.getElementById('fpsSlider').addEventListener('input', (e) => { fps = e.target.value; document.getElementById('fpsValue').textContent = fps; updateGlobalFrameDurationControl(); if (isPlaying) { toggleAnimation(); toggleAnimation(); } });
@@ -5305,6 +5398,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         function renderPlaybackFrame(index, logicalTick = null) {
             if (!frames[index]) return;
+            window.currentPlaybackFrameIndex = index;
+            window.currentPlaybackLogicalTick = logicalTick;
             if (logicalTick != null && window.render3DBackgroundForPlayback) window.render3DBackgroundForPlayback(index, logicalTick);
             else if (window.render3DBackgroundForFrame) window.render3DBackgroundForFrame(index);
             pCtx.globalCompositeOperation = 'source-over'; pCtx.clearRect(0, 0, playbackCanvas.width, playbackCanvas.height); pCtx.fillStyle = 'white'; pCtx.fillRect(0, 0, playbackCanvas.width, playbackCanvas.height); pCtx.drawImage(bgCanvas, 0, 0);
@@ -5382,6 +5477,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const backgroundOpacity = document.getElementById('backgroundOpacity');
         const backgroundOpacityValue = document.getElementById('backgroundOpacityValue');
         let panoramaDataURL = null;
+        let panoramaIsGif = false;
+        let panoramaAnimationGeneration = 0;
+        let panoramaGifImage = null;
+        let panoramaGifFrames = [];
+        let panoramaGifFrameIndex = -1;
+        let panoramaGifTimer = 0;
+        let panoramaGifClockStart = 0;
+        const panoramaGifCanvas = document.createElement('canvas');
+        const panoramaGifCtx = panoramaGifCanvas.getContext('2d');
+        const PANORAMA_GIF_FPS = 24;
         let moving3D = false;
         let renderQueued = false;
         let THREE, renderer, scene, camera, panoramaMesh, panoramaTexture;
@@ -5594,15 +5699,145 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             queueCurrentRender();
         }, { passive: false });
 
+        function stopGifBackground() {
+            panoramaAnimationGeneration++;
+            clearInterval(panoramaGifTimer);
+            panoramaGifTimer = 0;
+            panoramaIsGif = false;
+            if (panoramaGifImage) panoramaGifImage.remove();
+            panoramaGifImage = null;
+            panoramaGifFrames.forEach(frame => { try { frame.close(); } catch (error) {} });
+            panoramaGifFrames = [];
+            panoramaGifFrameIndex = -1;
+        }
+
+        function drawPanoramaGifFrame(frame) {
+            if (!frame || !frame.width || !frame.height) return false;
+            if (panoramaGifCanvas.width !== frame.width || panoramaGifCanvas.height !== frame.height) {
+                panoramaGifCanvas.width = frame.width;
+                panoramaGifCanvas.height = frame.height;
+            }
+            panoramaGifCtx.setTransform(1, 0, 0, 1, 0, 0);
+            panoramaGifCtx.globalCompositeOperation = 'copy';
+            panoramaGifCtx.drawImage(frame, 0, 0, panoramaGifCanvas.width, panoramaGifCanvas.height);
+            panoramaGifCtx.globalCompositeOperation = 'source-over';
+            return true;
+        }
+
+        function renderAnimatedPanorama() {
+            if (!panoramaIsGif || !panoramaTexture) return;
+            panoramaTexture.needsUpdate = true;
+            if (isPlaying && Number.isInteger(window.currentPlaybackFrameIndex)) {
+                renderPlaybackFrame(window.currentPlaybackFrameIndex, window.currentPlaybackLogicalTick);
+            } else {
+                window.render3DBackgroundForFrame(currentFrameIndex);
+            }
+        }
+
+        function startPanoramaGifPlayer(generation) {
+            clearInterval(panoramaGifTimer);
+            panoramaIsGif = true;
+            panoramaGifClockStart = performance.now();
+            panoramaGifTimer = setInterval(() => {
+                if (generation !== panoramaAnimationGeneration || !panoramaIsGif || document.hidden) return;
+                if (panoramaGifFrames.length) {
+                    const elapsed = Math.max(0, (performance.now() - panoramaGifClockStart) / 1000);
+                    const index = Math.floor(elapsed * PANORAMA_GIF_FPS) % panoramaGifFrames.length;
+                    if (index !== panoramaGifFrameIndex) {
+                        panoramaGifFrameIndex = index;
+                        drawPanoramaGifFrame(panoramaGifFrames[index]);
+                    }
+                } else if (panoramaGifImage) {
+                    // Compatibilidade para navegadores sem ImageDecoder.
+                    drawPanoramaGifFrame(panoramaGifImage);
+                }
+                renderAnimatedPanorama();
+            }, 1000 / PANORAMA_GIF_FPS);
+        }
+
+        async function decodePanoramaGif(dataURL) {
+            if (!('ImageDecoder' in window)) return false;
+            // Converte o data URL local diretamente em bytes. O desenhar.html
+            // bloqueia fetch por segurança (connect-src 'none'), então usar fetch
+            // aqui fazia o player funcional cair no fallback e exibir cor sólida.
+            const comma = dataURL.indexOf(',');
+            if (comma < 0) return false;
+            const header = dataURL.slice(0, comma);
+            const payload = dataURL.slice(comma + 1);
+            let bytes;
+            if (/;base64/i.test(header)) {
+                const binary = atob(payload);
+                bytes = new Uint8Array(binary.length);
+                for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+            } else {
+                bytes = new TextEncoder().encode(decodeURIComponent(payload));
+            }
+            const decoder = new ImageDecoder({ data: bytes, type: 'image/gif' });
+            await decoder.tracks.ready;
+            const frameCount = decoder.tracks.selectedTrack && decoder.tracks.selectedTrack.frameCount || 0;
+            if (!frameCount) { decoder.close(); return false; }
+            const decodedFrames = [];
+            try {
+                for (let index = 0; index < frameCount; index++) {
+                    const decoded = await decoder.decode({ frameIndex: index, completeFramesOnly: true });
+                    decodedFrames.push(await createImageBitmap(decoded.image));
+                    decoded.image.close();
+                }
+            } catch (error) {
+                decodedFrames.forEach(frame => { try { frame.close(); } catch (_) {} });
+                throw error;
+            } finally {
+                decoder.close();
+            }
+            panoramaGifFrames = decodedFrames;
+            panoramaGifFrameIndex = 0;
+            drawPanoramaGifFrame(decodedFrames[0]);
+            return true;
+        }
+
         async function loadPanorama(dataURL) {
+            stopGifBackground();
+            const generation = panoramaAnimationGeneration;
             panoramaDataURL = dataURL;
-            const texture = await new THREE.TextureLoader().loadAsync(dataURL);
+            panoramaIsGif = /^data:image\/gif(?:;|,)/i.test(dataURL);
+
+            let texture;
+            if (panoramaIsGif) {
+                let decoded = false;
+                try { decoded = await decodePanoramaGif(dataURL); }
+                catch (error) { console.warn('Decodificação controlada indisponível; usando GIF nativo.', error); }
+                if (!decoded) {
+                    const image = new Image();
+                    image.decoding = 'async';
+                    image.style.cssText = 'position:fixed;left:-2px;top:-2px;width:1px;height:1px;opacity:0;pointer-events:none;';
+                    document.body.appendChild(image);
+                    await new Promise((resolve, reject) => {
+                        image.onload = resolve;
+                        image.onerror = () => { image.remove(); reject(new Error('GIF inválido ou não suportado')); };
+                        image.src = dataURL;
+                    });
+                    panoramaGifImage = image;
+                    drawPanoramaGifFrame(image);
+                }
+                if (generation !== panoramaAnimationGeneration) return;
+                texture = new THREE.CanvasTexture(panoramaGifCanvas);
+                texture.generateMipmaps = false;
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+            } else {
+                texture = await new THREE.TextureLoader().loadAsync(dataURL);
+                if (generation !== panoramaAnimationGeneration) { texture.dispose(); return; }
+            }
             texture.colorSpace = THREE.SRGBColorSpace;
             if (panoramaTexture) panoramaTexture.dispose();
             panoramaTexture = texture;
             panoramaMesh.material.dispose();
             panoramaMesh.material = new THREE.MeshBasicMaterial({ map: panoramaTexture, side: THREE.BackSide });
             window.render3DBackgroundForFrame(currentFrameIndex);
+
+            if (panoramaIsGif) {
+                startPanoramaGifPlayer(generation);
+            }
         }
         window.load3DPanorama = loadPanorama;
 
@@ -5619,6 +5854,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             event.target.value = '';
         };
         clearBgBtn.onclick = () => {
+            stopGifBackground();
             panoramaDataURL = null;
             if (panoramaTexture) panoramaTexture.dispose();
             panoramaTexture = null;

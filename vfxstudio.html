@@ -815,7 +815,7 @@
             <button id="btn-play" class="btn-transport">Play</button>
             <div style="font-family: monospace; color: var(--accent); font-size: 14px; min-width: 80px;" id="time-display">00:00.00</div>
             <div style="flex: 1"></div>
-            <div>DURAÇÃO TOTAL: <input type="number" id="render-duration" class="time-input" value="10" min="1">s</div>
+            <div>DURAÇÃO TOTAL: <input type="number" id="render-duration" class="time-input" value="10" min="0.041667" step="0.041667">s</div>
         </div>
         <div id="timeline-track">
             <div id="timeline-content">
@@ -845,6 +845,18 @@
         const NUM_ZOOM_LAYERS = 3;
         const ZOOM_MIN = 1.0; // Imagem original (100%)
         const PPS = 200; // Pixels Per Second - Aumentado para maior precisão/distância
+        const EXPORT_FPS = 24;
+
+        function normalizeLoopDuration(value) {
+            const requested = Number(value);
+            const frames = Math.max(1, Math.round((Number.isFinite(requested) ? requested : 1) * EXPORT_FPS));
+            return { frames, duration: frames / EXPORT_FPS };
+        }
+
+        function loopPhase(time, duration = settings.renderDuration) {
+            if (!(duration > 0)) return 0;
+            return (((time % duration) + duration) % duration) / duration;
+        }
 
         // --- SISTEMA PREVIEW 3D ---
         let isPreview3D = false;
@@ -1635,7 +1647,8 @@
             layers.forEach(layer=>{
                 const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD;
                 const scale=Math.max(.22,Number(layer.effectScale||1));
-                const frame=Math.floor(time*(layer.presetKey==='lightning'?11:20));
+                const flashesPerLoop=Math.max(1,Math.round(settings.renderDuration*(layer.presetKey==='lightning'?11:20)));
+                const frame=Math.floor(loopPhase(time)*flashesPerLoop);
                 const flash=particleRandom(frame,11,layer.seed||1);
                 if (flash>.18) {
                     if (layer.presetKey==='lightning' && flash>.72) {
@@ -1666,6 +1679,7 @@
             const root = settings.particles;
             particleContainer.visible = root.active;
             if (isLivePreview) time = Math.max(0, time - particlePreviewEpoch);
+            const phaseInLoop = loopPhase(time);
             updateLightning(time);
             if (!root.active) return;
 
@@ -1740,7 +1754,8 @@
                 let age;
                 if (p.burst) {
                     const cycle = Math.max(life, p.cycle || 5);
-                    const cycleTime = ((time % cycle) + cycle) % cycle;
+                    const cyclesPerLoop = Math.max(1, Math.round(settings.renderDuration / cycle));
+                    const cycleTime = ((phaseInLoop * cyclesPerLoop) % 1) * cycle;
                     age = cycleTime - (p.startDelay || 0) - r0 * (p.emissionWindow ?? .12);
                     if (age < 0 || age > life) {
                         sprite.alpha = 0; sprite.visible = false; sprite.renderable = false;
@@ -1748,7 +1763,8 @@
                         return;
                     }
                 } else {
-                    age = ((time + r0 * life) % life + life) % life;
+                    const cyclesPerLoop = Math.max(1, Math.round(settings.renderDuration / life));
+                    age = ((phaseInLoop * cyclesPerLoop + r0) % 1) * life;
                 }
                 const phase = age / life;
                 const cx = p.x * W, cy = p.y * H;
@@ -2711,9 +2727,10 @@
         });
 
         document.getElementById('render-duration').addEventListener('change', (e) => {
-            let val = parseInt(e.target.value) || 1;
-            settings.renderDuration = val;
-            if (currentTime > val) currentTime = val;
+            const normalized = normalizeLoopDuration(e.target.value);
+            settings.renderDuration = normalized.duration;
+            e.target.value = Number(normalized.duration.toFixed(6));
+            if (currentTime >= settings.renderDuration) currentTime = 0;
             updateRuler();
             updateKeyframesUI();
             updateScrubberUI();
@@ -2731,7 +2748,7 @@
             const totalWidth = settings.renderDuration * PPS;
             content.style.width = totalWidth + 'px';
 
-            for (let i = 0; i <= settings.renderDuration; i++) {
+            for (let i = 0; i <= Math.ceil(settings.renderDuration); i++) {
                 const tick = document.createElement('div');
                 tick.className = 'timeline-tick';
                 tick.style.left = (i * PPS) + 2 + 'px';
@@ -2802,7 +2819,8 @@
             currentTime += delta;
             
             if (currentTime >= settings.renderDuration) {
-                currentTime = 0; // Reinicia o tempo para criar o efeito de loop
+                // Preserva o excedente do frame para não criar uma micro-pausa a cada volta.
+                currentTime %= settings.renderDuration;
             }
             updateScrubberUI();
             requestAnimationFrame(playLoop);
@@ -3029,17 +3047,37 @@
         }
 
         function getInterpolatedValue(time, prop, type = 'ripple') {
-            const kfs = settings.keyframes.filter(k => k.type === type && k[prop] !== undefined);
+            const kfs = settings.keyframes
+                .filter(k => k.type === type && k[prop] !== undefined)
+                .sort((a, b) => a.time - b.time);
             if (kfs.length === 0) return settings[prop];
-            
-            if (time <= kfs[0].time) return kfs[0][prop];
-            if (time >= kfs[kfs.length - 1].time) return kfs[kfs.length - 1][prop];
+            if (kfs.length === 1) return kfs[0][prop];
+
+            const duration = Math.max(1 / EXPORT_FPS, settings.renderDuration);
+            const t = ((time % duration) + duration) % duration;
+            let from = kfs[kfs.length - 1];
+            let to = kfs[0];
+            let t0 = from.time;
+            let t1 = to.time + duration;
+            let sampleTime = t < to.time ? t + duration : t;
 
             for (let i = 0; i < kfs.length - 1; i++) {
-                if (time >= kfs[i].time && time <= kfs[i+1].time) {
+                if (t >= kfs[i].time && t < kfs[i + 1].time) {
+                    from = kfs[i];
+                    to = kfs[i + 1];
+                    t0 = from.time;
+                    t1 = to.time;
+                    sampleTime = t;
+                    break;
+                }
+            }
+
+            const ratio = Math.max(0, Math.min(1, (sampleTime - t0) / Math.max(1e-6, t1 - t0)));
+            const v0 = from[prop];
+            const v1 = to[prop];
+
                     if (type === 'particles' && prop === 'particles') {
-                        const p0 = kfs[i].particles, p1 = kfs[i+1].particles;
-                        const ratio = (time - kfs[i].time) / (kfs[i+1].time - kfs[i].time);
+                        const p0 = from.particles, p1 = to.particles;
                         const result = { ...p0 };
                         Object.keys(p1).forEach(key => {
                             if (typeof p0[key] === 'number' && typeof p1[key] === 'number') result[key] = p0[key] + (p1[key] - p0[key]) * ratio;
@@ -3053,9 +3091,8 @@
                     }
 
                     if (type === 'fire' && prop === 'fires') {
-                        const f0 = kfs[i].fires;
-                        const f1 = kfs[i+1].fires;
-                        const ratio = (time - kfs[i].time) / (kfs[i+1].time - kfs[i].time);
+                        const f0 = from.fires;
+                        const f1 = to.fires;
                         return f1.map((fire1, idx) => {
                             const fire0 = f0[idx] || fire1;
                             return {
@@ -3068,9 +3105,8 @@
                     }
 
                     if (type === 'light' && prop === 'lights') {
-                        const l0 = kfs[i].lights;
-                        const l1 = kfs[i+1].lights;
-                        const ratio = (time - kfs[i].time) / (kfs[i+1].time - kfs[i].time);
+                        const l0 = from.lights;
+                        const l1 = to.lights;
                         
                         return l1.map((light1, idx) => {
                             const light0 = l0[idx] || light1; // Fallback se a luz não existia no KF anterior
@@ -3092,18 +3128,12 @@
                         });
                     }
 
-                    const t0 = kfs[i].time; 
-                    const t1 = kfs[i+1].time;
-                    const v0 = kfs[i][prop];
-                    const v1 = kfs[i+1][prop];
-                    
                     if (typeof v0 === 'boolean') return v0; // Toggles não interpolam, apenas mudam
 
                     // Interpolação de Cor (Hex)
                     if (prop === 'lightColor' || prop === 'globalLightColor' || prop === 'vaporColor') {
                         const c0 = hexToRgb(v0);
                         const c1 = hexToRgb(v1);
-                        const ratio = (time - t0) / (t1 - t0);
                         const r = Math.round((c0[0] + (c1[0] - c0[0]) * ratio) * 255);
                         const g = Math.round((c0[1] + (c1[1] - c0[1]) * ratio) * 255);
                         const b = Math.round((c0[2] + (c1[2] - c0[2]) * ratio) * 255);
@@ -3111,11 +3141,7 @@
                         return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
                     }
 
-                    const ratio = (time - t0) / (t1 - t0);
                     return v0 + (v1 - v0) * ratio;
-                }
-            }
-            return kfs[kfs.length - 1][prop];
         }
 
         // Aplica os valores atuais de 'settings' nos filtros do Pixi
@@ -3124,6 +3150,8 @@
             
             const animTime = isLivePreview ? (performance.now() / 1000) : currentTime;
             const duration = settings.renderDuration;
+            const phase = loopPhase(animTime, duration);
+            const seamlessOscillation = Math.sin(phase * Math.PI * 2);
 
             // Scroll de Cenário em Loop (Sincronizado com tempo e duração)
             const tex = sprite.texture;
@@ -3224,12 +3252,19 @@
                 activeProgress = Math.min(explosionProgress, 1.0);
             } else {
                 // Usando Keyframes da Timeline
-                const recentImpact = [...settings.keyframes]
-                    .filter(kf => kf.type === 'impact' && kf.time <= currentTime)
+                const impacts = settings.keyframes.filter(kf => kf.type === 'impact');
+                let recentImpact = impacts
+                    .filter(kf => kf.time <= currentTime)
                     .sort((a,b) => b.time - a.time)[0];
+                let elapsed = recentImpact ? currentTime - recentImpact.time : Infinity;
+
+                // Um impacto iniciado perto do fim pode terminar depois da volta do loop.
+                if (!recentImpact && impacts.length) {
+                    recentImpact = [...impacts].sort((a,b) => b.time - a.time)[0];
+                    elapsed = currentTime + settings.renderDuration - recentImpact.time;
+                }
                 
                 if (recentImpact) {
-                    const elapsed = currentTime - recentImpact.time;
                     activeProgress = Math.min(elapsed * recentImpact.expSpeed, 1.0);
                     activeStrength = recentImpact.expStrength;
                 }
@@ -3250,7 +3285,8 @@
             const vaporCycles = Math.max(1, Math.round(settings.vaporSpeed * duration * 0.1));
             
             vaporFilter.uniforms.uThreshold = settings.vaporProgress;
-            vaporFilter.uniforms.uTime = (animTime / duration) * (vaporCycles * 4.0);
+            // Tempo circular: em qualquer duração, o estado em 100% é idêntico ao de 0%.
+            vaporFilter.uniforms.uTime = seamlessOscillation * vaporCycles;
             vaporFilter.uniforms.uDuration = duration;
             vaporFilter.uniforms.uSpeed = settings.vaporSpeed;
             vaporFilter.uniforms.uColor = hexToRgb(settings.vaporColor);
@@ -3296,7 +3332,7 @@
                 f.uniforms.uPos = [fire.posX, fire.posY];
                 f.uniforms.uSize = fire.size * 0.3; // Aumentado para o slider ter mais impacto
                 f.uniforms.uIntensity = fire.intensity;
-                f.uniforms.uTime = animTime;
+                f.uniforms.uTime = seamlessOscillation;
             });
 
             // Aplica Iluminação Dinâmica (Múltiplas Luzes)
@@ -3338,7 +3374,7 @@
             colorFilter.uniforms.uChromatic = settings.chromatic;
             colorFilter.uniforms.uGrain = settings.grain;
             colorFilter.uniforms.uScanlines = settings.scanlines;
-            colorFilter.uniforms.uTime = animTime;
+            colorFilter.uniforms.uTime = seamlessOscillation;
         }
 
         function seek(time, updateUI = true) {
@@ -3508,9 +3544,12 @@
 
             const width = 1456;
             const height = 728;
-            const fps = 24;
-            const totalDuration = parseFloat(document.getElementById('render-duration').value) || 5;
-            const totalFrames = Math.round(totalDuration * fps);
+            const fps = EXPORT_FPS;
+            const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
+            const totalFrames = normalizedLoop.frames;
+            const totalDuration = normalizedLoop.duration;
+            settings.renderDuration = totalDuration;
+            document.getElementById('render-duration').value = Number(totalDuration.toFixed(6));
 
             // 2. Configurar o Muxer (WebMMuxer)
             const muxer = new WebMMuxer.Muxer({
@@ -3612,9 +3651,12 @@
                 btn.disabled = true;
                 statusLabel.style.display = 'block';
 
-                const fps = 24;
-                const totalDuration = parseFloat(document.getElementById('render-duration').value) || 5;
-                const totalFrames = Math.round(totalDuration * fps);
+                const fps = EXPORT_FPS;
+                const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
+                const totalFrames = normalizedLoop.frames;
+                const totalDuration = normalizedLoop.duration;
+                settings.renderDuration = totalDuration;
+                document.getElementById('render-duration').value = Number(totalDuration.toFixed(6));
 
                 app.ticker.stop();
 
