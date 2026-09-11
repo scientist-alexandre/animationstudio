@@ -391,6 +391,22 @@
       }
       .timeline-controls button { padding: 2px 6px; font-size: 9px; }
       .timeline-controls input { max-height: 21px; }
+      #last-keyframe-marker {
+        min-width: 34px;
+        height: 21px;
+        padding: 0 7px;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #444;
+        border-radius: 3px;
+        background: #090909;
+        color: #fff;
+        font: 700 10px monospace;
+        line-height: 1;
+        flex-shrink: 0;
+      }
       .canvas-view-controls {
         display: flex;
         align-items: center;
@@ -1050,14 +1066,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         <button id="add" class="btn-add" onclick="setMode('add')" title="Clique na base e depois na ponta. Continue para criar uma cadeia; Shift inicia outra.">Ossos</button>
         <button class="btn-delete" onclick="deleteAllPins()">Apagar Ossos</button>
       </div>
+      <div class="toolbar-white-group" aria-label="Grupo de máscara">
+        <button id="mask-brush" type="button" onclick="toggleInfluenceMaskTool()" title="Desenhe à mão livre uma região que isola a influência dos ossos sem recortar a imagem">Máscara</button>
+        <button id="mask-eraser" type="button" onclick="deleteLastInfluenceMask()" title="Apaga a última máscara criada na camada selecionada">Apagar Máscara</button>
+      </div>
       <button id="move" class="btn-move active" onclick="setMode('move')" title="Arraste as juntas livremente para mover, alongar ou encurtar os ossos.">
         Rigging
       </button>
-      <div class="toolbar-white-group" aria-label="Grupo de máscara">
-        <button id="mask-brush" onclick="toggleMeshTool()" title="Desenhe um laço fechado para isolar a influência dos ossos nesta região">Máscara</button>
-        <button id="mask-follow-bone" onclick="pickMaskFollowBone()" title="Escolha o osso que movimentará a última máscara criada">Máscara Seguir Osso</button>
-        <button id="mask-eraser" onclick="clearSelectedInfluence()" title="Apaga a última máscara; com ossos selecionados, apaga a máscara que contém esses ossos">Apagar Máscara</button>
-      </div>
 
       <div class="toolbar-white-group" aria-label="Grupo de transformar">
         <button id="g-move" class="btn-global" onclick="setMode('g-move')">
@@ -1103,7 +1118,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             min="1"
             max="60"
             step="1"
-            value="12"
+            value="1"
             style="width: 40px"
             oninput="seek(currentFrame); refreshTotalFrames(); renderAudioTimeline()"
         /></label>
@@ -1267,6 +1282,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     </div>
     <div id="timeline-container">
       <div class="timeline-controls">
+        <span id="last-keyframe-marker" title="Último keyframe da animação">1</span>
         <button
           id="playBtn"
           onclick="togglePlay()"
@@ -1603,20 +1619,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 `${i}:${Math.round((p.ox || 0) * 100) / 100},${Math.round((p.oy || 0) * 100) / 100}`,
             )
             .join(";");
-          const regions = (l.pins || [])
-            .map((p, i) => {
-              const poly = Array.isArray(p.deformPolygon)
-                ? p.deformPolygon
-                    .map(
-                      (q) =>
-                        `${Math.round(q.x * 10) / 10},${Math.round(q.y * 10) / 10}`,
-                    )
-                    .join(":")
-                : "";
-              return `${i}[${poly}]`;
-            })
-            .join("|");
-          return `${gm.signature || "base"}|${gm.mesh.length}|${gm.triangles.length}|${item.img.width}x${item.img.height}|${pinBind}|${regions}`;
+          return `${gm.signature || "base"}|${gm.mesh.length}|${gm.triangles.length}|${item.img.width}x${item.img.height}|${pinBind}`;
         };
 
         // Metadados invariantes por triângulo. Nearest pin e candidatos de Frente
@@ -1624,70 +1627,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const buildTriangleMeta = (item, gm) => {
           const l = item.l;
           const meta = new Array(gm.triangles.length);
-          const bodyPins = (l.pins || [])
-            .map((p, i) => ({ p, i }))
-            .filter((o) => isMaskDepthPin(l,o.i));
-          // Estes dados dependem do pin em repouso, não do triângulo.
-          // Calculá-los uma vez evita repetir a busca entre todos os pins
-          // para cada triângulo ao adicionar um ponto.
-          for (const o of bodyPins) {
-            o.localPolygons = (l.meshPolygons || []).filter((poly) =>
-              pointInOrOnPolygon(o.p.ox, o.p.oy, poly),
-            );
-            o.frontRadius = !o.localPolygons.length &&
-              !(Array.isArray(o.p.deformPolygon) && o.p.deformPolygon.length >= 3)
-              ? getPinLocalFrontRadius(l, o.p) : 0;
-          }
+          const bodyPins = (l.pins || []).map((p, i) => ({ p, i }));
           for (let ti = 0; ti < gm.triangles.length; ti++) {
             const t = gm.triangles[ti];
-            const a = gm.mesh[t[0]],
-              b = gm.mesh[t[1]],
-              c = gm.mesh[t[2]];
-            const cx = (a.ox + b.ox + c.ox) / 3,
-              cy = (a.oy + b.oy + c.oy) / 3;
-            let nearest = -1,
-              best = Infinity;
+            const a = gm.mesh[t[0]], b = gm.mesh[t[1]], c = gm.mesh[t[2]];
+            const cx = (a.ox + b.ox + c.ox) / 3;
+            const cy = (a.oy + b.oy + c.oy) / 3;
+            let nearest = -1, best = Infinity;
             for (let j = 0; j < bodyPins.length; j++) {
-              const o = bodyPins[j],
-                dx = cx - (o.p.ox ?? o.p.x),
-                dy = cy - (o.p.oy ?? o.p.y),
-                d = dx * dx + dy * dy;
-              if (d < best) {
-                best = d;
-                nearest = o.i;
-              }
+              const o = bodyPins[j];
+              const dx = cx - (o.p.ox ?? o.p.x);
+              const dy = cy - (o.p.oy ?? o.p.y);
+              const d = dx * dx + dy * dy;
+              if (d < best) { best = d; nearest = o.i; }
             }
-            const tri = [a, b, c];
-            const frontCandidates = [];
-            for (let j = 0; j < bodyPins.length; j++) {
-              const p = bodyPins[j].p;
-              let inside = false;
-              const localPolygons = bodyPins[j].localPolygons;
-              if (localPolygons.length)
-                inside = localPolygons.some((poly) =>
-                  pointInPolygon(cx, cy, poly),
-                );
-              else if (
-                Array.isArray(p.deformPolygon) &&
-                p.deformPolygon.length >= 3
-              )
-                inside = pointInPolygon(cx, cy, p.deformPolygon);
-              else {
-                const px = Number.isFinite(p.ox) ? p.ox : p.x,
-                  py = Number.isFinite(p.oy) ? p.oy : p.y;
-                inside =
-                  Math.hypot(cx - px, cy - py) <= bodyPins[j].frontRadius;
-              }
-              if (inside) frontCandidates.push(bodyPins[j].i);
-            }
-            // A malha local continua sendo parte da mesma imagem, como Puppet
-            // Pin. Esta marca só define a ordem quando a superfície dobra sobre
-            // ela mesma: a parte animada deve ficar sobre a parte parada da
-            // mesma camada, nunca atrás dela.
-            const localOverlay = (l.meshPolygons || []).some((poly) =>
-              pointInPolygon(cx, cy, poly),
-            );
-            meta[ti] = { nearest, frontCandidates, localOverlay };
+            meta[ti] = { nearest, frontCandidates: [], localOverlay: false };
           }
           return meta;
         };
@@ -2011,6 +1965,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById("file-menu-panel")?.classList.remove("open");
       });
       document.addEventListener("keydown", (e) => {
+        if (e.code !== "Space" && e.key !== " ") return;
+        const target = e.target;
+        const tag = target?.tagName;
+        const isTextEditing =
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          target?.isContentEditable;
+        if (isTextEditing) return;
+        e.preventDefault();
+        setMode("move");
       });
       document.addEventListener("fullscreenchange", updateFullscreenMenu);
       document.addEventListener("webkitfullscreenchange", updateFullscreenMenu);
@@ -2059,8 +2024,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           }
 
           skinBindingCache.delete(layer);
-          adaptiveTopologyCache.delete(layer);
-          adaptiveRenderGeometryCache.delete(layer);
           if (layer.pins?.length >= 2) updateDeform(layer);
         });
 
@@ -2411,13 +2374,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       // mesmo quando selectLayer() ativa automaticamente um filho da pasta.
       // Guardamos UID para a seleção sobreviver a reordenação/exclusão de índices.
       let layerLibrarySelectionUid = null;
-      let maskBrushActive = false,
-        maskEraserActive = false,
-        maskPainting = false,
-        maskBrushCursor = null,
-        influencePolygon = [],
-        maskDriverPickIndex = -1;
-      let meshDisplayVisible = false;
       let globalTransformDragging = false;
 
       function updateBackgroundCameraModeUI() {
@@ -2964,7 +2920,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           activeAssetIndex: 0,
           pins: [],
           mesh: [],
-          meshPolygons: [],
+          influenceMasks: [],
           followPin: null,
           followPinBase: null,
           followPinKeyframes: [],
@@ -3935,214 +3891,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return m;
       }
 
-      function pointInPolygon(x, y, polygon) {
-        let inside = false;
-        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-          const a = polygon[i],
-            b = polygon[j];
-          if (
-            a.y > y !== b.y > y &&
-            x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x
-          )
-            inside = !inside;
-        }
-        return inside;
-      }
-
-      // Distância do ponto até a borda da região. Usada para fazer a influência
-      // chegar a zero na borda e evitar que a interpolação de um triângulo carregue
-      // pixels para fora do polígono.
-      function distancePointToSegment(px, py, ax, ay, bx, by) {
-        const abx = bx - ax,
-          aby = by - ay;
-        const len2 = abx * abx + aby * aby;
-        if (len2 < 1e-9) return Math.hypot(px - ax, py - ay);
-        const t = Math.max(
-          0,
-          Math.min(1, ((px - ax) * abx + (py - ay) * aby) / len2),
-        );
-        const qx = ax + abx * t,
-          qy = ay + aby * t;
-        return Math.hypot(px - qx, py - qy);
-      }
-      function distanceToPolygonEdge(x, y, polygon) {
-        if (!polygon || polygon.length < 2) return Infinity;
-        let best = Infinity;
-        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-          const a = polygon[j],
-            b = polygon[i];
-          best = Math.min(
-            best,
-            distancePointToSegment(x, y, a.x, a.y, b.x, b.y),
-          );
-        }
-        return best;
-      }
-      function pointInOrOnPolygon(x, y, polygon, tolerance = 2.5) {
-        return (
-          Array.isArray(polygon) &&
-          polygon.length >= 3 &&
-          (pointInPolygon(x, y, polygon) ||
-            distanceToPolygonEdge(x, y, polygon) <= tolerance)
-        );
-      }
-      function maskBoundaryWeight(x, y, polygon) {
-        let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-        for(const p of polygon){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
-        const span=Math.min(maxX-minX,maxY-minY);
-        const feather=Math.max(1e-7,Math.min(span*.25,Math.max(2,span*.08)));
-        const t=Math.min(1,distanceToPolygonEdge(x,y,polygon)/feather);
-        return t*t*(3-2*t);
-      }
-      function inwardMaskWeight(x, y, polygon) {
-        if (!Array.isArray(polygon) || polygon.length < 3 || !pointInPolygon(x,y,polygon)) return 0;
-        return maskBoundaryWeight(x,y,polygon);
-      }
-      function outsideMaskFollowWeight(x, y, polygon) {
-        let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-        for(const p of polygon){minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
-        const span=Math.max(1,Math.min(maxX-minX,maxY-minY));
-        // Larga o bastante para conter vários vértices mesmo no grid 16/32.
-        const feather=Math.max(12,span*.2);
-        const t=Math.min(1,distanceToPolygonEdge(x,y,polygon)/feather);
-        const body=t*t*(3-2*t);
-        return 1-body;
-      }
-      function polygonsTouchOrOverlap(a, b) {
-        if (!Array.isArray(a) || !Array.isArray(b) || a.length < 3 || b.length < 3) return false;
-        if (a.some((p) => pointInOrOnPolygon(p.x, p.y, b, 1e-7)) ||
-            b.some((p) => pointInOrOnPolygon(p.x, p.y, a, 1e-7))) return true;
-        const cross = (p, q, r) =>
-          (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
-        for (let i = 0; i < a.length; i++) {
-          const p = a[i], q = a[(i + 1) % a.length];
-          for (let j = 0; j < b.length; j++) {
-            const r = b[j], s = b[(j + 1) % b.length];
-            const c1 = cross(p, q, r), c2 = cross(p, q, s);
-            const c3 = cross(r, s, p), c4 = cross(r, s, q);
-            if (((c1 >= -1e-7 && c2 <= 1e-7) || (c2 >= -1e-7 && c1 <= 1e-7)) &&
-                ((c3 >= -1e-7 && c4 <= 1e-7) || (c4 >= -1e-7 && c3 <= 1e-7))) return true;
-          }
-        }
-        return false;
-      }
-      function startInfluencePolygon() {
-        if (activeLayerIndex === -1 || activeLayerIndex === "bg") return;
-        influencePolygon = [];
-        maskBrushActive = true;
-        maskPainting = false;
-        dragTarget = null;
-        canvas.style.cursor = "crosshair";
-        document.getElementById("mask-brush")?.classList.add("active");
-        showNotice(
-          "Contorne a região que deve ficar isolada dos outros ossos e feche o laço.",
-        );
-        draw();
-      }
-      function toggleMeshTool() {
-        if (activeLayerIndex === -1 || activeLayerIndex === "bg") return;
-        meshDisplayVisible = !meshDisplayVisible;
-        const button = document.getElementById("mask-brush");
-        button?.classList.toggle("active", meshDisplayVisible);
-        if (meshDisplayVisible) {
-          startInfluencePolygon();
-          showNotice(
-            "Máscaras visíveis. Desenhe um laço fechado ou clique novamente para ocultar.",
-          );
-        } else {
-          influencePolygon = [];
-          maskBrushActive = false;
-          maskPainting = false;
-          maskBrushCursor = null;
-          canvas.style.cursor = "crosshair";
-          showNotice("Máscaras ocultadas.");
-          draw();
-        }
-      }
-      function finishInfluencePolygon() {
-        if (!maskBrushActive || influencePolygon.length < 3) return;
-        const l = layers[activeLayerIndex];
-        if (!Array.isArray(l.meshPolygons)) l.meshPolygons = [];
-        l.meshPolygons.push(influencePolygon.map((p) => ({ x: p.x, y: p.y })));
-        // Mantém a caneta ativa para permitir criar várias malhas consecutivas.
-        // Apenas o polígono recém-finalizado é limpo; as malhas anteriores
-        // continuam armazenadas em meshPolygons.
-        influencePolygon = [];
-        maskBrushActive = true;
-        maskPainting = false;
-        canvas.style.cursor = "crosshair";
-        document
-          .getElementById("mask-brush")
-          ?.classList.toggle("active", meshDisplayVisible);
-        if (l) updateDeform(l);
-        showNotice(
-          "Máscara criada: os ossos de dentro não deformam a região de fora, nem o contrário.",
-        );
-        draw();
-      }
-      function clearSelectedInfluence() {
-        const l = layers[activeLayerIndex];
-        if (l && Array.isArray(l.meshPolygons)) {
-          const selectedBodyPins = selectedPins;
-          if (selectedBodyPins.length) {
-            l.meshPolygons = l.meshPolygons.filter(
-              (poly) =>
-                !selectedBodyPins.some((pin) =>
-                  pointInPolygon(pin.ox, pin.oy, poly),
-                ),
-            );
-          } else {
-            l.meshPolygons.pop();
-          }
-        }
-        influencePolygon = [];
-        maskBrushActive = false;
-        maskPainting = false;
-        document
-          .getElementById("mask-brush")
-          ?.classList.toggle("active", meshDisplayVisible);
-        if (l) updateDeform(l);
-        showNotice("Máscara apagada.");
-        draw();
-      }
-      function pickMaskFollowBone() {
-        const l=Number.isInteger(activeLayerIndex)?layers[activeLayerIndex]:null;
-        if(!l||l.isFolder||!Array.isArray(l.meshPolygons)||!l.meshPolygons.length){
-          showNotice("Crie uma máscara primeiro.");
-          return;
-        }
-        maskDriverPickIndex=l.meshPolygons.length-1;
-        maskBrushActive=false;maskPainting=false;influencePolygon=[];
-        meshDisplayVisible=true;
-        document.getElementById("mask-follow-bone")?.classList.add("active");
-        showNotice("Clique na junta ou no segmento do osso que a máscara deve acompanhar.");
-        draw();
-      }
-      function finishMaskFollowBonePick(point) {
-        if(maskDriverPickIndex<0)return false;
-        const l=Number.isInteger(activeLayerIndex)?layers[activeLayerIndex]:null;
-        const polygon=l?.meshPolygons?.[maskDriverPickIndex];
-        const pin=l&&(hitBodyBone(l.pins,point,20)||hitRigJoint(l.pins,point,26));
-        if(!polygon?.length||!pin){
-          showNotice("Clique diretamente em uma junta ou em um osso visível.");
-          return true;
-        }
-        polygon[0].driverPinIndex=l.pins.indexOf(pin);
-        maskDriverPickIndex=-1;
-        document.getElementById("mask-follow-bone")?.classList.remove("active");
-        skinBindingCache.delete(l.mesh);
-        updateDeform(l);draw();
-        showNotice("Máscara vinculada ao osso escolhido.");
-        return true;
-      }
-      function pinMaskCovers(pin, x, y) {
-        if (pin?.deformPolygon?.length >= 3)
-          return pointInPolygon(x, y, pin.deformPolygon);
-        return !!pin?.deformMask?.some(
-          (dot) => Math.hypot(dot.x - x, dot.y - y) <= dot.r,
-        );
-      }
-
       function isDrawingEditorOpen() {
         return document.getElementById('drawing-dialog')?.classList.contains('open') === true;
       }
@@ -4150,27 +3898,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         dragTarget = null;
         hoveredPin = null;
         globalTransformDragging = false;
-        maskPainting = false;
       }
       function setMode(m) {
         resetRigPointerGesture();
+        if (influenceMaskToolActive) {
+          influenceMaskToolActive = false;
+          influenceMaskDrawing = false;
+          influenceMaskPointerId = null;
+          influenceMaskDraft = [];
+          document.getElementById("mask-brush")?.classList.remove("active");
+        }
         if (m === 'add') {
           followPickLayer = null;
           updateFollowPinButton();
         }
         mode = m;
-        maskBrushActive = false;
-        maskEraserActive = false;
-        maskPainting = false;
-        maskBrushCursor = null;
-        influencePolygon = [];
-        maskDriverPickIndex = -1;
         canvas.style.cursor = "crosshair";
-        document
-          .getElementById("mask-brush")
-          ?.classList.toggle("active", meshDisplayVisible);
-        document.getElementById("mask-eraser")?.classList.remove("active");
-        document.getElementById("mask-follow-bone")?.classList.remove("active");
         selectedPins = [];
         const btns = {
           add: "add",
@@ -4186,9 +3929,191 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         dragTarget = null;
       }
 
+
+      // ---------------------------------------------------------------------
+      // Máscara de influência de ossos — somente skinning, nunca clipping.
+      // O laço é salvo nas coordenadas originais da camada. Ele não recorta
+      // pixels e não participa das Shape Keys; apenas filtra pesos do rig.
+      // ---------------------------------------------------------------------
+      let influenceMaskToolActive = false;
+      let influenceMaskDrawing = false;
+      let influenceMaskPointerId = null;
+      let influenceMaskDraft = [];
+
+      function activeInfluenceMaskLayer() {
+        if (!Number.isInteger(activeLayerIndex)) return null;
+        const layer = layers[activeLayerIndex];
+        return layer && !layer.isFolder ? layer : null;
+      }
+
+      function normalizeInfluenceMasks(layer) {
+        if (!layer || layer.isFolder) return [];
+        if (!Array.isArray(layer.influenceMasks)) layer.influenceMasks = [];
+        layer.influenceMasks = layer.influenceMasks
+          .filter((poly) => Array.isArray(poly) && poly.length >= 3)
+          .map((poly) => poly
+            .filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+            .map((p) => ({ x: Number(p.x), y: Number(p.y) })))
+          .filter((poly) => poly.length >= 3);
+        return layer.influenceMasks;
+      }
+
+      function toggleInfluenceMaskTool() {
+        const layer = activeInfluenceMaskLayer();
+        if (!layer) {
+          showNotice("Selecione uma camada de imagem para desenhar a máscara.");
+          return;
+        }
+        if (shapeWarpSession || shapeWarpToolActive) {
+          showNotice("Finalize ou cancele a edição da Shape Key antes de desenhar máscaras.");
+          return;
+        }
+        influenceMaskToolActive = !influenceMaskToolActive;
+        influenceMaskDrawing = false;
+        influenceMaskPointerId = null;
+        influenceMaskDraft = [];
+        resetRigPointerGesture();
+        const btn = document.getElementById("mask-brush");
+        if (btn) btn.classList.toggle("active", influenceMaskToolActive);
+        canvas.style.cursor = influenceMaskToolActive ? "crosshair" : "crosshair";
+        showNotice(influenceMaskToolActive
+          ? "Máscara: pressione e desenhe o laço livre ao redor da região. Solte para fechar."
+          : "Ferramenta de máscara encerrada.");
+        draw();
+      }
+
+      function maskLocalPointFromPointer(e) {
+        return getCoords(e);
+      }
+
+      function beginInfluenceMaskLasso(e) {
+        if (!influenceMaskToolActive) return false;
+        const layer = activeInfluenceMaskLayer();
+        if (!layer) return false;
+        if (e.pointerType === "touch") e.preventDefault();
+        const p = maskLocalPointFromPointer(e);
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return true;
+        influenceMaskDrawing = true;
+        influenceMaskPointerId = e.pointerId;
+        influenceMaskDraft = [{ x: p.x, y: p.y }];
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+        draw();
+        return true;
+      }
+
+      function moveInfluenceMaskLasso(e) {
+        if (!influenceMaskToolActive || !influenceMaskDrawing || influenceMaskPointerId !== e.pointerId)
+          return false;
+        if (e.pointerType === "touch") e.preventDefault();
+        const p = maskLocalPointFromPointer(e);
+        const last = influenceMaskDraft[influenceMaskDraft.length - 1];
+        if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= 2) {
+          influenceMaskDraft.push({ x: p.x, y: p.y });
+          scheduleInteractiveRender();
+        }
+        return true;
+      }
+
+      function finishInfluenceMaskLasso(e, cancelled = false) {
+        if (!influenceMaskDrawing || influenceMaskPointerId !== e.pointerId) return false;
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        influenceMaskDrawing = false;
+        influenceMaskPointerId = null;
+        const layer = activeInfluenceMaskLayer();
+        const draft = influenceMaskDraft;
+        influenceMaskDraft = [];
+        if (!cancelled && layer && draft.length >= 3) {
+          // Simplificação mínima: remove pontos quase coincidentes sem alterar
+          // o desenho livre feito pelo usuário.
+          const poly = [];
+          for (const p of draft) {
+            const prev = poly[poly.length - 1];
+            if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) >= 2) poly.push(p);
+          }
+          if (poly.length >= 3) {
+            normalizeInfluenceMasks(layer).push(poly);
+            skinBindingCache.delete(layer.mesh);
+            updateDeform(layer);
+            showNotice("Máscara criada. A imagem continua livre; somente a influência dos ossos foi isolada.");
+          }
+        }
+        flushInteractiveRender();
+        draw();
+        return true;
+      }
+
+      function deleteLastInfluenceMask() {
+        const layer = activeInfluenceMaskLayer();
+        if (!layer) {
+          showNotice("Selecione uma camada de imagem.");
+          return;
+        }
+        const masks = normalizeInfluenceMasks(layer);
+        if (!masks.length) {
+          showNotice("Esta camada não possui máscaras.");
+          return;
+        }
+        masks.pop();
+        influenceMaskDraft = [];
+        influenceMaskDrawing = false;
+        skinBindingCache.delete(layer.mesh);
+        updateDeform(layer);
+        showNotice("Última máscara apagada.");
+        draw();
+      }
+
+      function pointInInfluenceMask(x, y, polygon) {
+        if (!Array.isArray(polygon) || polygon.length < 3) return false;
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+          const a = polygon[i], b = polygon[j];
+          const crosses = ((a.y > y) !== (b.y > y)) &&
+            (x < ((b.x - a.x) * (y - a.y)) / ((b.y - a.y) || 1e-12) + a.x);
+          if (crosses) inside = !inside;
+        }
+        return inside;
+      }
+
+      function distanceSqPointToBoneSegment(x, y, control) {
+        const a = control.parent;
+        const t = Math.max(0, Math.min(1,
+          ((x - a.ox) * control.vx + (y - a.oy) * control.vy) / control.length2));
+        const dx = x - (a.ox + t * control.vx);
+        const dy = y - (a.oy + t * control.vy);
+        return dx * dx + dy * dy;
+      }
+
+      function drawInfluenceMaskOverlay(layer, gMat, targetCtx = ctx) {
+        if (!influenceMaskToolActive || layer !== activeInfluenceMaskLayer()) return;
+        const masks = normalizeInfluenceMasks(layer);
+        targetCtx.save();
+        targetCtx.setTransform(gMat);
+        targetCtx.lineWidth = Math.max(1, 2 / Math.max(0.001, Math.hypot(gMat.a, gMat.b)));
+        masks.forEach((poly) => {
+          if (poly.length < 3) return;
+          targetCtx.beginPath();
+          targetCtx.moveTo(poly[0].x, poly[0].y);
+          for (let i = 1; i < poly.length; i++) targetCtx.lineTo(poly[i].x, poly[i].y);
+          targetCtx.closePath();
+          targetCtx.fillStyle = "rgba(255, 210, 0, 0.10)";
+          targetCtx.strokeStyle = "rgba(255, 220, 70, 0.95)";
+          targetCtx.fill();
+          targetCtx.stroke();
+        });
+        if (influenceMaskDraft.length) {
+          targetCtx.beginPath();
+          targetCtx.moveTo(influenceMaskDraft[0].x, influenceMaskDraft[0].y);
+          for (let i = 1; i < influenceMaskDraft.length; i++)
+            targetCtx.lineTo(influenceMaskDraft[i].x, influenceMaskDraft[i].y);
+          targetCtx.strokeStyle = "#ffffff";
+          targetCtx.stroke();
+        }
+        targetCtx.restore();
+      }
+
       function getFps() {
         const val = parseFloat(document.getElementById("fps-input").value);
-        return isNaN(val) ? 12 : Math.max(1, Math.min(60, val));
+        return isNaN(val) ? 1 : Math.max(1, Math.min(60, val));
       }
 
       function togglePins() {
@@ -4540,7 +4465,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const lastBackground=backgroundKeyframes.reduce((last,key)=>Math.max(last,Math.round(Number(key.frame)||1)),1);
         const lastTransform=layers.reduce((last,layer)=>Math.max(last,...(layer.transformKeyframes||[]).map((key)=>Math.round(Number(key.frame)||1))),1);
         const lastFollow=layers.reduce((last,layer)=>Math.max(last,...(layer.followPinKeyframes||[]).map((key)=>Math.round(Number(key.frame)||1))),1);
-        return Math.max(lastBody,lastBackground,lastTransform,lastFollow);
+        const lastFrame=Math.max(lastBody,lastBackground,lastTransform,lastFollow);
+        const marker=document.getElementById("last-keyframe-marker");
+        if(marker) marker.textContent=String(lastFrame);
+        return lastFrame;
       }
 
       function seek(frame) {
@@ -5807,7 +5735,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           directionIndex: Number.isInteger(l.directionIndex) ? l.directionIndex : null,
           pins: JSON.parse(JSON.stringify(l.pins || [])),
           mesh: JSON.parse(JSON.stringify(l.mesh || [])),
-          meshPolygons: JSON.parse(JSON.stringify(l.meshPolygons || [])),
+          influenceMasks: JSON.parse(JSON.stringify(l.influenceMasks || [])),
           followPin: l.followPin ? JSON.parse(JSON.stringify(l.followPin)) : null,
           followPinBase: Object.prototype.hasOwnProperty.call(l, "followPinBase") ? JSON.parse(JSON.stringify(l.followPinBase)) : (l.followPin ? JSON.parse(JSON.stringify(l.followPin)) : null),
           followPinKeyframes: [],
@@ -5939,7 +5867,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 directionIndex: Number.isInteger(lData.directionIndex) ? lData.directionIndex : null,
                 pins: JSON.parse(JSON.stringify(lData.pins || [])),
                 mesh: JSON.parse(JSON.stringify(lData.mesh || [])),
-                meshPolygons: JSON.parse(JSON.stringify(lData.meshPolygons || [])),
+                influenceMasks: JSON.parse(JSON.stringify(lData.influenceMasks || [])),
                 followPin: lData.followPin ? JSON.parse(JSON.stringify(lData.followPin)) : null,
                 followPinBase: Object.prototype.hasOwnProperty.call(lData, "followPinBase") ? JSON.parse(JSON.stringify(lData.followPinBase)) : (lData.followPin ? JSON.parse(JSON.stringify(lData.followPin)) : null),
                 followPinKeyframes: Array.isArray(lData.followPinKeyframes) ? JSON.parse(JSON.stringify(lData.followPinKeyframes)) : [],
@@ -5964,6 +5892,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 : 0;
               normalizeSavedPosesForLayer(layer);
               ensureShapeKeys2D(layer);
+              normalizeInfluenceMasks(layer);
               return layer;
             }));
 
@@ -5982,7 +5911,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             imported.forEach((layer, offset) => {
               // A grade Warp é global no projeto. Se o pacote veio de outra
               // resolução, refaz somente a grade renderizável no GRID atual;
-              // pins, máscaras/polígonos e poses continuam preservados.
+              // pins, malha e poses continuam preservados.
               if (!layer.isFolder && (packageGrid !== GRID || !Array.isArray(layer.mesh) || layer.mesh.length !== (GRID + 1) * (GRID + 1))) {
                 const asset = layer.assets[layer.activeAssetIndex];
                 if (asset?.img) {
@@ -6060,7 +5989,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
               directionIndex: Number.isInteger(l.directionIndex) ? l.directionIndex : null,
               pins: l.pins || [],
               mesh: l.mesh || [],
-              meshPolygons: l.meshPolygons || [],
+              influenceMasks: l.influenceMasks || [],
               followPin: l.followPin || null,
               followPinBase: Object.prototype.hasOwnProperty.call(l, "followPinBase") ? l.followPinBase : (l.followPin || null),
               followPinKeyframes: Array.isArray(l.followPinKeyframes) ? l.followPinKeyframes : [],
@@ -6163,7 +6092,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 window.r2dPanoramaData = null;
                 window.r2dPendingPanoramaData = null;
               }
-              document.getElementById("fps-input").value = data.fps || 12;
+              document.getElementById("fps-input").value = data.fps || 1;
 
               const loadedLayers = await Promise.all(
                 (Array.isArray(data.layers) ? data.layers : []).map(async (lData) => {
@@ -6181,7 +6110,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                   directionIndex: Number.isInteger(lData.directionIndex) ? lData.directionIndex : null,
                   pins: lData.pins || [],
                   mesh: Array.isArray(lData.mesh) ? lData.mesh : [],
-                  meshPolygons: lData.meshPolygons || [],
+                  influenceMasks: Array.isArray(lData.influenceMasks) ? lData.influenceMasks : [],
                   followPin: lData.followPin || null,
                   followPinBase: Object.prototype.hasOwnProperty.call(lData, "followPinBase") ? lData.followPinBase : (lData.followPin || null),
                   followPinKeyframes: Array.isArray(lData.followPinKeyframes) ? lData.followPinKeyframes : [],
@@ -6215,6 +6144,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 }
                 normalizeSavedPosesForLayer(layer);
                 ensureShapeKeys2D(layer);
+                normalizeInfluenceMasks(layer);
                 return layer;
               }),
               );
@@ -6258,9 +6188,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                   }
                 }
                 skinBindingCache.delete(layer);
-                adaptiveTopologyCache.delete(layer);
-                adaptiveRenderGeometryCache.delete(layer);
-              });
+                          });
 
               // seek(1) já aplica a pose e deforma todas as camadas quando há
               // timeline. Só fazemos esta passagem aqui em projetos sem keys.
@@ -7194,7 +7122,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           shapes.push(shape);
         }
         shape.warps = session.workingWarps.map(cloneShapeWarpOperation);
-        shape.value = 100;
+        // Editar a FORMA da Shape Key não pode alterar sua animação.
+        // A sessão força 100% apenas para facilitar a edição visual; ao confirmar
+        // uma Shape existente, restaure exatamente o valor que ela tinha antes
+        // de entrar no editor (0%, 100% ou qualquer valor intermediário).
+        // Somente uma Shape recém-criada nasce em 100% no frame atual.
+        shape.value = created
+          ? 100
+          : Math.max(0, Math.min(100, Number(session.originalValue) || 0));
 
         shapeWarpSession = null;
         shapeWarpTemp = null;
@@ -7209,14 +7144,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         updateShapeKeysUI();
         canvas.style.cursor = "crosshair";
         draw();
-        scheduleShapeKeyAutoKey();
+        // Criar uma nova Shape deve entrar na timeline; atualizar a geometria de
+        // uma Shape já existente NÃO deve regravar o keyframe atual. Assim os
+        // keys antigos preservam 0/100/intermediários e passam a usar a nova forma.
+        if (created) scheduleShapeKeyAutoKey();
 
         if (created) {
-          requestAnimationFrame(() => {
-            const input = document.querySelector(`[data-shape-name="${shape.uid}"]`);
-            if (input) { input.focus(); input.select(); }
-          });
-          showNotice("Shape Key criada. O nome já está pronto para edição inline.");
+          // No tablet, criar uma Shape Key não deve abrir o teclado virtual.
+          // O nome continua editável manualmente quando o usuário tocar no campo.
+          if (document.activeElement instanceof HTMLInputElement ||
+              document.activeElement instanceof HTMLTextAreaElement) {
+            document.activeElement.blur();
+          }
+          showNotice("Shape Key criada.");
         } else {
           showNotice(`Shape Key "${shape.name}" atualizada.`);
         }
@@ -7544,6 +7484,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       canvas.addEventListener("pointerdown", (e) => {
         if (isDrawingEditorOpen()) return;
         if (beginCanvasViewPan(e)) return;
+        if (influenceMaskToolActive && beginInfluenceMaskLasso(e)) return;
         if (shapeWarpToolActive) {
           if (e.pointerType === "touch") e.preventDefault();
           if (handleShapeWarpPointerDown(e)) return;
@@ -7558,25 +7499,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (chooseFollowPin(rawX, rawY)) return;
         }
         const c = getCoords(e);
-        if (finishMaskFollowBonePick(c)) return;
-
-
-        if (maskBrushActive) {
-          if (
-            influencePolygon.length >= 3 &&
-            Math.hypot(
-              c.x - influencePolygon[0].x,
-              c.y - influencePolygon[0].y,
-            ) < 14
-          )
-            finishInfluencePolygon();
-          else {
-            influencePolygon.push({ x: c.x, y: c.y });
-            maskPainting = true;
-            draw();
-          }
-          return;
-        }
 
         const r = canvas.getBoundingClientRect();
         lastRawMousePos = {
@@ -7697,12 +7619,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       canvas.addEventListener("pointerenter", (e) => {
         if (canvasViewPanMode) { canvas.style.cursor = canvasViewPanPointerId === null ? "grab" : "grabbing"; return; }
+        if (influenceMaskToolActive) { canvas.style.cursor = "crosshair"; return; }
         if (!shapeWarpToolActive) return;
         shapeWarpPointer = { ...shapeWarpCanvasPoint(e), visible: true };
         draw();
       });
       canvas.addEventListener("pointerleave", () => {
         if (canvasViewPanMode) return;
+        if (influenceMaskToolActive) return;
         if (!shapeWarpToolActive || shapeWarpDragging) return;
         shapeWarpPointer.visible = false;
         draw();
@@ -7711,8 +7635,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       window.addEventListener("pointerup", (e) => {
         if (isDrawingEditorOpen()) return;
         if (endCanvasViewPan(e)) return;
+        if (influenceMaskToolActive && finishInfluenceMaskLasso(e, false)) return;
         if (shapeWarpToolActive && handleShapeWarpPointerUp(e)) return;
-        maskPainting = false;
         const wasGlobalTransformDragging = globalTransformDragging;
         globalTransformDragging = false;
         flushInteractiveRender();
@@ -7740,8 +7664,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       window.addEventListener("pointercancel", (e) => {
         if (isDrawingEditorOpen()) return;
         if (endCanvasViewPan(e)) return;
+        if (influenceMaskToolActive && finishInfluenceMaskLasso(e, true)) return;
         if (shapeWarpToolActive && handleShapeWarpPointerCancel(e)) return;
-        maskPainting = false;
         globalTransformDragging = false;
         flushInteractiveRender();
         dragTarget = null;
@@ -7751,6 +7675,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       window.addEventListener("pointermove", (e) => {
         if (isDrawingEditorOpen()) return;
         if (moveCanvasViewPan(e)) return;
+        if (influenceMaskToolActive && moveInfluenceMaskLasso(e)) return;
         if (shapeWarpToolActive) {
           if (handleShapeWarpPointerMove(e)) return;
         }
@@ -7758,14 +7683,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const r = canvas.getBoundingClientRect();
         const rawX = (e.clientX - r.left) * (FW / r.width);
         const rawY = (e.clientY - r.top) * (FH / r.height);
-
-        if (maskBrushActive) {
-          maskBrushCursor = c;
-          canvas.style.cursor = "crosshair";
-          if (!e.buttons) maskPainting = false;
-          draw();
-          return;
-        }
 
         if (
           globalTransformDragging &&
@@ -7852,7 +7769,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           .map((p) => l.pins.indexOf(p)).filter((idx) => idx >= 0))].sort((a,b)=>b-a);
         if (!indicesToRemove.length) return;
         indicesToRemove.forEach((idx) => {
-          (l.meshPolygons||[]).forEach((polygon)=>{ const point=polygon?.[0]; if(!Number.isInteger(point?.driverPinIndex))return; if(point.driverPinIndex===idx)delete point.driverPinIndex; else if(point.driverPinIndex>idx)point.driverPinIndex--; });
           l.pins.forEach((p)=>{ if(p.parentId===idx)p.parentId=null; else if(p.parentId>idx)p.parentId--; if(p.extraLinks){p.extraLinks=p.extraLinks.filter((link)=>link!==idx).map((link)=>link>idx?link-1:link);} });
           layers.forEach((other)=>{
             const adjust=(link)=>{
@@ -7879,9 +7795,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const skinBindingCache = new WeakMap();
 
       function buildBoneWarpBinding(layer, lMesh, lPins) {
-        const polygons = (layer?.meshPolygons || []).filter(
-          (poly) => Array.isArray(poly) && poly.length >= 3,
-        );
         const image = layer?.assets?.[layer.activeAssetIndex || 0]?.img;
         let width = image?.width || 0, height = image?.height || 0;
         if (!width || !height) {
@@ -7891,168 +7804,193 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           }
         }
         const radius = Math.max(1, Math.max(width, height) * 0.35);
+        const masks = normalizeInfluenceMasks(layer);
         const signature = JSON.stringify({
           radius,
-          pins: lPins.map((p) => [p.ox, p.oy, p.parentId, p.deformPolygon || null]),
-          polygons,
-          maskBoneIndices: layer?._maskBoneIndices || null,
+          pins: lPins.map((p) => [p.ox, p.oy, p.parentId]),
+          masks,
         });
         let cached = skinBindingCache.get(lMesh);
         if (cached?.signature === signature && cached.count === lMesh.length)
           return cached;
 
-        const polygonBounds = polygons.map((poly) => poly.reduce((b, p) => ({
-          minX: Math.min(b.minX, p.x), minY: Math.min(b.minY, p.y),
-          maxX: Math.max(b.maxX, p.x), maxY: Math.max(b.maxY, p.y),
-        }), {minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity}));
-        const parents = polygons.map((_, i) => i);
-        const find = (i) => parents[i] === i ? i : (parents[i] = find(parents[i]));
-        const join = (a, b) => { a=find(a); b=find(b); if (a !== b) parents[b]=a; };
-        for (let i=0;i<polygons.length;i++) for (let j=i+1;j<polygons.length;j++) {
-          const a=polygonBounds[i],b=polygonBounds[j];
-          if(a.maxX<b.minX||b.maxX<a.minX||a.maxY<b.minY||b.maxY<a.minY)continue;
-          if(polygonsTouchOrOverlap(polygons[i],polygons[j]))join(i,j);
-        }
-        const regionPolygons = new Map();
-        polygons.forEach((_,i)=>{
-          const root=find(i);
-          if(!regionPolygons.has(root))regionPolygons.set(root,[]);
-          regionPolygons.get(root).push(i);
+        const controls = [];
+        lPins.forEach((pin, index) => {
+          const parent = Number.isInteger(pin.parentId) ? lPins[pin.parentId] : null;
+          if (!parent || parent === pin) return;
+          const vx = pin.ox - parent.ox, vy = pin.oy - parent.oy;
+          const length2 = vx * vx + vy * vy;
+          if (!Number.isFinite(length2) || length2 < 1e-8) return;
+          controls.push({
+            pin, parent, index, vx, vy, length2, length: Math.sqrt(length2),
+            mx: (pin.ox + parent.ox) * 0.5,
+            my: (pin.oy + parent.oy) * 0.5,
+          });
         });
-        const regionAt = (x, y) => {
-          for (let i = polygons.length - 1; i >= 0; i--) {
-            const b=polygonBounds[i];
-            if(x<b.minX-1e-7||x>b.maxX+1e-7||y<b.minY-1e-7||y>b.maxY+1e-7)continue;
-            if (pointInOrOnPolygon(x, y, polygons[i], 1e-7)) return find(i);
+
+        // Cada máscara adota automaticamente os ossos cujo CENTRO do segmento
+        // está dentro do laço. Esses ossos não vazam para fora da região.
+        // Se nenhum segmento estiver dentro (ex.: cabeça sem osso), usa apenas
+        // o osso mais próximo como transportador automático, sem torná-lo exclusivo.
+        const maskInfo = masks.map((poly) => {
+          const owned = controls.filter((c) => pointInInfluenceMask(c.mx, c.my, poly));
+          const ownedIds = new Set(owned.map((c) => c.index));
+          let fallback = null;
+          let fallbackPivotIndex = -1;
+          if (!owned.length && controls.length) {
+            const center = poly.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x: 0, y: 0 });
+            center.x /= poly.length; center.y /= poly.length;
+            let best = Infinity;
+            for (const c of controls) {
+              const d = distanceSqPointToBoneSegment(center.x, center.y, c);
+              if (d < best) { best = d; fallback = c; }
+            }
+            if (fallback) {
+              // Para uma região sem osso próprio (ex.: cabeça), o osso mais
+              // próximo é apenas um TRANSPORTADOR RÍGIDO 2D. O pivô é a ponta
+              // do segmento mais próxima da região. Assim alongar o osso não
+              // alonga a cabeça: ela somente translada e inclina com o pescoço.
+              const parentIndex = fallback.pin.parentId;
+              const dTip = (fallback.pin.ox - center.x) ** 2 + (fallback.pin.oy - center.y) ** 2;
+              const dRoot = (fallback.parent.ox - center.x) ** 2 + (fallback.parent.oy - center.y) ** 2;
+              fallbackPivotIndex = dTip <= dRoot ? fallback.index : parentIndex;
+            }
           }
+          return {
+            poly,
+            ownedIds,
+            fallbackId: fallback?.index ?? -1,
+            fallbackPivotIndex,
+          };
+        });
+        const exclusiveOwner = new Map();
+        maskInfo.forEach((info, maskIndex) => {
+          info.ownedIds.forEach((id) => exclusiveOwner.set(id, maskIndex));
+        });
+
+        const maskAt = (x, y) => {
+          for (let i = maskInfo.length - 1; i >= 0; i--)
+            if (pointInInfluenceMask(x, y, maskInfo[i].poly)) return i;
           return -1;
         };
 
-        const rigidRegions = new Map();
-        for (const [region, indices] of regionPolygons) {
-          const points=indices.flatMap(i=>polygons[i]);
-          const center=points.reduce((p,q)=>({x:p.x+q.x,y:p.y+q.y}),{x:0,y:0});
-          center.x/=Math.max(1,points.length);center.y/=Math.max(1,points.length);
-          const explicitDrivers=indices.map(i=>Number(polygons[i][0]?.driverPinIndex))
-            .filter(i=>Number.isInteger(i)&&i>=0&&i<lPins.length);
-          let driverIndex=explicitDrivers.length?explicitDrivers[explicitDrivers.length-1]:-1;
-          let best=Infinity;
-          if(driverIndex<0)lPins.forEach((pin,index)=>{
-              const inside=regionAt(pin.ox,pin.oy)===region;
-              const score=(inside?0:width*width+height*height)+
-                (pin.ox-center.x)**2+(pin.oy-center.y)**2;
-              if(score<best){best=score;driverIndex=index;}
-            });
-          let directionIndex=-1;
-          const driver=lPins[driverIndex];
-          if(driver){
-            if(Number.isInteger(driver.parentId)&&lPins[driver.parentId])
-              directionIndex=driver.parentId;
-            else {
-              let childDistance=Infinity;
-              lPins.forEach((pin,index)=>{
-                if(pin.parentId!==driverIndex)return;
-                const d=(pin.ox-driver.ox)**2+(pin.oy-driver.oy)**2;
-                if(d<childDistance){childDistance=d;directionIndex=index;}
-              });
-            }
-          }
-          rigidRegions.set(region,{driverIndex,directionIndex});
-        }
-
-        const controls = [];
-        lPins.forEach((pin, index) => {
-          if (layer?._maskBoneIndices && !layer._maskBoneIndices.includes(index)) return;
-          const parent = Number.isInteger(pin.parentId) ? lPins[pin.parentId] : null;
-          if (!parent || parent === pin) return;
-          const vx = pin.ox-parent.ox, vy = pin.oy-parent.oy;
-          const length2 = vx*vx+vy*vy;
-          if (!Number.isFinite(length2) || length2 < 1e-8) return;
-          controls.push({pin, parent, index, vx, vy, length2, length:Math.sqrt(length2),
-            region: regionAt((parent.ox+pin.ox)/2, (parent.oy+pin.oy)/2)});
-        });
-
         const offsets = new Uint32Array(lMesh.length + 1);
-        const vertexRegions = new Int32Array(lMesh.length).fill(-1);
-        const rigidWeights = new Float64Array(lMesh.length);
+        // Regiões sem osso próprio não usam blend de skinning. Cada vértice
+        // recebe o mesmo transform rígido do osso mais próximo, preservando a
+        // forma 2D mesmo quando o usuário alonga/encurta esse osso.
+        const rigidCarrierIds = new Int32Array(lMesh.length).fill(-1);
+        const rigidCarrierPivotIds = new Int32Array(lMesh.length).fill(-1);
         const ids = [], weights = [], projections = [];
         for (let vi = 0; vi < lMesh.length; vi++) {
           offsets[vi] = ids.length;
           const v = lMesh[vi];
-          const x = Number.isFinite(v.maskX) ? v.maskX : v.ox;
-          const y = Number.isFinite(v.maskY) ? v.maskY : v.oy;
-          const region = regionAt(x, y);
-          let followWeight=0,followRegion=-1;
-          if(region<0)polygons.forEach((poly,index)=>{
-            const weight=outsideMaskFollowWeight(x,y,poly);
-            if(weight>followWeight){followWeight=weight;followRegion=find(index);}
-          });
-          const regionWeight=region>=0
-            ?Math.max(...regionPolygons.get(region).map(i=>inwardMaskWeight(x,y,polygons[i])))
-            :1-followWeight;
-          if(region>=0){
-            vertexRegions[vi]=region;
-            rigidWeights[vi]=1;
-            continue;
+          const vertexMask = maskAt(v.ox, v.oy);
+          if (vertexMask >= 0) {
+            const rigidInfo = maskInfo[vertexMask];
+            if (!rigidInfo.ownedIds.size && rigidInfo.fallbackId >= 0) {
+              rigidCarrierIds[vi] = rigidInfo.fallbackId;
+              rigidCarrierPivotIds[vi] = rigidInfo.fallbackPivotIndex;
+              continue;
+            }
           }
-          if(followWeight>1e-7){
-            vertexRegions[vi]=followRegion;
-            rigidWeights[vi]=followWeight;
-          }
-          const vertexWeight=regionWeight;
-          if(vertexWeight===0)continue;
-          const localIds = [], localWeights = [], exactIds = [];
-          let sum = 0, envelope = 0;
+          const base = [];
+          let baseSum = 0, envelope = 0;
+
           for (const control of controls) {
-            if (control.region !== region) continue;
-            const p = control.pin;
-            const maskWeight=Array.isArray(p.deformPolygon)&&p.deformPolygon.length>=3
-              ?inwardMaskWeight(x,y,p.deformPolygon):1;
-            if(maskWeight===0)continue;
             const a = control.parent;
             const u = Math.max(0, Math.min(1,
-              ((v.ox-a.ox)*control.vx+(v.oy-a.oy)*control.vy)/control.length2));
-            const distance2 = (v.ox-a.ox-u*control.vx)**2+(v.oy-a.oy-u*control.vy)**2;
+              ((v.ox - a.ox) * control.vx + (v.oy - a.oy) * control.vy) / control.length2));
+            const distance2 =
+              (v.ox - a.ox - u * control.vx) ** 2 +
+              (v.oy - a.oy - u * control.vy) ** 2;
             if (distance2 <= 1e-12) {
-              exactIds.push({id:control.index,maskWeight});
+              base.push({ id: control.index, raw: 1e18, exact: true });
               continue;
             }
             const t = 1 - Math.sqrt(distance2) / radius;
             if (t <= 0) continue;
-            const falloff = t * t * (3 - 2 * t) * maskWeight;
-            const weight = falloff * falloff / distance2;
-            localIds.push(control.index);
-            localWeights.push(weight);
-            sum += weight;
+            const falloff = t * t * (3 - 2 * t);
+            const raw = falloff * falloff / distance2;
+            base.push({ id: control.index, raw, exact: false });
+            baseSum += raw;
             envelope = Math.max(envelope, falloff);
           }
-          if (exactIds.length) {
-            for (const entry of exactIds) {
-              ids.push(entry.id);
-              weights.push(vertexWeight * entry.maskWeight / exactIds.length);
+
+          const exact = base.filter((e) => e.exact);
+          let normalized = [];
+          if (exact.length) {
+            normalized = exact.map((e) => ({ id: e.id, weight: 1 / exact.length }));
+          } else if (baseSum > 0) {
+            normalized = base.map((e) => ({ id: e.id, weight: e.raw / baseSum * envelope }));
+          }
+          const originalTotal = normalized.reduce((sum, e) => sum + e.weight, 0);
+          if (originalTotal <= 0 || !normalized.length) continue;
+
+          let filtered;
+          if (vertexMask >= 0) {
+            const info = maskInfo[vertexMask];
+            const allowedIds = info.ownedIds.size
+              ? info.ownedIds
+              : new Set(info.fallbackId >= 0 ? [info.fallbackId] : []);
+            filtered = normalized.filter((e) => allowedIds.has(e.id));
+
+            // Para máscaras que possuem ossos próprios, mantém o skinning
+            // normal apenas entre os ossos permitidos da região.
+            if (!filtered.length && allowedIds.size) {
+              let bestId = -1, best = Infinity;
+              for (const id of allowedIds) {
+                const c = controls.find((item) => item.index === id);
+                if (!c) continue;
+                const d = distanceSqPointToBoneSegment(v.ox, v.oy, c);
+                if (d < best) { best = d; bestId = id; }
+              }
+              if (bestId >= 0) filtered = [{ id: bestId, weight: originalTotal }];
             }
-          } else if (sum > 0) {
-            for (let i = 0; i < localIds.length; i++) {
-              ids.push(localIds[i]);
-              weights.push(localWeights[i] / sum * envelope * vertexWeight);
+          } else {
+            // Fora das máscaras, bloqueia apenas ossos que pertencem de forma
+            // exclusiva a alguma região. Isso impede o braço de puxar a barriga.
+            filtered = normalized.filter((e) => !exclusiveOwner.has(e.id));
+            if (!filtered.length) {
+              let nearestFree = null, best = Infinity;
+              for (const c of controls) {
+                if (exclusiveOwner.has(c.index)) continue;
+                const d = distanceSqPointToBoneSegment(v.ox, v.oy, c);
+                if (d < best) { best = d; nearestFree = c; }
+              }
+              if (nearestFree) filtered = [{ id: nearestFree.index, weight: originalTotal }];
             }
+          }
+
+          if (!filtered?.length) continue;
+          const filteredTotal = filtered.reduce((sum, e) => sum + e.weight, 0);
+          if (filteredTotal <= 0) continue;
+          const scale = originalTotal / filteredTotal;
+          for (const e of filtered) {
+            ids.push(e.id);
+            weights.push(e.weight * scale);
           }
         }
         offsets[lMesh.length] = ids.length;
-        const byIndex=new Map(controls.map(c=>[c.index,c]));
-        for(let i=0;i<lMesh.length;i++)for(let j=offsets[i];j<offsets[i+1];j++){
-          const c=byIndex.get(ids[j]),v=lMesh[i];
-          projections.push(Math.max(0,Math.min(1,
-            ((v.ox-c.parent.ox)*c.vx+(v.oy-c.parent.oy)*c.vy)/c.length2)));
+
+        const byIndex = new Map(controls.map((c) => [c.index, c]));
+        for (let i = 0; i < lMesh.length; i++) {
+          for (let j = offsets[i]; j < offsets[i + 1]; j++) {
+            const c = byIndex.get(ids[j]), v = lMesh[i];
+            projections.push(Math.max(0, Math.min(1,
+              ((v.ox - c.parent.ox) * c.vx + (v.oy - c.parent.oy) * c.vy) / c.length2)));
+          }
         }
+
         cached = {
           signature, count: lMesh.length, offsets,
           ids: Uint32Array.from(ids), weights: Float64Array.from(weights),
           controls, angle: new Float64Array(lPins.length),
-          angleCos: new Float64Array(lPins.length).fill(1), angleSin: new Float64Array(lPins.length),
-          bends: new Float64Array(lPins.length*4),
-          projections:Float64Array.from(projections), byIndex,
-          rigidRegions, vertexRegions, rigidWeights,
+          angleCos: new Float64Array(lPins.length).fill(1),
+          angleSin: new Float64Array(lPins.length),
+          bends: new Float64Array(lPins.length * 4),
+          projections: Float64Array.from(projections), byIndex,
+          rigidCarrierIds,
+          rigidCarrierPivotIds,
         };
         skinBindingCache.set(lMesh, cached);
         return cached;
@@ -8083,6 +8021,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         for (let i = 0; i < lMesh.length; i++) {
           let qx=0, qy=0, rx=0, ry=0, sum=0;
           const v = lMesh[i];
+
+          // Máscara sem osso interno: attachment rígido 2D ao segmento mais
+          // próximo. Usa só rotação + translação do osso, SEM a escala causada
+          // pela mudança de comprimento do segmento. É o comportamento esperado
+          // para cabeça, cabelo, acessórios etc. ligados ao pescoço/âncora.
+          const carrierId = binding.rigidCarrierIds?.[i] ?? -1;
+          if (carrierId >= 0) {
+            const carrier = binding.byIndex.get(carrierId);
+            const pivotId = binding.rigidCarrierPivotIds?.[i] ?? -1;
+            const restPivot = pivotId >= 0 ? lPins[pivotId] : carrier?.pin;
+            const currentPivot = restPivot;
+            if (carrier && restPivot && currentPivot) {
+              const angle = binding.angle[carrierId] || 0;
+              const c = cosAngle(angle), s = sinAngle(angle);
+              const dx = v.ox - restPivot.ox;
+              const dy = v.oy - restPivot.oy;
+              const resultX = currentPivot.x + dx * c - dy * s;
+              const resultY = currentPivot.y + dx * s + dy * c;
+              v.x = v.bx = resultX;
+              v.y = v.by = resultY;
+              continue;
+            }
+          }
+
           const start=binding.offsets[i], end=binding.offsets[i+1];
           for (let j = start; j < end; j++) {
             const id = binding.ids[j], weight = binding.weights[j];
@@ -8100,23 +8062,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const boneCos=cosAngle(boneAngle),boneSin=sinAngle(boneAngle);
           let resultX=v.ox*(1-sum)+qx+rx*boneCos-ry*boneSin;
           let resultY=v.oy*(1-sum)+qy+rx*boneSin+ry*boneCos;
-          const rigid=binding.rigidRegions.get(binding.vertexRegions[i]);
-          if(rigid&&rigid.driverIndex>=0&&binding.rigidWeights[i]>0){
-            const anchor=lPins[rigid.driverIndex];
-            const direction=lPins[rigid.directionIndex];
-            let angle=0;
-            if(direction){
-              const bindX=direction.ox-anchor.ox,bindY=direction.oy-anchor.oy;
-              const poseX=direction.x-anchor.x,poseY=direction.y-anchor.y;
-              if(bindX*bindX+bindY*bindY>1e-8&&poseX*poseX+poseY*poseY>1e-8)
-                angle=Math.atan2(bindX*poseY-bindY*poseX,bindX*poseX+bindY*poseY);
-            }
-            const cos=cosAngle(angle),sin=sinAngle(angle),w=binding.rigidWeights[i];
-            const dx=v.ox-anchor.ox,dy=v.oy-anchor.oy;
-            const tx=anchor.x+dx*cos-dy*sin,ty=anchor.y+dx*sin+dy*cos;
-            resultX+=(tx-resultX)*w;
-            resultY+=(ty-resultY)*w;
-          }
           v.x=v.bx=resultX;v.y=v.by=resultY;
         }
         if (layer && !layer.__adaptiveTemp)
@@ -8199,606 +8144,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       
 
-      function getPinLocalFrontRadius(layer, pin) {
-        const otherPins=(layer?.pins||[]).filter((p)=>p!==pin);
-        let nearest=Infinity;
-        otherPins.forEach((other)=>{const d=Math.hypot((pin.ox??pin.x)-(other.ox??other.x),(pin.oy??pin.y)-(other.oy??other.y));if(d>1&&d<nearest)nearest=d;});
-        const basedOnSpacing=Number.isFinite(nearest)?nearest*.72:58;
-        return Math.max(34,Math.min(96,basedOnSpacing));
-      }
-
-      function getTriangleManualFrontZ(layer, tri) {
-        if (!layer) return 0;
-        const centerX = (tri[0].ox + tri[1].ox + tri[2].ox) / 3;
-        const centerY = (tri[0].oy + tri[1].oy + tri[2].oy) / 3;
-        let strongestFrontZ = 0;
-        let strongestBackZ = 0;
-
-        (layer.pins || []).forEach((pin,index) => {
-          if (!isMaskDepthPin(layer,index)) return;
-          const z = pin.z || 0;
-          if (z === 0) return;
-
-          // Se o usuário delimitou uma Região poligonal para este pin, ela passa
-          // a ser também o limite exato de profundidade. Caso contrário usamos
-          // uma pequena vizinhança local, suficiente para mão/punho sem puxar o corpo.
-          let inside = false;
-          const localPolygons = (layer.meshPolygons || []).filter((poly) =>
-            pointInOrOnPolygon(pin.ox, pin.oy, poly),
-          );
-          if (localPolygons.length) {
-            inside = localPolygons.some((poly) =>
-              pointInPolygon(centerX, centerY, poly),
-            );
-          } else if (
-            Array.isArray(pin.deformPolygon) &&
-            pin.deformPolygon.length >= 3
-          ) {
-            inside = pointInPolygon(centerX, centerY, pin.deformPolygon);
-          } else {
-            const px = Number.isFinite(pin.ox) ? pin.ox : pin.x;
-            const py = Number.isFinite(pin.oy) ? pin.oy : pin.y;
-            inside =
-              Math.hypot(centerX - px, centerY - py) <=
-              getPinLocalFrontRadius(layer, pin);
-          }
-
-          if (inside) {
-            if (z > strongestFrontZ) strongestFrontZ = z;
-            if (z < strongestBackZ) strongestBackZ = z;
-          }
-        });
-
-        return strongestFrontZ > 0 ? strongestFrontZ : strongestBackZ;
-      }
-
-      // ===== CORTE REAL DOS TRIÂNGULOS PELAS REGIÕES POLIGONAIS — V2 =====
-      // A região é definida em coordenadas ORIGINAIS da imagem. O erro da versão
-      // anterior era transformar o polígono pela matriz affine de cada triângulo,
-      // fazendo a mesma borda aparecer em lugares diferentes. Agora a borda é
-      // transformada SOMENTE por gMat, portanto fica fixa exatamente onde foi clicada.
-      function getLayerCutPolygons(layer) {
-        // A caneta cria topologia de deformação, não uma máscara de recorte.
-        // A imagem inteira continua sendo renderizada normalmente.
-        return [];
-      }
-
-      function pointInTriangle2D(px, py, a, b, c) {
-        const v0x = c.x - a.x,
-          v0y = c.y - a.y;
-        const v1x = b.x - a.x,
-          v1y = b.y - a.y;
-        const v2x = px - a.x,
-          v2y = py - a.y;
-        const den = v0x * v1y - v1x * v0y;
-        if (Math.abs(den) < 1e-9) return false;
-        const u = (v2x * v1y - v1x * v2y) / den;
-        const v = (v0x * v2y - v2x * v0y) / den;
-        return u >= -1e-7 && v >= -1e-7 && u + v <= 1 + 1e-7;
-      }
-
-      function segmentsIntersect2D(a, b, c, d) {
-        const cross = (ax, ay, bx, by) => ax * by - ay * bx;
-        const rx = b.x - a.x,
-          ry = b.y - a.y,
-          sx = d.x - c.x,
-          sy = d.y - c.y;
-        const den = cross(rx, ry, sx, sy);
-        const qx = c.x - a.x,
-          qy = c.y - a.y;
-        if (Math.abs(den) < 1e-9) return false;
-        const t = cross(qx, qy, sx, sy) / den;
-        const u = cross(qx, qy, rx, ry) / den;
-        return t >= -1e-7 && t <= 1 + 1e-7 && u >= -1e-7 && u <= 1 + 1e-7;
-      }
-
-      function polygonTouchesTriangle(poly, tri) {
-        if (tri.some((v) => pointInPolygon(v.ox, v.oy, poly))) return true;
-        if (
-          poly.some((p) =>
-            pointInTriangle2D(
-              p.x,
-              p.y,
-              { x: tri[0].ox, y: tri[0].oy },
-              { x: tri[1].ox, y: tri[1].oy },
-              { x: tri[2].ox, y: tri[2].oy },
-            ),
-          )
-        )
-          return true;
-        const te = [
-          [
-            { x: tri[0].ox, y: tri[0].oy },
-            { x: tri[1].ox, y: tri[1].oy },
-          ],
-          [
-            { x: tri[1].ox, y: tri[1].oy },
-            { x: tri[2].ox, y: tri[2].oy },
-          ],
-          [
-            { x: tri[2].ox, y: tri[2].oy },
-            { x: tri[0].ox, y: tri[0].oy },
-          ],
-        ];
-        for (let i = 0; i < poly.length; i++) {
-          const a = poly[i],
-            b = poly[(i + 1) % poly.length];
-          for (const [c, d] of te)
-            if (segmentsIntersect2D(a, b, c, d)) return true;
-        }
-        return false;
-      }
-
-      function triangleInsideAnyPolygon(tri, polygons) {
-        return polygons.some((poly) =>
-          tri.every((v) => pointInPolygon(v.ox, v.oy, poly)),
-        );
-      }
-
-      function triangleTouchesAnyPolygon(tri, polygons) {
-        return polygons.some((poly) => polygonTouchesTriangle(poly, tri));
-      }
-
-      function triangleAffine(p1, p2, p3, gMat, useBase = false) {
-        const u0 = p1.ox,
-          v0 = p1.oy,
-          u1 = p2.ox,
-          v1 = p2.oy,
-          u2 = p3.ox,
-          v2 = p3.oy;
-        const q = (p) => ({ x: useBase ? (Number.isFinite(p.bx) ? p.bx : (Number.isFinite(p.ox) ? p.ox : p.x)) : p.x, y: useBase ? (Number.isFinite(p.by) ? p.by : (Number.isFinite(p.oy) ? p.oy : p.y)) : p.y });
-        const r0 = q(p1),
-          r1 = q(p2),
-          r2 = q(p3);
-        const x0 = r0.x * gMat.a + r0.y * gMat.c + gMat.e,
-          y0 = r0.x * gMat.b + r0.y * gMat.d + gMat.f;
-        const x1 = r1.x * gMat.a + r1.y * gMat.c + gMat.e,
-          y1 = r1.x * gMat.b + r1.y * gMat.d + gMat.f;
-        const x2 = r2.x * gMat.a + r2.y * gMat.c + gMat.e,
-          y2 = r2.x * gMat.b + r2.y * gMat.d + gMat.f;
-        const det = (u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0);
-        if (Math.abs(det) < 0.1) return null;
-        const a = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / det;
-        const b = ((y1 - y0) * (v2 - v0) - (y2 - y0) * (v1 - v0)) / det;
-        const c = ((x2 - x0) * (u1 - u0) - (x1 - x0) * (u2 - u0)) / det;
-        const d = ((y2 - y0) * (u1 - u0) - (y1 - y0) * (u2 - u0)) / det;
-        return {
-          a,
-          b,
-          c,
-          d,
-          e: x0 - a * u0 - c * v0,
-          f: y0 - b * u0 - d * v0,
-          pts: [
-            { x: x0, y: y0 },
-            { x: x1, y: y1 },
-            { x: x2, y: y2 },
-          ],
-        };
-      }
-
-      function mapGlobalImagePoint(gMat, p) {
-        return { x: p.x * gMat.a + p.y * gMat.c + gMat.e, y: p.x * gMat.b + p.y * gMat.d + gMat.f };
-      }
-
-      // Recorta exatamente pela linha desenhada. IMPORTANTE: usa gMat, e não a
-      // affine do triângulo. Portanto um ponto do octógono tem uma única posição
-      // na tela, independente de qual triângulo esteja sendo rasterizado.
-      function clipByInfluencePolygon(targetCtx, poly, gMat, invert = false) {
-        if (!poly || poly.length < 3) return;
-        targetCtx.beginPath();
-        if (invert) targetCtx.rect(-20000, -20000, 40000, 40000);
-        const first = mapGlobalImagePoint(gMat, poly[0]);
-        targetCtx.moveTo(first.x, first.y);
-        for (let i = 1; i < poly.length; i++) {
-          const q = mapGlobalImagePoint(gMat, poly[i]);
-          targetCtx.lineTo(q.x, q.y);
-        }
-        targetCtx.closePath();
-        targetCtx.clip(invert ? "evenodd" : "nonzero");
-      }
-
-      function clipTriangleDevice(targetCtx, pts) {
-        // Pequena expansão apenas contra micro-frestas entre triângulos. Ela não
-        // altera o limite do octógono porque o clip do polígono é aplicado depois.
-        const epsilon = 0.75;
-        const cx = (pts[0].x + pts[1].x + pts[2].x) / 3;
-        const cy = (pts[0].y + pts[1].y + pts[2].y) / 3;
-        const pp = pts.map((p) => {
-          const dx = p.x - cx,
-            dy = p.y - cy,
-            d = Math.hypot(dx, dy) || 1;
-          return { x: p.x + (dx / d) * epsilon, y: p.y + (dy / d) * epsilon };
-        });
-        targetCtx.beginPath();
-        targetCtx.moveTo(pp[0].x, pp[0].y);
-        targetCtx.lineTo(pp[1].x, pp[1].y);
-        targetCtx.lineTo(pp[2].x, pp[2].y);
-        targetCtx.closePath();
-        targetCtx.clip();
-      }
-
-      function renderTMasked(
-        p1,
-        p2,
-        p3,
-        gMat,
-        lImg,
-        targetCtx,
-        useBase,
-        polygons,
-        inside,
-      ) {
-        const drawAff = triangleAffine(p1, p2, p3, gMat, useBase);
-        if (!drawAff) return;
-        targetCtx.save();
-        clipTriangleDevice(targetCtx, drawAff.pts);
-
-        if (inside) {
-          // Dentro é desenhado uma vez por região/polígono.
-          if (polygons && polygons.length)
-            clipByInfluencePolygon(targetCtx, polygons[0], gMat, false);
-        } else {
-          // Fora = interseção dos complementos. Fazendo um clip por vez obtemos
-          // complemento da UNIÃO mesmo se houver duas regiões sobrepostas.
-          (polygons || []).forEach((poly) =>
-            clipByInfluencePolygon(targetCtx, poly, gMat, true),
-          );
-        }
-
-        targetCtx.setTransform(
-          drawAff.a,
-          drawAff.b,
-          drawAff.c,
-          drawAff.d,
-          drawAff.e,
-          drawAff.f,
-        );
-        targetCtx.drawImage(lImg, 0, 0, lImg._r2dSourceWidth || lImg.width, lImg._r2dSourceHeight || lImg.height);
-        targetCtx.restore();
-      }
-
-      function renderTriangleWithPolygonCuts(
-        layer,
-        p1,
-        p2,
-        p3,
-        gMat,
-        lImg,
-        targetCtx = ctx,
-      ) {
-        const polygons = getLayerCutPolygons(layer);
-        if (!polygons.length) {
-          renderT(p1, p2, p3, gMat, lImg, targetCtx);
-          return;
-        }
-        const tri = [p1, p2, p3];
-
-        // Triângulo totalmente contido: usa diretamente a malha deformada.
-        if (triangleInsideAnyPolygon(tri, polygons)) {
-          renderT(p1, p2, p3, gMat, lImg, targetCtx);
-          return;
-        }
-
-        // Triângulo totalmente fora: usa somente a posição-base (sem os pins que
-        // possuem região), impedindo qualquer vazamento para fora do octógono.
-        if (!triangleTouchesAnyPolygon(tri, polygons)) {
-          renderTMasked(p1, p2, p3, gMat, lImg, targetCtx, true, null, false);
-          return;
-        }
-
-        // TRIÂNGULO REALMENTE CORTADO AO MEIO:
-        // 1) desenha o pedaço que está FORA usando a malha-base;
-        renderTMasked(p1, p2, p3, gMat, lImg, targetCtx, true, polygons, false);
-        // 2) desenha somente o pedaço que está DENTRO usando a malha deformada.
-        // O clip acontece exatamente na linha desenhada, mesmo que ela atravesse
-        // o centro do triângulo e não passe por nenhum vértice da grade.
-        polygons.forEach((poly) => {
-          if (polygonTouchesTriangle(poly, tri)) {
-            renderTMasked(
-              p1,
-              p2,
-              p3,
-              gMat,
-              lImg,
-              targetCtx,
-              false,
-              [poly],
-              true,
-            );
-          }
-        });
-      }
-
-      // ===== MALHA ADAPTATIVA NAS BORDAS — V3 =====
-      // Em vez de tentar rasterizar "meio triângulo" com duas transformações
-      // diferentes, criamos vértices REAIS adicionais apenas nos triângulos que a
-      // borda de uma Região poligonal atravessa. Depois updateDeform()
-      // calcula a deformação de CADA novo vértice pela sua coordenada original.
-      // Assim o limite deixa de depender dos três vértices grandes da grade original.
-      const ADAPTIVE_BOUNDARY_DEPTH = 5;
-      const adaptiveTopologyCache = new WeakMap();
-      const adaptiveRenderGeometryCache = new WeakMap();
-
-      function polygonSignature(poly) {
-        return (poly || [])
-          .map(
-            (p) =>
-              `${Math.round(p.x * 1000) / 1000},${Math.round(p.y * 1000) / 1000}`,
-          )
-          .join(";");
-      }
-
-      function getLayerRefinementPolygons(layer) {
-        const out = [];
-        const seen = new Set();
-        const add = (poly) => {
-          if (!Array.isArray(poly) || poly.length < 3) return;
-          const key = polygonSignature(poly);
-          if (!key || seen.has(key)) return;
-          seen.add(key);
-          out.push(poly);
-        };
-        (layer?.meshPolygons || []).forEach(add);
-        return out;
-      }
-
-      function adaptiveTriPointInside(pt, poly) {
-        return pointInPolygon(pt.ox, pt.oy, poly);
-      }
-
-      function polygonBoundaryTouchesAdaptiveTriangle(poly, tri) {
-        if (!poly || poly.length < 3) return false;
-
-        // Se os vértices estão dos dois lados, a borda obrigatoriamente atravessa.
-        const inside = tri.map((v) => adaptiveTriPointInside(v, poly));
-        if (inside.some(Boolean) && !inside.every(Boolean)) return true;
-
-        // Interseção direta entre arestas do polígono e do triângulo.
-        const edges = [
-          [
-            { x: tri[0].ox, y: tri[0].oy },
-            { x: tri[1].ox, y: tri[1].oy },
-          ],
-          [
-            { x: tri[1].ox, y: tri[1].oy },
-            { x: tri[2].ox, y: tri[2].oy },
-          ],
-          [
-            { x: tri[2].ox, y: tri[2].oy },
-            { x: tri[0].ox, y: tri[0].oy },
-          ],
-        ];
-        for (let i = 0; i < poly.length; i++) {
-          const a = poly[i],
-            b = poly[(i + 1) % poly.length];
-          for (const [c, d] of edges)
-            if (segmentsIntersect2D(a, b, c, d)) return true;
-        }
-
-        // Caso especial: um canto/trecho inteiro do polígono está dentro do
-        // triângulo, mesmo com os três vértices do triângulo do lado de fora.
-        const a = { x: tri[0].ox, y: tri[0].oy },
-          b = { x: tri[1].ox, y: tri[1].oy },
-          c = { x: tri[2].ox, y: tri[2].oy };
-        if (poly.some((p) => pointInTriangle2D(p.x, p.y, a, b, c))) return true;
-
-        return false;
-      }
-
-      function adaptiveBoundaryTouchesAny(tri, polygons) {
-        return polygons.some((poly) =>
-          polygonBoundaryTouchesAdaptiveTriangle(poly, tri),
-        );
-      }
-
-      // Divide um triângulo exatamente pelas oito retas do octógono convexo.
-      // Em cada etapa, a parte externa já é definitiva; apenas a parte interna
-      // segue para a próxima aresta. Ao final temos dois conjuntos sem qualquer
-      // triângulo atravessando a costura.
-      function splitTriangleAtConvexPolygon(triangle, clipPolygon) {
-        if (!Array.isArray(clipPolygon) || clipPolygon.length < 3)
-          return { inside: [], outside: [triangle] };
-        let area = 0;
-        for (let i = 0; i < clipPolygon.length; i++) {
-          const p = clipPolygon[i], q = clipPolygon[(i + 1) % clipPolygon.length];
-          area += p.x * q.y - q.x * p.y;
-        }
-        const orientation = area >= 0 ? 1 : -1;
-        const signedDistance = (p, a, b) =>
-          orientation * ((b.x - a.x) * (p.oy - a.y) - (b.y - a.y) * (p.ox - a.x));
-        const clipHalfPlane = (subject, a, b, keepInside) => {
-          if (!subject.length) return [];
-          const output = [];
-          for (let i = 0; i < subject.length; i++) {
-            const s = subject[(i + subject.length - 1) % subject.length];
-            const e = subject[i];
-            const ds = signedDistance(s, a, b);
-            const de = signedDistance(e, a, b);
-            const sIn = keepInside ? ds >= -1e-7 : ds <= 1e-7;
-            const eIn = keepInside ? de >= -1e-7 : de <= 1e-7;
-            if (sIn !== eIn) {
-              const denominator = ds - de;
-              const t = Math.abs(denominator) > 1e-12 ? ds / denominator : 0;
-              output.push({
-                ox: s.ox + (e.ox - s.ox) * t,
-                oy: s.oy + (e.oy - s.oy) * t,
-              });
-            }
-            if (eIn) output.push({ ox: e.ox, oy: e.oy });
-          }
-          return output;
-        };
-
-        let candidates = [triangle.map((v) => ({ ox: v.ox, oy: v.oy }))];
-        const outside = [];
-        for (let edge = 0; edge < clipPolygon.length && candidates.length; edge++) {
-          const a = clipPolygon[edge], b = clipPolygon[(edge + 1) % clipPolygon.length];
-          const next = [];
-          candidates.forEach((poly) => {
-            const outer = clipHalfPlane(poly, a, b, false);
-            const inner = clipHalfPlane(poly, a, b, true);
-            if (outer.length >= 3) outside.push(outer);
-            if (inner.length >= 3) next.push(inner);
-          });
-          candidates = next;
-        }
-        return { inside: candidates, outside };
-      }
-
-      function getAdaptiveTopology(layer) {
-        if (layer?._maskRenderTopology) return layer._maskRenderTopology;
-        const polygons = getLayerRefinementPolygons(layer);
-        if (!polygons.length || !layer?.mesh?.length) return null;
-        const boundaryDepth = ADAPTIVE_BOUNDARY_DEPTH;
-
-        const assetIdx =
-          layer.activeAssetIndex >= 0 &&
-          layer.activeAssetIndex < (layer.assets?.length || 0)
-            ? layer.activeAssetIndex
-            : 0;
-        const image = layer.assets?.[assetIdx]?.img;
-        const signature = [
-          GRID,
-          image?.width || 0,
-          image?.height || 0,
-          boundaryDepth,
-          ...polygons.map(polygonSignature),
-        ].join("|");
-
-        const cached = adaptiveTopologyCache.get(layer);
-        if (cached && cached.signature === signature) return cached;
-
-        const coords = [];
-        const triangles = [];
-        const vertexMap = new Map();
-        const midpointMap = new Map();
-
-        const vertexKey = (x, y) =>
-          `${Math.round(x * 1e6)},${Math.round(y * 1e6)}`;
-        const addVertex = (x, y) => {
-          const key = vertexKey(x, y);
-          let idx = vertexMap.get(key);
-          if (idx !== undefined) return idx;
-          idx = coords.length;
-          coords.push({ ox: x, oy: y });
-          vertexMap.set(key, idx);
-          return idx;
-        };
-        const midpoint = (ia, ib) => {
-          const lo = Math.min(ia, ib), hi = Math.max(ia, ib), key = `${lo}:${hi}`;
-          let idx = midpointMap.get(key);
-          if (idx !== undefined) return idx;
-          const a = coords[ia], b = coords[ib];
-          idx = addVertex((a.ox + b.ox) / 2, (a.oy + b.oy) / 2);
-          midpointMap.set(key, idx);
-          return idx;
-        };
-
-        const baseIndex = layer.mesh.map((v) => addVertex(v.ox, v.oy));
-        const subdivide = (ia, ib, ic, depth) => {
-          const tri = [coords[ia], coords[ib], coords[ic]];
-          if (depth < boundaryDepth && adaptiveBoundaryTouchesAny(tri, polygons)) {
-            const iab = midpoint(ia, ib), ibc = midpoint(ib, ic), ica = midpoint(ic, ia);
-            subdivide(ia, iab, ica, depth + 1);
-            subdivide(iab, ib, ibc, depth + 1);
-            subdivide(ica, ibc, ic, depth + 1);
-            subdivide(iab, ibc, ica, depth + 1);
-          } else {
-            triangles.push([ia, ib, ic]);
-          }
-        };
-
-        TRIANGLE_INDICES.forEach((t) =>
-          subdivide(baseIndex[t[0]], baseIndex[t[1]], baseIndex[t[2]], 0),
-        );
-
-        const conforming = [];
-        const edgePoints = (a,b,out) => {
-          const key=a<b?`${a}:${b}`:`${b}:${a}`;
-          const mid=midpointMap.get(key);
-          if(mid===undefined)return;
-          edgePoints(a,mid,out);out.push(mid);edgePoints(mid,b,out);
-        };
-        for(const tri of triangles){
-          const ring=[];
-          for(let e=0;e<3;e++){const a=tri[e],b=tri[(e+1)%3];ring.push(a);edgePoints(a,b,ring);}
-          if(ring.length===3){conforming.push(tri);continue;}
-          const center=addVertex(
-            (coords[tri[0]].ox+coords[tri[1]].ox+coords[tri[2]].ox)/3,
-            (coords[tri[0]].oy+coords[tri[1]].oy+coords[tri[2]].oy)/3);
-          for(let e=0;e<ring.length;e++)conforming.push([center,ring[e],ring[(e+1)%ring.length]]);
-        }
-        triangles.length=0;
-        for(const tri of conforming)triangles.push(tri);
-
-        const topology = { signature, coords, triangles, polygons };
-        adaptiveTopologyCache.set(layer, topology);
-        return topology;
-      }
-
-      function buildAdaptiveRenderGeometry(layer) {
-        const topology = getAdaptiveTopology(layer);
-        if (!topology)
-          return {
-            mesh: layer.mesh,
-            triangles: TRIANGLE_INDICES,
-            adaptive: false,
-          };
-
-        // A topologia refinada é estática enquanto Grid/imagem/regiões não mudarem.
-        // Reutilizamos os mesmos arrays, mantendo EXATAMENTE a profundidade 5 e a
-        // qualidade original; apenas x/y são atualizados quando a pose muda.
-        let cached = adaptiveRenderGeometryCache.get(layer);
-        if (!cached || cached.signature !== topology.signature) {
-          const refinedMesh = [];
-          const refinedTriangles = [];
-          // Vizinhos compartilham vértices somente do mesmo lado do contorno.
-          topology.coords.forEach((v) => refinedMesh.push({
-            ox: v.ox, oy: v.oy, x: v.ox, y: v.oy,
-            bx: v.ox, by: v.oy, maskX: v.ox, maskY: v.oy,
-          }));
-          topology.triangles.forEach((t) => refinedTriangles.push([...t]));
-          cached = {
-            signature: topology.signature,
-            mesh: refinedMesh,
-            triangles: refinedTriangles,
-            version: -1,
-            adaptive: true,
-          };
-          adaptiveRenderGeometryCache.set(layer, cached);
-        }
-
-        const version = layer._deformVersion || 0;
-        if (cached.version !== version) {
-          const tempLayer = Object.create(layer);
-          tempLayer.mesh = cached.mesh;
-          tempLayer.__adaptiveTemp = true;
-          updateDeform(tempLayer);
-          cached.version = version;
-        }
-        return cached;
-      }
-
-      function isMaskDepthPin(layer,index) {
-        return !layer?._maskDepthPinIndices || layer._maskDepthPinIndices.has(index);
-      }
-
-      function mapRestPointThroughGeometry(geometry, point) {
-        if (!geometry?.mesh || !geometry?.triangles) return {x:point.x,y:point.y};
-        for (const triangle of geometry.triangles) {
-          const a=geometry.mesh[triangle[0]],b=geometry.mesh[triangle[1]],c=geometry.mesh[triangle[2]];
-          const den=(b.oy-c.oy)*(a.ox-c.ox)+(c.ox-b.ox)*(a.oy-c.oy);
-          if(Math.abs(den)<1e-10)continue;
-          const u=((b.oy-c.oy)*(point.x-c.ox)+(c.ox-b.ox)*(point.y-c.oy))/den;
-          const v=((c.oy-a.oy)*(point.x-c.ox)+(a.ox-c.ox)*(point.y-c.oy))/den;
-          const w=1-u-v;
-          if(u>=-1e-6&&v>=-1e-6&&w>=-1e-6)
-            return {x:u*a.x+v*b.x+w*c.x,y:u*a.y+v*b.y+w*c.y};
-        }
-        return {x:point.x,y:point.y};
-      }
-
       function draw(showUI = true, targetCtx = ctx, ignoreBg = false) {
         targetCtx.clearRect(0, 0, FW, FH);
         applyFollowPins();
@@ -8827,10 +8172,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const gMat = getLayerCanvasMatrix(l);
           if (!gMat) return;
 
-          // A máscara limita somente a influência dos ossos no bind da malha.
-          // A textura permanece inteira para os Shape Keys deslocarem pixels
-          // através do contorno sem recortar a camada.
-          const geometry = buildAdaptiveRenderGeometry(l);
+          const geometry = {
+            mesh: l.mesh,
+            triangles: TRIANGLE_INDICES,
+            adaptive: false,
+          };
           renderLayers.push({
             l,
             idx,
@@ -8857,9 +8203,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const needsDepthSort = renderLayers.some(
             (item) =>
               item.l.pins.some((p) => (p.z || 0) !== 0) ||
-              Number(item.l.z || 0) !== 0 ||
-              (Array.isArray(item.l.meshPolygons) && item.l.meshPolygons.length) ||
-              false,
+              Number(item.l.z || 0) !== 0,
           );
           if (!needsDepthSort) {
             renderLayers.forEach((item) => {
@@ -8892,27 +8236,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 const centerY = (tri[0].oy + tri[1].oy + tri[2].oy) / 3;
                 let pinZ = 0,
                   minDist = Infinity;
-                item.l.pins.forEach((p,index) => {
-                  if (!isMaskDepthPin(item.l,index)) return;
+                item.l.pins.forEach((p) => {
                   const d = (centerX - p.ox) ** 2 + (centerY - p.oy) ** 2;
                   if (d < minDist) {
                     minDist = d;
                     pinZ = p.z || 0;
                   }
                 });
-                const manualFrontZ = getTriangleManualFrontZ(item.l, tri);
-                const effectivePinZ = manualFrontZ || pinZ;
-                const effectiveZ = layerZ + effectivePinZ;
-                const localOverlay = (item.l.meshPolygons || []).some((poly) =>
-                  pointInPolygon(centerX, centerY, poly),
-                );
+                const effectiveZ = layerZ + pinZ;
                 allTriangles.push({
                   tri,
-                  manualFrontZ,
                   depthGroup: 0,
                   pinZ: effectiveZ,
                   layerOrder: Number.isFinite(item.renderOrder) ? item.renderOrder : item.idx,
-                  localOverlay,
+                  localOverlay: false,
                   gMat: item.gMat,
                   img: item.img,
                   layer: item.l,
@@ -8981,68 +8318,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (active && current) {
             const m = getLayerCanvasMatrix(active);
             if (!m) return;
-            targetCtx.save();
-            targetCtx.setTransform(m);
-
-
-            // As máscaras locais permanecem visíveis durante toda a montagem do
-            // rig, inclusive depois de receber pins e ossos.
-            const activeRender=renderLayers.find(item=>item.l===active);
-            (meshDisplayVisible ? active.meshPolygons || [] : []).forEach(
-              (poly) => {
-                if (!Array.isArray(poly) || poly.length < 3) return;
-                const displayPoly=poly.map(p=>
-                  mapRestPointThroughGeometry(activeRender?.geometry,p));
-
-                targetCtx.beginPath();
-                targetCtx.moveTo(displayPoly[0].x, displayPoly[0].y);
-                displayPoly.slice(1).forEach((p) => targetCtx.lineTo(p.x, p.y));
-                targetCtx.closePath();
-                targetCtx.fillStyle = "rgba(0,245,255,0.10)";
-                targetCtx.fill();
-                targetCtx.strokeStyle = "#00f5ff";
-                targetCtx.lineWidth = 2;
-                targetCtx.setLineDash([7, 4]);
-                targetCtx.stroke();
-                targetCtx.setLineDash([]);
-                displayPoly.forEach((p) => {
-                  targetCtx.beginPath();
-                  targetCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                  targetCtx.fillStyle = "#00f5ff";
-                  targetCtx.fill();
-                  targetCtx.strokeStyle = "#071014";
-                  targetCtx.lineWidth = 1;
-                  targetCtx.stroke();
-                });
-              },
-            );
-
-            if (influencePolygon.length) {
-              targetCtx.beginPath();
-              targetCtx.moveTo(influencePolygon[0].x, influencePolygon[0].y);
-              influencePolygon
-                .slice(1)
-                .forEach((p) => targetCtx.lineTo(p.x, p.y));
-              if (maskBrushCursor)
-                targetCtx.lineTo(maskBrushCursor.x, maskBrushCursor.y);
-              targetCtx.strokeStyle = "#00f5ff";
-              targetCtx.lineWidth = 2;
-              targetCtx.setLineDash([6, 4]);
-              targetCtx.stroke();
-              influencePolygon.forEach((p) => {
-                targetCtx.beginPath();
-                targetCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                targetCtx.fillStyle = "#00f5ff";
-                targetCtx.fill();
-              });
-            }
-    
-            targetCtx.restore();
-
+            drawInfluenceMaskOverlay(active, m, targetCtx);
             // Overlay temporário do Laço Warp / pincel da Shape Key.
             drawShapeWarpOverlay(active, m, targetCtx);
-
-            // O contorno só aparece enquanto está sendo desenhado.
 
           }
         }
@@ -9222,6 +8500,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const name = input.value.trim() || `Pose ${l.savedPoses.length + 1}`;
         l.savedPoses.push(captureLayerPose(l, name));
         input.value = "";
+        input.blur();
         updateSavedPosesUI();
       }
 
@@ -10736,7 +10015,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
      created.z=targetLayer.z||0;created.visible=true;
      updateLayersUI();draw();
     }else if(asSwitch){
-     // Same-size images preserve pin, mesh and mask coordinates.
+     // Same-size images preserve pin and mesh coordinates.
      const used=new Set(targetLayer.assets.map(a=>a.name));let switchName=name,count=2;
      while(used.has(switchName))switchName=name+' '+count++;
      targetLayer.assets.push({name:switchName,img:image});
