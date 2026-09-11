@@ -1067,7 +1067,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         <button class="btn-delete" onclick="deleteAllPins()">Apagar Ossos</button>
       </div>
       <div class="toolbar-white-group" aria-label="Grupo de máscara">
-        <button id="mask-brush" type="button" onclick="toggleInfluenceMaskTool()" title="Desenhe à mão livre uma região que isola a influência dos ossos sem recortar a imagem">Máscara</button>
+        <button id="mask-brush" type="button" onclick="toggleInfluenceMaskTool()" title="Desenhe regiões de influência à mão livre. Máscaras podem se sobrepor exatamente onde você desenhar">Máscara</button>
         <button id="mask-eraser" type="button" onclick="deleteLastInfluenceMask()" title="Apaga a última máscara criada na camada selecionada">Apagar Máscara</button>
       </div>
       <button id="move" class="btn-move active" onclick="setMode('move')" title="Arraste as juntas livremente para mover, alongar ou encurtar os ossos.">
@@ -3977,7 +3977,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (btn) btn.classList.toggle("active", influenceMaskToolActive);
         canvas.style.cursor = influenceMaskToolActive ? "crosshair" : "crosshair";
         showNotice(influenceMaskToolActive
-          ? "Máscara: pressione e desenhe o laço livre ao redor da região. Solte para fechar."
+          ? "Máscara: desenhe a região livremente. Para ligar partes, sobreponha os laços onde quiser a transição."
           : "Ferramenta de máscara encerrada.");
         draw();
       }
@@ -4034,7 +4034,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             normalizeInfluenceMasks(layer).push(poly);
             skinBindingCache.delete(layer.mesh);
             updateDeform(layer);
-            showNotice("Máscara criada. A imagem continua livre; somente a influência dos ossos foi isolada.");
+            showNotice("Máscara criada. Ela pode se sobrepor às outras exatamente onde você desenhar; a imagem não é recortada.");
           }
         }
         flushInteractiveRender();
@@ -4072,6 +4072,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (crosses) inside = !inside;
         }
         return inside;
+      }
+
+      // Um membro deformável precisa conter uma parte significativa do osso.
+      // Apenas a ponta do pescoço tocando a cabeça não conta; assim máscaras
+      // sem osso interno continuam usando o transporte rígido original.
+      function boneBelongsToInfluenceMask(control, polygon) {
+        let inside = 0;
+        for (let k = 1; k <= 9; k++) {
+          const t = k / 10;
+          const x = control.parent.ox + (control.pin.ox - control.parent.ox) * t;
+          const y = control.parent.oy + (control.pin.oy - control.parent.oy) * t;
+          if (pointInInfluenceMask(x, y, polygon)) inside++;
+        }
+        return inside >= 4;
       }
 
       // ---------------------------------------------------------------------
@@ -4145,24 +4159,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return false;
       }
 
-      function influenceMaskIndexAtPoint(x, y, masks) {
-        for (let i=(masks?.length||0)-1; i>=0; i--)
-          if (pointInInfluenceMask(x, y, masks[i])) return i;
-        return -1;
+      function influenceMaskIndicesAtPoint(x, y, masks) {
+        const result = [];
+        for (let i = 0; i < (masks?.length || 0); i++) {
+          if (pointInInfluenceMask(x, y, masks[i])) result.push(i);
+        }
+        return result;
       }
 
-      function buildInfluenceMaskVertexMap(lMesh, masks) {
-        const result=new Int32Array(lMesh.length).fill(-1);
-        if(!masks?.length || !lMesh?.length) return result;
-        for(let vi=0;vi<lMesh.length;vi++){
-          const v=lMesh[vi];
-          // A fronteira topológica NÃO encolhe a máscara. Cada vértice novo é
-          // classificado pela sua posição real em relação ao laço desenhado.
-          // Assim um ponto realmente dentro continua dentro mesmo que também
-          // pertença a um pequeno triângulo que cruza a borda. Pontos realmente
-          // fora continuam fora e jamais recebem ossos exclusivos da máscara.
-          if (Number.isInteger(v.maskRegion)) result[vi] = v.maskRegion;
-          else result[vi]=influenceMaskIndexAtPoint(v.ox ?? v.x,v.oy ?? v.y,masks);
+      // As máscaras NÃO disputam pixels e NÃO criam recortes. Um ponto pode
+      // pertencer a várias máscaras ao mesmo tempo quando o usuário desenha os
+      // laços sobrepostos. Essa interseção explícita é a única zona de blend.
+      function buildInfluenceMaskMembershipMap(lMesh, masks) {
+        const result = new Array(lMesh.length);
+        for (let vi = 0; vi < lMesh.length; vi++) {
+          const v = lMesh[vi];
+          result[vi] = influenceMaskIndicesAtPoint(v.ox ?? v.x, v.oy ?? v.y, masks);
         }
         return result;
       }
@@ -4172,7 +4184,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const first=lMesh[0], last=lMesh[lMesh.length-1];
         const maskSig=(masks||[]).map((poly)=>poly.map((p)=>
           `${Math.round(p.x*10)/10},${Math.round(p.y*10)/10}`).join(';')).join('|');
-        return `${GRID}|${INFLUENCE_MASK_CONFORMING_DEPTH}|${lMesh.length}|${first?.ox??0},${first?.oy??0}|${last?.ox??0},${last?.oy??0}|${maskSig}`;
+        return `${GRID}|${INFLUENCE_MASK_CONFORMING_DEPTH}|manual-overlap-v1|${lMesh.length}|${first?.ox??0},${first?.oy??0}|${last?.ox??0},${last?.oy??0}|${maskSig}`;
       }
 
       function buildInfluenceMaskGeometry(layer) {
@@ -4195,8 +4207,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             poly,baseMesh[tri[0]],baseMesh[tri[1]],baseMesh[tri[2]])),
         }));
 
-        // Toda aresta de um triângulo refinado publica os seus pontos. O vizinho
-        // usa os mesmos parâmetros, portanto não surgem T-junctions.
+        // Refinamos somente para a máscara poder ser desenhada justa. A malha
+        // refinada continua UMA superfície: nenhum vértice é duplicado por máscara.
         const edgeSplits=new Map();
         const edgeKey=(a,b)=>a<b?`${a}:${b}`:`${b}:${a}`;
         const segments=1<<INFLUENCE_MASK_CONFORMING_DEPTH;
@@ -4215,26 +4227,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const outMesh=[];
         const outTriangles=[];
         const vertexByKey=new Map();
-        const incidentRegions=[];
         const coordKey=(x,y)=>`${Math.round(x*1e6)}|${Math.round(y*1e6)}`;
-        const vertexIndex=(p,region)=>{
+        const vertexIndex=(p)=>{
+          // Coordenada é a única identidade. Se duas máscaras passam pelo mesmo
+          // ponto, elas compartilham ESTE vértice e o bind mistura as influências.
           const key=coordKey(p.x,p.y);
           let i=vertexByKey.get(key);
           if(i===undefined){
             i=outMesh.length;
-            outMesh.push({x:p.x,y:p.y,ox:p.x,oy:p.y,bx:p.x,by:p.y,maskRegion:-1,maskBoundary:false});
+            outMesh.push({x:p.x,y:p.y,ox:p.x,oy:p.y,bx:p.x,by:p.y});
             vertexByKey.set(key,i);
-            incidentRegions[i]=new Set();
           }
-          incidentRegions[i].add(region);
           return i;
         };
         const addTriangle=(a,b,c)=>{
           const area=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
           if(Math.abs(area)<1e-10) return;
-          const cx=(a.x+b.x+c.x)/3,cy=(a.y+b.y+c.y)/3;
-          const region=influenceMaskIndexAtPoint(cx,cy,masks);
-          const ia=vertexIndex(a,region),ib=vertexIndex(b,region),ic=vertexIndex(c,region);
+          const ia=vertexIndex(a),ib=vertexIndex(b),ic=vertexIndex(c);
           if(ia!==ib&&ib!==ic&&ic!==ia) outTriangles.push([ia,ib,ic]);
         };
 
@@ -4246,9 +4255,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           };
         };
 
-        // Refinamento uniforme dentro do triângulo atravessado. Diferente do
-        // refinamento seletivo anterior, não pode existir vértice pendurado em
-        // uma aresta INTERNA do próprio triângulo-base.
         const addUniformRefinedTriangle=(tri)=>{
           const n=segments;
           const grid=[];
@@ -4284,9 +4290,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return from<to ? values : values.map((t)=>1-t).sort((a,b)=>a-b);
         };
 
-        // Vizinho não atravessado: só adiciona os pontos publicados nas arestas
-        // e liga todos ao centro. O domínio continua sendo exatamente o mesmo
-        // triângulo convexo, mas agora sua borda casa 1:1 com o vizinho refinado.
         const addConformingNeighbor=(tri)=>{
           const [a,b,c]=tri;
           const perimeter=[];
@@ -4298,7 +4301,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             perimeter.push({x:end.ox??end.x,y:end.oy??end.y});
           };
           appendEdge(a,b);appendEdge(b,c);appendEdge(c,a);
-          // remove duplicatas consecutivas e a repetição final do primeiro ponto
           const clean=[];
           for(const p of perimeter){
             const last=clean[clean.length-1];
@@ -4327,22 +4329,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           }
         }
 
-        // A subdivisão apenas aumenta a resolução da malha; ela não aumenta nem
-        // reduz o laço. A região final de CADA vértice é decidida pela coordenada
-        // original exata. incidentRegions serve somente para marcar que aquele
-        // vértice está numa célula de transição, nunca para empurrá-lo para fora.
-        for(let i=0;i<outMesh.length;i++){
-          const regions=incidentRegions[i]||new Set([-1]);
-          const v=outMesh[i];
-          v.maskRegion=influenceMaskIndexAtPoint(v.ox,v.oy,masks);
-          v.maskBoundary=regions.size>1;
-        }
-
         const geometry={
           mesh:outMesh,
           triangles:outTriangles,
           adaptive:true,
-          signature:`mask-conforming:${signature}`,
+          signature:`mask-manual-overlap:${signature}`,
         };
         influenceMaskGeometryCache.set(layer,{signature,geometry});
         return geometry;
@@ -8096,7 +8087,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         // Se nenhum segmento estiver dentro (ex.: cabeça sem osso), usa apenas
         // o osso mais próximo como transportador automático, sem torná-lo exclusivo.
         const maskInfo = masks.map((poly) => {
-          const owned = controls.filter((c) => pointInInfluenceMask(c.mx, c.my, poly));
+          const owned = controls.filter((c) => boneBelongsToInfluenceMask(c, poly));
           const ownedIds = new Set(owned.map((c) => c.index));
           let fallback = null;
           let fallbackPivotIndex = -1;
@@ -8126,15 +8117,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             fallbackPivotIndex,
           };
         });
-        const exclusiveOwner = new Map();
-        maskInfo.forEach((info, maskIndex) => {
-          info.ownedIds.forEach((id) => exclusiveOwner.set(id, maskIndex));
-        });
+        // Ossos que pertencem a alguma máscara ficam limitados ao conjunto de
+        // máscaras desenhado pelo usuário. Uma mesma posição pode pertencer a
+        // duas ou mais máscaras; nesse caso os conjuntos de ossos são unidos.
+        const maskedBoneIds = new Set();
+        maskInfo.forEach((info) => info.ownedIds.forEach((id) => maskedBoneIds.add(id)));
 
-        // A região da máscara é resolvida contra os triângulos da malha, não
-        // apenas contra pontos isolados. Assim um laço justo na cabeça funciona
-        // mesmo quando passa entre os vértices de uma grade 32×32.
-        const vertexMaskMap = buildInfluenceMaskVertexMap(lMesh, masks);
+        // Membership múltiplo: NÃO escolhe uma máscara vencedora. É exatamente
+        // a sobreposição dos laços que o usuário desenhou.
+        const vertexMaskMembership = buildInfluenceMaskMembershipMap(lMesh, masks);
 
         const offsets = new Uint32Array(lMesh.length + 1);
         // Regiões sem osso próprio não usam blend de skinning. Cada vértice
@@ -8146,13 +8137,32 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         for (let vi = 0; vi < lMesh.length; vi++) {
           offsets[vi] = ids.length;
           const v = lMesh[vi];
-          const vertexMask = vertexMaskMap[vi];
-          if (vertexMask >= 0) {
-            const rigidInfo = maskInfo[vertexMask];
-            if (!rigidInfo.ownedIds.size && rigidInfo.fallbackId >= 0) {
-              rigidCarrierIds[vi] = rigidInfo.fallbackId;
-              rigidCarrierPivotIds[vi] = rigidInfo.fallbackPivotIndex;
-              continue;
+          const memberships = vertexMaskMembership[vi] || [];
+
+          // Se o ponto está somente em máscaras sem osso próprio (cabeça,
+          // cabelo, acessório...), preserva o transporte rígido. Se o usuário
+          // sobrepôs essa máscara com outra que tem ossos, deixa de ser rígido
+          // APENAS nessa interseção para formar a ligação desenhada à mão.
+          if (memberships.length) {
+            const infos = memberships.map((mi) => maskInfo[mi]).filter(Boolean);
+            const hasOwnedRegion = infos.some((info) => info.ownedIds.size > 0);
+            if (!hasOwnedRegion) {
+              let bestRigid = null, bestDistance = Infinity;
+              for (const info of infos) {
+                if (info.fallbackId < 0) continue;
+                const control = controls.find((item) => item.index === info.fallbackId);
+                if (!control) continue;
+                const d = distanceSqPointToBoneSegment(v.ox, v.oy, control);
+                if (d < bestDistance) {
+                  bestDistance = d;
+                  bestRigid = info;
+                }
+              }
+              if (bestRigid) {
+                rigidCarrierIds[vi] = bestRigid.fallbackId;
+                rigidCarrierPivotIds[vi] = bestRigid.fallbackPivotIndex;
+                continue;
+              }
             }
           }
           const base = [];
@@ -8189,15 +8199,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if (originalTotal <= 0 || !normalized.length) continue;
 
           let filtered;
-          if (vertexMask >= 0) {
-            const info = maskInfo[vertexMask];
-            const allowedIds = info.ownedIds.size
-              ? info.ownedIds
-              : new Set(info.fallbackId >= 0 ? [info.fallbackId] : []);
+          if (memberships.length) {
+            // União literal das máscaras desenhadas neste ponto. Exemplo:
+            // tronco + perna sobrepostos => os ossos dos dois podem influenciar
+            // exatamente essa faixa comum, sem faixa automática adicional.
+            const allowedIds = new Set();
+            for (const mi of memberships) {
+              const info = maskInfo[mi];
+              if (!info) continue;
+              if (info.ownedIds.size) info.ownedIds.forEach((id) => allowedIds.add(id));
+              else if (info.fallbackId >= 0) allowedIds.add(info.fallbackId);
+            }
             filtered = normalized.filter((e) => allowedIds.has(e.id));
 
-            // Para máscaras que possuem ossos próprios, mantém o skinning
-            // normal apenas entre os ossos permitidos da região.
             if (!filtered.length && allowedIds.size) {
               let bestId = -1, best = Infinity;
               for (const id of allowedIds) {
@@ -8209,13 +8223,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
               if (bestId >= 0) filtered = [{ id: bestId, weight: originalTotal }];
             }
           } else {
-            // Fora das máscaras, bloqueia apenas ossos que pertencem de forma
-            // exclusiva a alguma região. Isso impede o braço de puxar a barriga.
-            filtered = normalized.filter((e) => !exclusiveOwner.has(e.id));
+            // Fora de TODOS os laços, ossos pertencentes a máscaras não vazam.
+            // Não há recorte de imagem: isto filtra somente pesos do rig.
+            filtered = normalized.filter((e) => !maskedBoneIds.has(e.id));
             if (!filtered.length) {
               let nearestFree = null, best = Infinity;
               for (const c of controls) {
-                if (exclusiveOwner.has(c.index)) continue;
+                if (maskedBoneIds.has(c.index)) continue;
                 const d = distanceSqPointToBoneSegment(v.ox, v.oy, c);
                 if (d < best) { best = d; nearestFree = c; }
               }
