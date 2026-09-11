@@ -4074,6 +4074,280 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return inside;
       }
 
+      // ---------------------------------------------------------------------
+      // Topologia CONFORME da máscara.
+      //
+      // Regra estrutural:
+      // 1) triângulos-base atravessados pelo laço são refinados uniformemente;
+      // 2) os pontos criados em uma aresta são registrados por aresta ORIGINAL;
+      // 3) o triângulo vizinho reutiliza exatamente esses mesmos pontos;
+      // 4) um vértice compartilhado é classificado pela sua posição ORIGINAL
+      //    exata no laço; estar na transição não faz a máscara encolher.
+      //
+      // Não existe pós-costura, não existe interpolação pela aresta deformada
+      // antiga e não existe clipping de pixels. A continuidade vem da própria
+      // topologia: os dois lados referenciam o MESMO índice de vértice.
+      // ---------------------------------------------------------------------
+      const INFLUENCE_MASK_CONFORMING_DEPTH = 5; // 32 divisões por aresta local: máscara justa sem ampliar o laço
+      const influenceMaskGeometryCache = new WeakMap();
+
+      function pointInInfluenceTriangle(x, y, a, b, c) {
+        const ax=a.ox ?? a.x, ay=a.oy ?? a.y;
+        const bx=b.ox ?? b.x, by=b.oy ?? b.y;
+        const cx=c.ox ?? c.x, cy=c.oy ?? c.y;
+        const d1=(x-bx)*(ay-by)-(ax-bx)*(y-by);
+        const d2=(x-cx)*(by-cy)-(bx-cx)*(y-cy);
+        const d3=(x-ax)*(cy-ay)-(cx-ax)*(y-ay);
+        const eps=1e-7;
+        const hasNeg=d1 < -eps || d2 < -eps || d3 < -eps;
+        const hasPos=d1 > eps || d2 > eps || d3 > eps;
+        return !(hasNeg && hasPos);
+      }
+
+      function influenceSegmentsIntersect(a, b, c, d) {
+        const eps=1e-7;
+        const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+        const on=(p,q,r)=>
+          Math.abs(cross(p,q,r))<=eps &&
+          r.x>=Math.min(p.x,q.x)-eps && r.x<=Math.max(p.x,q.x)+eps &&
+          r.y>=Math.min(p.y,q.y)-eps && r.y<=Math.max(p.y,q.y)+eps;
+        const o1=cross(a,b,c), o2=cross(a,b,d), o3=cross(c,d,a), o4=cross(c,d,b);
+        if (((o1>eps&&o2< -eps)||(o1< -eps&&o2>eps)) &&
+            ((o3>eps&&o4< -eps)||(o3< -eps&&o4>eps))) return true;
+        return on(a,b,c)||on(a,b,d)||on(c,d,a)||on(c,d,b);
+      }
+
+      function influenceMaskBoundaryTouchesTriangle(poly, a, b, c) {
+        if (!Array.isArray(poly) || poly.length < 3 || !a || !b || !c) return false;
+        const tri=[
+          {x:a.ox ?? a.x, y:a.oy ?? a.y},
+          {x:b.ox ?? b.x, y:b.oy ?? b.y},
+          {x:c.ox ?? c.x, y:c.oy ?? c.y},
+        ];
+        const triMinX=Math.min(tri[0].x,tri[1].x,tri[2].x);
+        const triMaxX=Math.max(tri[0].x,tri[1].x,tri[2].x);
+        const triMinY=Math.min(tri[0].y,tri[1].y,tri[2].y);
+        const triMaxY=Math.max(tri[0].y,tri[1].y,tri[2].y);
+        let polyMinX=Infinity,polyMaxX=-Infinity,polyMinY=Infinity,polyMaxY=-Infinity;
+        for(const p of poly){
+          polyMinX=Math.min(polyMinX,p.x);polyMaxX=Math.max(polyMaxX,p.x);
+          polyMinY=Math.min(polyMinY,p.y);polyMaxY=Math.max(polyMaxY,p.y);
+        }
+        if(polyMaxX<triMinX||polyMinX>triMaxX||polyMaxY<triMinY||polyMinY>triMaxY) return false;
+        if (poly.some((p)=>pointInInfluenceTriangle(p.x,p.y,a,b,c))) return true;
+        for(let i=0;i<3;i++){
+          const ta=tri[i], tb=tri[(i+1)%3];
+          for(let j=0;j<poly.length;j++){
+            const pa=poly[j], pb=poly[(j+1)%poly.length];
+            if(influenceSegmentsIntersect(ta,tb,pa,pb)) return true;
+          }
+        }
+        return false;
+      }
+
+      function influenceMaskIndexAtPoint(x, y, masks) {
+        for (let i=(masks?.length||0)-1; i>=0; i--)
+          if (pointInInfluenceMask(x, y, masks[i])) return i;
+        return -1;
+      }
+
+      function buildInfluenceMaskVertexMap(lMesh, masks) {
+        const result=new Int32Array(lMesh.length).fill(-1);
+        if(!masks?.length || !lMesh?.length) return result;
+        for(let vi=0;vi<lMesh.length;vi++){
+          const v=lMesh[vi];
+          // A fronteira topológica NÃO encolhe a máscara. Cada vértice novo é
+          // classificado pela sua posição real em relação ao laço desenhado.
+          // Assim um ponto realmente dentro continua dentro mesmo que também
+          // pertença a um pequeno triângulo que cruza a borda. Pontos realmente
+          // fora continuam fora e jamais recebem ossos exclusivos da máscara.
+          if (Number.isInteger(v.maskRegion)) result[vi] = v.maskRegion;
+          else result[vi]=influenceMaskIndexAtPoint(v.ox ?? v.x,v.oy ?? v.y,masks);
+        }
+        return result;
+      }
+
+      function influenceMaskTopologySignature(layer, masks) {
+        const lMesh=layer?.mesh||[];
+        const first=lMesh[0], last=lMesh[lMesh.length-1];
+        const maskSig=(masks||[]).map((poly)=>poly.map((p)=>
+          `${Math.round(p.x*10)/10},${Math.round(p.y*10)/10}`).join(';')).join('|');
+        return `${GRID}|${INFLUENCE_MASK_CONFORMING_DEPTH}|${lMesh.length}|${first?.ox??0},${first?.oy??0}|${last?.ox??0},${last?.oy??0}|${maskSig}`;
+      }
+
+      function buildInfluenceMaskGeometry(layer) {
+        const baseMesh=layer?.mesh||[];
+        const masks=normalizeInfluenceMasks(layer);
+        if (!baseMesh.length || !masks.length) return {
+          mesh: baseMesh,
+          triangles: TRIANGLE_INDICES,
+          adaptive: false,
+          signature: 'base',
+        };
+
+        const signature=influenceMaskTopologySignature(layer,masks);
+        const cached=influenceMaskGeometryCache.get(layer);
+        if (cached?.signature===signature) return cached.geometry;
+
+        const baseTriangles=TRIANGLE_INDICES.map((tri)=>({
+          tri,
+          boundary:masks.some((poly)=>influenceMaskBoundaryTouchesTriangle(
+            poly,baseMesh[tri[0]],baseMesh[tri[1]],baseMesh[tri[2]])),
+        }));
+
+        // Toda aresta de um triângulo refinado publica os seus pontos. O vizinho
+        // usa os mesmos parâmetros, portanto não surgem T-junctions.
+        const edgeSplits=new Map();
+        const edgeKey=(a,b)=>a<b?`${a}:${b}`:`${b}:${a}`;
+        const segments=1<<INFLUENCE_MASK_CONFORMING_DEPTH;
+        const publishEdge=(a,b)=>{
+          const key=edgeKey(a,b);
+          let set=edgeSplits.get(key);
+          if(!set){set=new Set();edgeSplits.set(key,set);}
+          for(let k=1;k<segments;k++) set.add(k/segments);
+        };
+        for(const info of baseTriangles){
+          if(!info.boundary) continue;
+          const [a,b,c]=info.tri;
+          publishEdge(a,b);publishEdge(b,c);publishEdge(c,a);
+        }
+
+        const outMesh=[];
+        const outTriangles=[];
+        const vertexByKey=new Map();
+        const incidentRegions=[];
+        const coordKey=(x,y)=>`${Math.round(x*1e6)}|${Math.round(y*1e6)}`;
+        const vertexIndex=(p,region)=>{
+          const key=coordKey(p.x,p.y);
+          let i=vertexByKey.get(key);
+          if(i===undefined){
+            i=outMesh.length;
+            outMesh.push({x:p.x,y:p.y,ox:p.x,oy:p.y,bx:p.x,by:p.y,maskRegion:-1,maskBoundary:false});
+            vertexByKey.set(key,i);
+            incidentRegions[i]=new Set();
+          }
+          incidentRegions[i].add(region);
+          return i;
+        };
+        const addTriangle=(a,b,c)=>{
+          const area=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+          if(Math.abs(area)<1e-10) return;
+          const cx=(a.x+b.x+c.x)/3,cy=(a.y+b.y+c.y)/3;
+          const region=influenceMaskIndexAtPoint(cx,cy,masks);
+          const ia=vertexIndex(a,region),ib=vertexIndex(b,region),ic=vertexIndex(c,region);
+          if(ia!==ib&&ib!==ic&&ic!==ia) outTriangles.push([ia,ib,ic]);
+        };
+
+        const pointFromBary=(tri,u,v,w)=>{
+          const a=baseMesh[tri[0]],b=baseMesh[tri[1]],c=baseMesh[tri[2]];
+          return {
+            x:(a.ox??a.x)*u+(b.ox??b.x)*v+(c.ox??c.x)*w,
+            y:(a.oy??a.y)*u+(b.oy??b.y)*v+(c.oy??c.y)*w,
+          };
+        };
+
+        // Refinamento uniforme dentro do triângulo atravessado. Diferente do
+        // refinamento seletivo anterior, não pode existir vértice pendurado em
+        // uma aresta INTERNA do próprio triângulo-base.
+        const addUniformRefinedTriangle=(tri)=>{
+          const n=segments;
+          const grid=[];
+          for(let i=0;i<=n;i++){
+            grid[i]=[];
+            for(let j=0;j<=n-i;j++){
+              const v=i/n,w=j/n,u=1-v-w;
+              grid[i][j]=pointFromBary(tri,u,v,w);
+            }
+          }
+          for(let i=0;i<n;i++){
+            for(let j=0;j<n-i;j++){
+              const p00=grid[i][j],p10=grid[i+1][j],p01=grid[i][j+1];
+              addTriangle(p00,p10,p01);
+              if(j<n-i-1){
+                const p11=grid[i+1][j+1];
+                addTriangle(p10,p11,p01);
+              }
+            }
+          }
+        };
+
+        const edgePoint=(from,to,t)=>{
+          const a=baseMesh[from],b=baseMesh[to];
+          return {x:(a.ox??a.x)+((b.ox??b.x)-(a.ox??a.x))*t,
+                  y:(a.oy??a.y)+((b.oy??b.y)-(a.oy??a.y))*t};
+        };
+
+        const edgeParamsDirected=(from,to)=>{
+          const set=edgeSplits.get(edgeKey(from,to));
+          if(!set?.size) return [];
+          const values=[...set].sort((a,b)=>a-b);
+          return from<to ? values : values.map((t)=>1-t).sort((a,b)=>a-b);
+        };
+
+        // Vizinho não atravessado: só adiciona os pontos publicados nas arestas
+        // e liga todos ao centro. O domínio continua sendo exatamente o mesmo
+        // triângulo convexo, mas agora sua borda casa 1:1 com o vizinho refinado.
+        const addConformingNeighbor=(tri)=>{
+          const [a,b,c]=tri;
+          const perimeter=[];
+          const appendEdge=(from,to)=>{
+            const start=baseMesh[from];
+            if(!perimeter.length) perimeter.push({x:start.ox??start.x,y:start.oy??start.y});
+            for(const t of edgeParamsDirected(from,to)) perimeter.push(edgePoint(from,to,t));
+            const end=baseMesh[to];
+            perimeter.push({x:end.ox??end.x,y:end.oy??end.y});
+          };
+          appendEdge(a,b);appendEdge(b,c);appendEdge(c,a);
+          // remove duplicatas consecutivas e a repetição final do primeiro ponto
+          const clean=[];
+          for(const p of perimeter){
+            const last=clean[clean.length-1];
+            if(!last||Math.hypot(last.x-p.x,last.y-p.y)>1e-8) clean.push(p);
+          }
+          if(clean.length>1&&Math.hypot(clean[0].x-clean.at(-1).x,clean[0].y-clean.at(-1).y)<=1e-8) clean.pop();
+          const center=pointFromBary(tri,1/3,1/3,1/3);
+          for(let i=0;i<clean.length;i++) addTriangle(center,clean[i],clean[(i+1)%clean.length]);
+        };
+
+        for(const info of baseTriangles){
+          if(info.boundary){
+            addUniformRefinedTriangle(info.tri);
+            continue;
+          }
+          const [a,b,c]=info.tri;
+          const needsConform=edgeSplits.has(edgeKey(a,b))||edgeSplits.has(edgeKey(b,c))||edgeSplits.has(edgeKey(c,a));
+          if(needsConform) addConformingNeighbor(info.tri);
+          else {
+            const va=baseMesh[a],vb=baseMesh[b],vc=baseMesh[c];
+            addTriangle(
+              {x:va.ox??va.x,y:va.oy??va.y},
+              {x:vb.ox??vb.x,y:vb.oy??vb.y},
+              {x:vc.ox??vc.x,y:vc.oy??vc.y},
+            );
+          }
+        }
+
+        // A subdivisão apenas aumenta a resolução da malha; ela não aumenta nem
+        // reduz o laço. A região final de CADA vértice é decidida pela coordenada
+        // original exata. incidentRegions serve somente para marcar que aquele
+        // vértice está numa célula de transição, nunca para empurrá-lo para fora.
+        for(let i=0;i<outMesh.length;i++){
+          const regions=incidentRegions[i]||new Set([-1]);
+          const v=outMesh[i];
+          v.maskRegion=influenceMaskIndexAtPoint(v.ox,v.oy,masks);
+          v.maskBoundary=regions.size>1;
+        }
+
+        const geometry={
+          mesh:outMesh,
+          triangles:outTriangles,
+          adaptive:true,
+          signature:`mask-conforming:${signature}`,
+        };
+        influenceMaskGeometryCache.set(layer,{signature,geometry});
+        return geometry;
+      }
+
       function distanceSqPointToBoneSegment(x, y, control) {
         const a = control.parent;
         const t = Math.max(0, Math.min(1,
@@ -6238,42 +6512,31 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       function movePinZ(delta) {
         if (activeLayerIndex === -1 || activeLayerIndex === "bg") return;
+        if (isPlaying) togglePlay();
 
+        // Z faz parte da pose animada, exatamente como x/y dos ossos.
+        // Nunca propague uma edição para todos os keys futuros: o valor atual
+        // deve pertencer somente ao frame onde o usuário fez a alteração.
         if (selectedPins.length === 0) {
           const activeLayer = layers[activeLayerIndex];
+          if (!activeLayer || activeLayer.isFolder) return;
           const newZ = Number(activeLayer.z || 0) + delta;
           activeLayer.z = newZ;
-          const currentF = Math.round(currentFrame);
-          keyframes.forEach((kf) => {
-            if (kf.frame < currentF) return;
-            const state = kf.layerStates?.[activeLayerIndex];
-            if (state) state.z = newZ;
-          });
+          setKeyframe(false);
           showNotice(`Camada Z: ${newZ}`);
           updateLayersUI();
           draw();
           return;
         }
 
-        const targetPins = selectedPins;
-        const currentF = Math.round(currentFrame);
-
-        targetPins.forEach((p) => {
+        selectedPins.forEach((p) => {
           if (!p) return;
-          const pinIdx = pins.indexOf(p);
-          const newZ = (p.z || 0) + delta;
-          p.z = newZ;
-
-          keyframes.forEach((kf) => {
-            if (kf.frame >= currentF) {
-              const layerState = kf.layerStates[activeLayerIndex];
-              if (layerState && layerState.pins[pinIdx]) {
-                layerState.pins[pinIdx].z = newZ;
-              }
-            }
-          });
+          p.z = Number(p.z || 0) + delta;
         });
 
+        // setKeyframe captura p.z de cada osso. Nos frames entre dois keys,
+        // interpolateBonePose() interpola Z continuamente durante o Play.
+        setKeyframe(false);
         draw();
       }
 
@@ -7868,11 +8131,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           info.ownedIds.forEach((id) => exclusiveOwner.set(id, maskIndex));
         });
 
-        const maskAt = (x, y) => {
-          for (let i = maskInfo.length - 1; i >= 0; i--)
-            if (pointInInfluenceMask(x, y, maskInfo[i].poly)) return i;
-          return -1;
-        };
+        // A região da máscara é resolvida contra os triângulos da malha, não
+        // apenas contra pontos isolados. Assim um laço justo na cabeça funciona
+        // mesmo quando passa entre os vértices de uma grade 32×32.
+        const vertexMaskMap = buildInfluenceMaskVertexMap(lMesh, masks);
 
         const offsets = new Uint32Array(lMesh.length + 1);
         // Regiões sem osso próprio não usam blend de skinning. Cada vértice
@@ -7884,7 +8146,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         for (let vi = 0; vi < lMesh.length; vi++) {
           offsets[vi] = ids.length;
           const v = lMesh[vi];
-          const vertexMask = maskAt(v.ox, v.oy);
+          const vertexMask = vertexMaskMap[vi];
           if (vertexMask >= 0) {
             const rigidInfo = maskInfo[vertexMask];
             if (!rigidInfo.ownedIds.size && rigidInfo.fallbackId >= 0) {
@@ -7996,9 +8258,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return cached;
       }
 
-      function updateDeform(targetLayer) {
+      function updateDeform(targetLayer, overrideMesh = null, suppressVersion = false) {
         const lPins = targetLayer ? targetLayer.pins : pins;
-        const lMesh = targetLayer ? targetLayer.mesh : mesh;
+        const lMesh = overrideMesh || (targetLayer ? targetLayer.mesh : mesh);
         if (!Array.isArray(lMesh) || !Array.isArray(lPins)) return;
         // Avaliar uma pose não pode mover os controles nem os pés fixados.
         const layer = targetLayer ||
@@ -8064,7 +8326,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           let resultY=v.oy*(1-sum)+qy+rx*boneSin+ry*boneCos;
           v.x=v.bx=resultX;v.y=v.by=resultY;
         }
-        if (layer && !layer.__adaptiveTemp)
+        if (layer && !layer.__adaptiveTemp && !suppressVersion)
           layer._deformVersion = (layer._deformVersion || 0) + 1;
       }
 
@@ -8172,11 +8434,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const gMat = getLayerCanvasMatrix(l);
           if (!gMat) return;
 
-          const geometry = {
-            mesh: l.mesh,
-            triangles: TRIANGLE_INDICES,
-            adaptive: false,
-          };
+          const geometry = buildInfluenceMaskGeometry(l);
+          // A malha conforme subdivide apenas onde a máscara cruza a grade e
+          // compartilha de verdade os vértices entre triângulos vizinhos. Ela usa
+          // o mesmo updateDeform 2D do rig; não existe segunda imagem nem clip.
+          if (geometry.adaptive) {
+            updateDeform(l, geometry.mesh, true);
+          }
           renderLayers.push({
             l,
             idx,
