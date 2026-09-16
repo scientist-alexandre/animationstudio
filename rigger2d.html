@@ -3403,8 +3403,38 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             };
             assetSelect.onclick = (e) => e.stopPropagation();
             assetSelect.onchange = (e) => {
-              activateLayerVariant(l, parseInt(e.target.value));
-              selectLayer(idx);
+              e.stopPropagation();
+              const layerUid = l.uid;
+              const nextIndex = Number.parseInt(e.target.value, 10);
+              if (!Number.isInteger(nextIndex)) return;
+
+              // IMPORTANTE (Android / selects nativos): não reconstruir a lista
+              // enquanto o próprio <select> ainda está finalizando o evento.
+              // updateLayersUI()/seek() removem este nó do DOM e alguns WebViews
+              // cancelam a escolha, fazendo o Switch parecer que não mudou.
+              // Guardamos UID + índice e aplicamos somente no próximo task.
+              setTimeout(() => {
+                const liveLayer = layers.find((item) => item.uid === layerUid);
+                if (!liveLayer || liveLayer.isFolder) return;
+                const liveIndex = layers.indexOf(liveLayer);
+                if (liveIndex < 0) return;
+
+                // Torna a linha escolhida a camada ativa sem reconstruir a lista
+                // antes da troca do asset. Depois activateLayerVariant grava o
+                // Switch no frame atual e faz a atualização completa da UI.
+                selectLayer(liveIndex, true);
+                activateLayerVariant(liveLayer, nextIndex);
+
+                // Se a opção já era a atual, activateLayerVariant retorna cedo;
+                // ainda assim garantimos que a linha/canvas reflitam a seleção.
+                if (activeLayerIndex !== liveIndex) activeLayerIndex = liveIndex;
+                refreshActiveLayerForFrame();
+                updateLayersUI();
+                updateFolderSwitcher();
+                updateSavedPosesUI();
+                updateShapeKeysUI();
+                draw();
+              }, 0);
             };
 
             btnDelAsset = document.createElement("button");
@@ -4433,12 +4463,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (isPlaying) togglePlay();
         const frame = Math.round(currentFrame);
         const movingBody = keyframes.filter((k)=>k.frame>=frame);
+        const movingBackground = backgroundKeyframes.filter((k)=>k.frame>=frame);
         const movingTransform = layers.flatMap((l)=>(Array.isArray(l.transformKeyframes)?l.transformKeyframes:[]).filter((k)=>k.frame>=frame));
         const movingFollow = layers.flatMap((l)=>(Array.isArray(l.followPinKeyframes)?l.followPinKeyframes:[]).filter((k)=>k.frame>=frame));
-        const moving = movingBody.concat(movingTransform,movingFollow);
+        const moving = movingBody.concat(movingBackground,movingTransform,movingFollow);
         if (!moving.length) return;
         const stationaryFrames = [
           ...keyframes.filter((k)=>k.frame<frame).map((k)=>k.frame),
+          ...backgroundKeyframes.filter((k)=>k.frame<frame).map((k)=>k.frame),
           ...layers.flatMap((l)=>(Array.isArray(l.transformKeyframes)?l.transformKeyframes:[]).filter((k)=>k.frame<frame).map((k)=>k.frame)),
           ...layers.flatMap((l)=>(Array.isArray(l.followPinKeyframes)?l.followPinKeyframes:[]).filter((k)=>k.frame<frame).map((k)=>k.frame)),
         ];
@@ -4453,8 +4485,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           if(Array.isArray(l.followPinKeyframes)) l.followPinKeyframes.sort((a,b)=>a.frame-b.frame);
         });
         keyframes.sort((a,b)=>a.frame-b.frame);
+        backgroundKeyframes.sort((a,b)=>a.frame-b.frame);
         totalFrames = getLastTimelineKeyframe();
-        seek(Math.max(1, firstMovingFrame+n)); renderTransformTimeline();
+        seek(Math.max(1, firstMovingFrame+n));
+        renderTransformTimeline();
+        renderBackgroundTimeline();
         const status=document.getElementById("kf-status"); status.innerText=n>0?"↔ Espaço anterior aumentado":"↔ Espaço anterior diminuído"; setTimeout(()=>updateKfStatus(),1200);
       }
 
@@ -4760,6 +4795,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         applyInterpolation();
+        syncShapeKeySlidersFromState();
         // Estes ponteiros alimentam apenas a edição/overlay. Durante o Play o
         // desenho usa diretamente as camadas e a pausa faz a sincronização final.
         if (!isPlaying) refreshActiveLayerForFrame();
@@ -7240,6 +7276,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         scheduleShapeKeyAutoKey();
       }
 
+      // A timeline altera shape.value durante seek/playback. Mantenha os
+      // controles existentes em sincronia sem reconstruir a lista (o que
+      // interromperia arrastes e edição de nomes).
+      function syncShapeKeySlidersFromState() {
+        const layer = shapeWarpActiveLayer();
+        const list = document.getElementById("shape-key-list");
+        if (!layer || !list) return;
+        const values = new Map(
+          ensureShapeKeys2D(layer).map((shape) => [
+            shape.uid,
+            Math.max(0, Math.min(100, Number(shape.value) || 0)),
+          ]),
+        );
+        list.querySelectorAll("input[data-shape-value]").forEach((slider) => {
+          const value = values.get(slider.dataset.shapeValue);
+          if (value == null) return;
+          slider.value = String(value);
+          const output = list.querySelector(
+            `[data-shape-value-out="${slider.dataset.shapeValue}"]`,
+          );
+          if (output) output.textContent = `${Math.round(value)}%`;
+        });
+      }
+
       function editShapeKey2D(shapeUid) {
         const layer = shapeWarpActiveLayer();
         if (!layer) return;
@@ -7465,6 +7525,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const slider = document.createElement("input");
           slider.type = "range"; slider.min = "0"; slider.max = "100"; slider.step = "1";
           slider.value = String(Number(shape.value) || 0);
+          slider.dataset.shapeValue = shape.uid;
           slider.disabled = editing;
           slider.addEventListener("input", () => setShapeKey2DValue(shape.uid, slider.value));
           const output = document.createElement("span");

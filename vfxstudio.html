@@ -793,10 +793,34 @@
                 </div>
             </div>
 
+            <div class="effect-card" id="camera-effect-card">
+                <h3>Câmera 3D 360° <i class="fas fa-chevron-down" style="font-size:8px; transition:.3s;"></i></h3>
+                <div class="vfx-content" id="camera-controls">
+                    <div style="font-size:9px; color:#aaa; margin-bottom:10px; line-height:1.5;">Ative o preview, escolha o ângulo e crie keyframes para animar a câmera.</div>
+                    <button id="btn-camera-preview" class="btn-primary" style="width:100%; min-height:38px; margin-bottom:10px;">ATIVAR PREVIEW 3D</button>
+                    <label style="display:block; font-size:9px;">PANORÂMICA 360° <span id="camera-yaw-value">0°</span></label>
+                    <input id="camera-yaw" type="range" min="-720" max="720" step="1" value="0">
+                    <label style="display:block; font-size:9px;">INCLINAÇÃO LIVRE <span id="camera-pitch-value">0°</span></label>
+                    <input id="camera-pitch" type="range" min="-85" max="85" step="1" value="0">
+                    <label style="display:block; font-size:9px;">ALTURA DO HORIZONTE <span id="camera-horizon-value">CENTRO</span></label>
+                    <div style="display:flex; justify-content:space-between; font-size:8px; color:#888;"><span>MAIS CÉU</span><span>MAIS CHÃO</span></div>
+                    <input id="camera-horizon" type="range" min="-100" max="100" step="1" value="0">
+                    <label style="display:block; font-size:9px;">ZOOM DA CÂMERA <span id="camera-fov-value">75°</span></label>
+                    <input id="camera-fov" type="range" min="35" max="100" step="1" value="75">
+                    <div style="display:flex; flex-direction:column; gap:7px; margin-top:8px;">
+                        <button id="btn-kf-camera" class="btn-trigger" style="width:100%; min-height:38px; border-color:#4aa3ff; color:#4aa3ff;">◆ ADD KEY CÂMERA</button>
+                        <button id="btn-render-camera" class="btn-primary" style="width:100%; min-height:40px; background:#2471a3;">EXPORTAR WEBM FULL HD</button>
+                        <button id="btn-render-camera-png" class="btn-primary" style="width:100%; min-height:40px; background:#b65f12;">EXPORTAR SEQUÊNCIA PNG FULL HD</button>
+                    </div>
+                    <div style="font-size:8px; color:#777; line-height:1.45; margin-top:8px;">Giro completo: key em 0° no início e outro key em 360° no final.</div>
+                </div>
+            </div>
+
             <div style="margin-top: 20px; text-align: center; display: flex; flex-direction: column; gap: 8px;">
                 <button class="btn-primary btn-record" id="btn-render" style="width: 100%; padding: 12px;">EXPORTAR VÍDEO (WEBM)</button>
+                <button class="btn-primary" id="btn-render-gif" style="width: 100%; padding: 12px; background: #8e44ad;">EXPORTAR GIF</button>
                 <button class="btn-primary" id="btn-render-png" style="width: 100%; padding: 12px; background: #e67e22;">EXPORTAR SEQ. PNG</button>
-                <div style="font-size: 9px; color: #777; text-align: center; line-height:1.45;">2:1 (1456x728) • 24 FPS<br>PNG preserva transparência total. WebM alfa depende do navegador.</div>
+                <div id="export-info" style="font-size: 9px; color: #777; text-align: center; line-height:1.45;">1456×728 (2:1) • 24 FPS<br>GIF, PNG e WebM usam o tamanho/formato da imagem original.</div>
             </div>
         </div>
     </aside>
@@ -846,6 +870,18 @@
         const ZOOM_MIN = 1.0; // Imagem original (100%)
         const PPS = 200; // Pixels Per Second - Aumentado para maior precisão/distância
         const EXPORT_FPS = 24;
+        let compositionWidth = 1456;
+        let compositionHeight = 728;
+
+        function updateCompositionDimensions(width, height) {
+            compositionWidth = Math.max(1, Math.round(width || 1456));
+            compositionHeight = Math.max(1, Math.round(height || 728));
+            const canvasContainer = document.getElementById('canvas-container');
+            canvasContainer.style.width = `${compositionWidth}px`;
+            canvasContainer.style.height = `${compositionHeight}px`;
+            const ratio = compositionWidth / compositionHeight;
+            document.getElementById('export-info').innerHTML = `${compositionWidth}×${compositionHeight} (${ratio.toFixed(2)}:1) • ${EXPORT_FPS} FPS<br>GIF, PNG e WebM usam o tamanho/formato da imagem original.`;
+        }
 
         function normalizeLoopDuration(value) {
             const requested = Number(value);
@@ -864,7 +900,10 @@
         let resizePreviewHandler = null;
         let filterStackSignature = '';
         let threeYaw = 0, threePitch = 0;
+        let threeFov = 75;
+        let threeHorizon = 0;
         let isDraggingThree = false;
+        let lastThreePointerX = 0, lastThreePointerY = 0;
 
         window.addEventListener('pointerup', () => {
             isPaintingMask = false;
@@ -881,16 +920,55 @@
             if (isLocked) {
                 threeYaw += e.movementX * 0.0015;
                 threePitch -= e.movementY * 0.0015;
-            } else if (isDraggingThree && (e.buttons & 1) === 1) {
-                threeYaw += e.movementX * 0.003;
-                threePitch -= e.movementY * 0.003;
+            } else if (isDraggingThree) {
+                const deltaX = e.clientX - lastThreePointerX;
+                const deltaY = e.clientY - lastThreePointerY;
+                threeYaw += deltaX * 0.004;
+                threePitch -= deltaY * 0.004;
+                lastThreePointerX = e.clientX;
+                lastThreePointerY = e.clientY;
             } else {
                 return;
             }
 
             // Limita o ângulo vertical para não "dar a volta" no cenário
             threePitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, threePitch));
+            settings.cameraYaw = threeYaw;
+            settings.cameraPitch = threePitch;
+            syncCameraControls();
         });
+
+        function syncCameraControls() {
+            const yawInput = document.getElementById('camera-yaw');
+            if (!yawInput) return;
+            const yawDegrees = threeYaw * 180 / Math.PI;
+            const pitchDegrees = threePitch * 180 / Math.PI;
+            yawInput.value = Math.max(-720, Math.min(720, Math.round(yawDegrees)));
+            document.getElementById('camera-pitch').value = Math.round(pitchDegrees);
+            document.getElementById('camera-horizon').value = Math.round(threeHorizon);
+            document.getElementById('camera-fov').value = Math.round(threeFov);
+            document.getElementById('camera-yaw-value').innerText = `${Math.round(yawDegrees)}°`;
+            document.getElementById('camera-pitch-value').innerText = `${Math.round(pitchDegrees)}°`;
+            document.getElementById('camera-horizon-value').innerText = threeHorizon === 0 ? 'CENTRO' : `${Math.abs(Math.round(threeHorizon))}% ${threeHorizon > 0 ? 'CHÃO' : 'CÉU'}`;
+            document.getElementById('camera-fov-value').innerText = `${Math.round(threeFov)}°`;
+        }
+
+        function aimThreeCamera(camera, yaw = threeYaw, pitch = threePitch, fov = threeFov, horizon = threeHorizon) {
+            camera.fov = fov;
+            camera.clearViewOffset();
+            // View offset oficial do Three.js: desloca o horizonte sem alterar
+            // manualmente a matriz de projeção nem quebrar a textura dos efeitos.
+            const referenceHeight = 1080;
+            const referenceWidth = Math.max(1, Math.round(referenceHeight * camera.aspect));
+            const offsetY = Math.round((horizon / 100) * referenceHeight * 0.32);
+            camera.setViewOffset(referenceWidth, referenceHeight, 0, offsetY, referenceWidth, referenceHeight);
+            camera.updateProjectionMatrix();
+            camera.lookAt(new THREE.Vector3(
+                Math.sin(yaw) * Math.cos(pitch),
+                Math.sin(pitch),
+                -Math.cos(yaw) * Math.cos(pitch)
+            ));
+        }
 
         function setupThree() {
             const container = document.getElementById('three-container');
@@ -909,15 +987,17 @@
                 threeRenderer.domElement.style.width = '100%';
                 threeRenderer.domElement.style.height = '100%';
                 threeRenderer.domElement.style.display = 'block';
+                threeRenderer.domElement.style.touchAction = 'none';
                 container.appendChild(threeRenderer.domElement);
 
                 // No Preview 3D, um clique dentro da imagem recaptura o mouse se necessário.
                 threeRenderer.domElement.addEventListener('pointerdown', (e) => {
                     if (e.button !== 0 || !isPreview3D) return;
-                    if (document.pointerLockElement !== threeRenderer.domElement) {
-                        const lockRequest = threeRenderer.domElement.requestPointerLock?.();
-                        if (lockRequest && typeof lockRequest.catch === 'function') lockRequest.catch(() => {});
-                    }
+                    isDraggingThree = true;
+                    lastThreePointerX = e.clientX;
+                    lastThreePointerY = e.clientY;
+                    threeRenderer.domElement.setPointerCapture?.(e.pointerId);
+                    e.preventDefault();
                 });
 
                 window.addEventListener('resize', () => {
@@ -949,7 +1029,12 @@
 
                 const geometry = new THREE.SphereGeometry(10, 64, 40);
                 geometry.scale(-1, 1, 1);
-                const material = new THREE.MeshBasicMaterial({ map: threeTexture, side: THREE.FrontSide });
+                const material = new THREE.MeshBasicMaterial({
+                    map: threeTexture,
+                    side: THREE.FrontSide,
+                    transparent: true,
+                    depthWrite: false
+                });
                 threeSphere = new THREE.Mesh(geometry, material);
                 threeSphere.rotation.y = Math.PI / 2;
                 threeScene.add(threeSphere);
@@ -959,12 +1044,7 @@
         function renderThreePreview() {
             if (!isPreview3D || !threeRenderer || !threeTexture || !threeCamera) return;
             threeTexture.needsUpdate = true;
-            const target = new THREE.Vector3(
-                Math.sin(threeYaw) * Math.cos(threePitch),
-                Math.sin(threePitch),
-                -Math.cos(threeYaw) * Math.cos(threePitch)
-            );
-            threeCamera.lookAt(target);
+            aimThreeCamera(threeCamera);
             threeRenderer.render(threeScene, threeCamera);
         }
 
@@ -977,17 +1057,14 @@
             threeContainer.style.display = isPreview3D ? 'block' : 'none';
             canvasContainer.style.opacity = isPreview3D ? '0' : '1';
             canvasContainer.style.pointerEvents = isPreview3D ? 'none' : 'auto';
-            btn.innerText = isPreview3D ? "Preview 3D: ON — ESC PARA SAIR" : "Preview 3D: OFF";
+            btn.innerText = isPreview3D ? "Preview 3D: ON" : "Preview 3D: OFF";
+            document.getElementById('btn-camera-preview').innerText = isPreview3D ? 'DESATIVAR PREVIEW 3D' : 'ATIVAR PREVIEW 3D';
 
             if (isPreview3D) {
                 setupThree();
+                syncCameraControls();
                 app.renderer.render(app.stage);
                 renderThreePreview();
-                requestAnimationFrame(renderThreePreview);
-
-                // O clique no botão é uma ação do usuário, então já podemos capturar o mouse.
-                const lockRequest = threeRenderer?.domElement?.requestPointerLock?.();
-                if (lockRequest && typeof lockRequest.catch === 'function') lockRequest.catch(() => {});
             } else if (document.pointerLockElement) {
                 document.exitPointerLock?.();
             }
@@ -996,14 +1073,271 @@
         document.getElementById('toggle-3d').onclick = () => {
             setPreview3D(!isPreview3D);
         };
+        document.getElementById('btn-camera-preview').onclick = () => {
+            setPreview3D(!isPreview3D);
+        };
 
-        // ESC é tratado pelo próprio navegador para liberar o Pointer Lock.
-        // Ao perder o lock, fechamos também o Preview 3D e voltamos ao canvas 2D.
-        document.addEventListener('pointerlockchange', () => {
-            if (isPreview3D && threeRenderer && document.pointerLockElement !== threeRenderer.domElement) {
-                setPreview3D(false);
-            }
+        document.getElementById('camera-yaw').addEventListener('input', e => {
+            threeYaw = Number(e.target.value) * Math.PI / 180;
+            settings.cameraYaw = threeYaw;
+            syncCameraControls();
+            renderThreePreview();
         });
+        document.getElementById('camera-pitch').addEventListener('input', e => {
+            threePitch = Number(e.target.value) * Math.PI / 180;
+            settings.cameraPitch = threePitch;
+            syncCameraControls();
+            renderThreePreview();
+        });
+        document.getElementById('camera-horizon').addEventListener('input', e => {
+            threeHorizon = Number(e.target.value);
+            settings.cameraHorizon = threeHorizon;
+            syncCameraControls();
+            renderThreePreview();
+        });
+        document.getElementById('camera-fov').addEventListener('input', e => {
+            threeFov = Number(e.target.value);
+            settings.cameraFov = threeFov;
+            syncCameraControls();
+            renderThreePreview();
+        });
+        async function exportCameraFullHD() {
+            if (!app) return alert('A composição ainda não foi iniciada.');
+            if (typeof VideoEncoder === 'undefined') return alert('Este navegador não suporta exportação Full HD por WebCodecs. Use Chrome ou Edge atualizado.');
+
+            if (!isPreview3D) setPreview3D(true);
+            setupThree();
+
+            const btn = document.getElementById('btn-render-camera');
+            const originalText = btn.innerText;
+            const statusLabel = document.getElementById('status-indicator');
+            const timerDisplay = document.getElementById('timer');
+            const width = 1920;
+            const height = 1080;
+            const fps = EXPORT_FPS;
+            const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
+            const totalFrames = normalizedLoop.frames;
+            settings.renderDuration = normalizedLoop.duration;
+            document.getElementById('render-duration').value = Number(normalizedLoop.duration.toFixed(6));
+
+            if (isPlaying) togglePlay();
+            btn.disabled = true;
+            btn.innerText = 'INICIANDO...';
+            statusLabel.style.display = 'block';
+
+            let exportRenderer = null;
+            let videoEncoder = null;
+            try {
+                const target = new WebMMuxer.ArrayBufferTarget();
+                const muxer = new WebMMuxer.Muxer({
+                    target,
+                    video: { codec: 'V_VP9', width, height, frameRate: fps }
+                });
+
+                videoEncoder = new VideoEncoder({
+                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+                    error: error => console.error(error)
+                });
+                videoEncoder.configure({
+                    codec: 'vp09.00.10.08',
+                    width,
+                    height,
+                    bitrate: 16_000_000,
+                    framerate: fps
+                });
+
+                exportRenderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: false,
+                    preserveDrawingBuffer: true,
+                    powerPreference: 'high-performance'
+                });
+                exportRenderer.setPixelRatio(1);
+                exportRenderer.setSize(width, height, false);
+                exportRenderer.setClearColor(0x000000, 1);
+                exportRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
+                const exportCamera = threeCamera.clone();
+                exportCamera.aspect = width / height;
+                exportCamera.position.copy(threeCamera.position);
+                aimThreeCamera(exportCamera);
+
+                app.ticker.stop();
+                for (let i = 0; i < totalFrames; i++) {
+                    while (videoEncoder.encodeQueueSize > 8) {
+                        await new Promise(resolve => setTimeout(resolve, 30));
+                    }
+                    if (i % 3 === 0) {
+                        const pct = Math.round(i / totalFrames * 100);
+                        btn.innerText = `⏳ FULL HD ${pct}%`;
+                        timerDisplay.innerText = `${pct}%`;
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+
+                    seek(i / fps, false);
+                    app.renderer.render(app.stage);
+                    threeTexture.needsUpdate = true;
+                    aimThreeCamera(exportCamera);
+                    exportRenderer.render(threeScene, exportCamera);
+
+                    const frame = new VideoFrame(exportRenderer.domElement, {
+                        timestamp: Math.round(i * 1_000_000 / fps),
+                        duration: Math.round(1_000_000 / fps)
+                    });
+                    videoEncoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
+                    frame.close();
+                }
+
+                await videoEncoder.flush();
+                muxer.finalize();
+                const blob = new Blob([target.buffer], { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'camera-3d-full-hd.webm';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                btn.innerText = 'CONCLUÍDO!';
+            } catch (error) {
+                console.error('Erro na exportação da câmera 3D:', error);
+                alert('Falha ao exportar a câmera 3D: ' + error.message);
+            } finally {
+                if (videoEncoder && videoEncoder.state !== 'closed') videoEncoder.close();
+                if (exportRenderer) {
+                    exportRenderer.dispose();
+                    exportRenderer.forceContextLoss?.();
+                }
+                if (app) app.ticker.start();
+                statusLabel.style.display = 'none';
+                renderThreePreview();
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }, 1200);
+            }
+        }
+
+        document.getElementById('btn-render-camera').addEventListener('click', exportCameraFullHD);
+
+        async function exportCameraPngSequence() {
+            if (!app) return alert('A composição ainda não foi iniciada.');
+
+            const btn = document.getElementById('btn-render-camera-png');
+            const originalText = btn.innerText;
+            const statusLabel = document.getElementById('status-indicator');
+            const timerDisplay = document.getElementById('timer');
+            const width = 1920;
+            const height = 1080;
+            const fps = EXPORT_FPS;
+            const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
+            const totalFrames = normalizedLoop.frames;
+            let directoryHandle = null;
+            let zipModule = null;
+            const zipFrames = {};
+
+            try {
+                if (typeof window.showDirectoryPicker === 'function') {
+                    directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                } else {
+                    if (totalFrames > 120 && !confirm(`A sequência terá ${totalFrames} imagens Full HD e será reunida em ZIP no tablet. Pode ficar pesada. Continuar?`)) return;
+                    zipModule = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/+esm');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                alert('Não foi possível escolher a pasta: ' + error.message);
+                return;
+            }
+
+            if (!isPreview3D) setPreview3D(true);
+            setupThree();
+            if (isPlaying) togglePlay();
+            settings.renderDuration = normalizedLoop.duration;
+            document.getElementById('render-duration').value = Number(normalizedLoop.duration.toFixed(6));
+
+            let exportRenderer = null;
+
+            btn.disabled = true;
+            btn.innerText = 'INICIANDO...';
+            statusLabel.style.display = 'block';
+
+            try {
+                exportRenderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: false,
+                    preserveDrawingBuffer: true,
+                    powerPreference: 'high-performance'
+                });
+                exportRenderer.setPixelRatio(1);
+                exportRenderer.setSize(width, height, false);
+                exportRenderer.setClearColor(0x000000, 1);
+                exportRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
+                const exportCamera = threeCamera.clone();
+                exportCamera.aspect = width / height;
+                exportCamera.position.copy(threeCamera.position);
+                aimThreeCamera(exportCamera);
+
+                app.ticker.stop();
+                for (let i = 0; i < totalFrames; i++) {
+                    const pct = Math.round(i / totalFrames * 100);
+                    btn.innerText = `⏳ PNG ${pct}%`;
+                    timerDisplay.innerText = `${pct}%`;
+                    if (i % 2 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+
+                    seek(i / fps, false);
+                    app.renderer.render(app.stage);
+                    threeTexture.needsUpdate = true;
+                    aimThreeCamera(exportCamera);
+                    exportRenderer.render(threeScene, exportCamera);
+
+                    const blob = await new Promise((resolve, reject) => {
+                        exportRenderer.domElement.toBlob(result => result ? resolve(result) : reject(new Error('Falha ao criar PNG.')), 'image/png');
+                    });
+                    const fileName = `camera_3d_${String(i).padStart(5, '0')}.png`;
+
+                    if (directoryHandle) {
+                        const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } else {
+                        zipFrames[fileName] = new Uint8Array(await blob.arrayBuffer());
+                    }
+                }
+
+                if (!directoryHandle) {
+                    btn.innerText = 'COMPACTANDO ZIP...';
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                    const zipped = zipModule.zipSync(zipFrames, { level: 0 });
+                    const url = URL.createObjectURL(new Blob([zipped], { type: 'application/zip' }));
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'camera-3d-full-hd-png.zip';
+                    link.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }
+                btn.innerText = 'CONCLUÍDO!';
+            } catch (error) {
+                console.error('Erro na sequência PNG da câmera 3D:', error);
+                alert('Falha na sequência PNG Full HD: ' + error.message);
+            } finally {
+                if (exportRenderer) {
+                    exportRenderer.dispose();
+                    exportRenderer.forceContextLoss?.();
+                }
+                if (app) app.ticker.start();
+                statusLabel.style.display = 'none';
+                renderThreePreview();
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }, 1200);
+            }
+        }
+
+        document.getElementById('btn-render-camera-png').addEventListener('click', exportCameraPngSequence);
+
+        // O modo por arraste funciona igualmente com mouse, caneta e toque.
 
         const settings = {
             effectsOnly: false,
@@ -1058,6 +1392,10 @@
                 rotation: 0, spin: 0, alpha: 1, fadeIn: 0.1, fadeOut: 0.2,
                 colorStart: '#ffffff', colorEnd: '#88ccff', blend: 'normal', stretch: 1, pulse: 0, seed: 1, layers: []
             },
+            cameraYaw: 0,
+            cameraPitch: 0,
+            cameraHorizon: 0,
+            cameraFov: 75,
             renderDuration: 10,
             keyframes: []
         };
@@ -1122,6 +1460,7 @@
             uniform sampler2D uSampler;
             uniform vec2 uPos;
             uniform float uAngle;
+            uniform float uAspect;
             uniform float uSize;
             uniform float uSpread;
             uniform float uSourceSize;
@@ -1130,7 +1469,7 @@
             uniform vec3 uColor;
 
             void main() {
-                float aspect = 2.0; // Proporção 2:1
+                float aspect = uAspect;
                 vec2 p = vTextureCoord - uPos;
                 
                 // FIX: Continuidade Horizontal 360° (Equirretangular)
@@ -1180,6 +1519,7 @@
             uniform float uSize;
             uniform float uIntensity;
             uniform float uTime;
+            uniform float uAspect;
 
             void main() {
                 vec2 uv = vTextureCoord;
@@ -1189,7 +1529,7 @@
                 if (p.x > 0.5) p.x -= 1.0;
                 else if (p.x < -0.5) p.x += 1.0;
                 
-                p.x *= 2.0; // Aspect ratio fix
+                p.x *= uAspect;
                 float scale = uSize + 0.01;
                 p /= scale;
 
@@ -1825,7 +2165,7 @@
             zoomLayers = [];
 
             for (let i = 0; i < NUM_ZOOM_LAYERS; i++) {
-                const s = new PIXI.TilingSprite(texture, 1456, 728);
+                const s = new PIXI.TilingSprite(texture, compositionWidth, compositionHeight);
                 // Armazena o offset inicial para distribuir as camadas no loop
                 s.initialZOffset = i / NUM_ZOOM_LAYERS;
                 s.zProgress = s.initialZOffset;
@@ -1834,7 +2174,8 @@
             }
         }
 
-        function initPixi(imageURL) {
+        function initPixi(imageURL, sourceWidth = compositionWidth, sourceHeight = compositionHeight) {
+            updateCompositionDimensions(sourceWidth, sourceHeight);
             if(document.getElementById('empty-msg')) document.getElementById('empty-msg').style.display = 'none';
             if (app) {
                 if (resizePreviewHandler) window.removeEventListener('resize', resizePreviewHandler);
@@ -1851,10 +2192,10 @@
             }
 
             app = new PIXI.Application({
-                width: 1456, height: 728,
+                width: compositionWidth, height: compositionHeight,
                 backgroundAlpha: 0,
                 preserveDrawingBuffer: true,
-                resolution: 1, // Mantém a saída lógica em 1456x728, independente do monitor
+                resolution: 1, // Mantém a saída lógica no tamanho original, independente do monitor
                 autoDensity: false
             });
 
@@ -1873,7 +2214,7 @@
             if (zoomContainer) zoomContainer.filterArea = app.screen;
 
             // Setup Mascara de Vento
-            maskTexture = PIXI.RenderTexture.create({ width: 1456, height: 728 });
+            maskTexture = PIXI.RenderTexture.create({ width: compositionWidth, height: compositionHeight });
             maskSprite = new PIXI.Sprite(maskTexture);
             
             // Criação de um pincel macio (Soft Brush) usando gradiente radial
@@ -1896,17 +2237,17 @@
             app.stage.on('pointermove', (e) => { if(isPaintingMask) paintMask(e); }, { passive: false });
             const texture = PIXI.Texture.from(imageURL);
             // Trocado para Sprite comum para evitar repetição (multiplicação)
-            sprite = new PIXI.TilingSprite(texture, 1456, 728);
+            sprite = new PIXI.TilingSprite(texture, compositionWidth, compositionHeight);
             
             const onTextureLoaded = () => {
                 if (texture.width <= 1) return; // Garante que a imagem já tenha dimensões reais
 
                 // Cálculo de Aspect Fit: Imagem inteira na tela sem cortes nem repetições
-                const ratio = Math.min(1456 / texture.width, 728 / texture.height);
+                const ratio = Math.min(compositionWidth / texture.width, compositionHeight / texture.height);
                 sprite.tileScale.set(ratio);
                 // Centraliza a textura inicialmente
-                sprite.tilePosition.x = (1456 - texture.width * ratio) / 2;
-                sprite.tilePosition.y = (728 - texture.height * ratio) / 2;
+                sprite.tilePosition.x = (compositionWidth - texture.width * ratio) / 2;
+                sprite.tilePosition.y = (compositionHeight - texture.height * ratio) / 2;
                 
                 setupZoomLayers(texture);
             };
@@ -1953,7 +2294,7 @@
                 uGrain: 0.0,
                 uScanlines: 0.0,
                 uTime: 0.0,
-                uResolution: [1456, 728]
+                uResolution: [compositionWidth, compositionHeight]
             });
 
             windFilter = new PIXI.Filter(null, windShader, {
@@ -2024,7 +2365,7 @@
 
             resizePreviewHandler = () => {
                 const viewport = document.getElementById('viewport');
-                const scale = Math.min(viewport.clientWidth / 1456, viewport.clientHeight / 728) * 0.95;
+                const scale = Math.min(viewport.clientWidth / compositionWidth, viewport.clientHeight / compositionHeight) * 0.95;
                 document.getElementById('canvas-container').style.transform = `translate(-50%, -50%) scale(${scale})`;
             };
             window.addEventListener('resize', resizePreviewHandler);
@@ -2403,7 +2744,12 @@
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = (ev) => initPixi(ev.target.result);
+                reader.onload = (ev) => {
+                    const sourceImage = new Image();
+                    sourceImage.onload = () => initPixi(ev.target.result, sourceImage.naturalWidth, sourceImage.naturalHeight);
+                    sourceImage.onerror = () => alert('Não foi possível ler as dimensões da imagem.');
+                    sourceImage.src = ev.target.result;
+                };
                 reader.readAsDataURL(file);
             }
         });
@@ -2740,6 +3086,7 @@
         const track = document.getElementById('timeline-track');
         const content = document.getElementById('timeline-content');
         const scrubber = document.getElementById('scrubber');
+        let timelinePointerId = null;
 
         function updateRuler() {
             const ruler = document.getElementById('ruler-ticks');
@@ -2775,21 +3122,28 @@
         }
 
         track.addEventListener('pointerdown', (e) => {
+            if (timelinePointerId !== null || e.target.closest('.keyframe-diamond')) return;
             if (isPlaying) togglePlay(); // Para a reprodução imediatamente ao interagir
             isDraggingScrubber = true;
+            timelinePointerId = e.pointerId;
+            track.setPointerCapture?.(e.pointerId);
             handleTimelineInteraction(e);
         });
 
         window.addEventListener('pointermove', (e) => {
-            if (isDraggingScrubber) handleTimelineInteraction(e);
+            if (isDraggingScrubber && e.pointerId === timelinePointerId) handleTimelineInteraction(e);
         });
 
-        window.addEventListener('pointerup', () => {
-            if (isDraggingScrubber) {
+        const finishTimelineDrag = (e) => {
+            if (isDraggingScrubber && e.pointerId === timelinePointerId) {
                 isDraggingScrubber = false;
+                if (track.hasPointerCapture?.(e.pointerId)) track.releasePointerCapture(e.pointerId);
+                timelinePointerId = null;
                 updateScrubberUI(true); // Sincroniza os inputs da interface ao soltar o mouse
             }
-        });
+        };
+        window.addEventListener('pointerup', finishTimelineDrag);
+        window.addEventListener('pointercancel', finishTimelineDrag);
 
         function handleTimelineInteraction(e) {
             const rect = content.getBoundingClientRect();
@@ -2832,6 +3186,12 @@
             track.scrollLeft = 0; // Reseta o scroll da timeline
             threeYaw = 0; // Reseta a rotação horizontal 3D
             threePitch = 0; // Reseta a rotação vertical 3D
+            threeHorizon = 0;
+            threeFov = 75;
+            settings.cameraYaw = threeYaw;
+            settings.cameraPitch = threePitch;
+            settings.cameraHorizon = threeHorizon;
+            settings.cameraFov = threeFov;
             updateScrubberUI();
         });
 
@@ -2964,6 +3324,21 @@
             });
         });
 
+        document.getElementById('btn-kf-camera').addEventListener('click', () => {
+            settings.cameraYaw = threeYaw;
+            settings.cameraPitch = threePitch;
+            settings.cameraHorizon = threeHorizon;
+            settings.cameraFov = threeFov;
+            addKeyframe({
+                type: 'camera3d',
+                time: currentTime,
+                cameraYaw: threeYaw,
+                cameraPitch: threePitch,
+                cameraHorizon: threeHorizon,
+                cameraFov: threeFov
+            });
+        });
+
         function addKeyframe(kf) {
             settings.keyframes.push(kf);
             settings.keyframes.sort((a, b) => a.time - b.time);
@@ -2987,7 +3362,8 @@
                 'globalLight': 'Iluminar Imagem',
                 'vignette': 'Vinheta',
                 'vapor': 'Fumaça / Neblina',
-                'particles': 'Campo de Partículas Universal'
+                'particles': 'Campo de Partículas Universal',
+                'camera3d': 'Câmera 3D 360°'
             };
 
             // Define posições verticais fixas em pixels para criar trilhas e permitir scroll
@@ -3003,7 +3379,8 @@
                 'impact': '340px',
                 'vignette': '360px',
                 'color': '380px'
-                ,'particles': '20px'
+                ,'particles': '20px',
+                'camera3d': '320px'
             };
 
             settings.keyframes.forEach((kf, index) => {
@@ -3019,6 +3396,7 @@
                 if (kf.type === 'light') div.style.backgroundColor = '#fffb00';
                 if (kf.type === 'globalLight') div.style.backgroundColor = '#ff00ff';
                 if (kf.type === 'particles') div.style.backgroundColor = '#66ffaa';
+                if (kf.type === 'camera3d') div.style.backgroundColor = '#4aa3ff';
                 if (kf.type === 'vapor') {
                     div.style.backgroundColor = '#ffffff'; // Cor branca para neblina na timeline
                 }
@@ -3155,7 +3533,7 @@
 
             // Scroll de Cenário em Loop (Sincronizado com tempo e duração)
             const tex = sprite.texture;
-            const baseRatio = Math.min(1456 / tex.width, 728 / tex.height);
+            const baseRatio = Math.min(compositionWidth / tex.width, compositionHeight / tex.height);
             const scrollCycles = Math.round((settings.scrollSpeed * duration) / (tex.width * baseRatio));
             const scrollOffset = (animTime / duration) * scrollCycles * (tex.width * baseRatio);
 
@@ -3185,8 +3563,8 @@
                     s.tileScale.set(scaleValue);
                     
                     // Centraliza + Scroll
-                    s.tilePosition.x = (1456 - tex.width * scaleValue) / 2 + scrollOffset;
-                    s.tilePosition.y = (728 - tex.height * scaleValue) / 2;
+                    s.tilePosition.x = (compositionWidth - tex.width * scaleValue) / 2 + scrollOffset;
+                    s.tilePosition.y = (compositionHeight - tex.height * scaleValue) / 2;
                     
                     // Transição Senoidal: Cria um cross-fade perfeito entre as 2 camadas.
                     // Quando uma está no pico de opacidade (centro), a outra está totalmente invisível (reiniciando).
@@ -3199,7 +3577,7 @@
                 sprite.visible = true;
                 zoomContainer.visible = false;
 
-                sprite.tilePosition.x = (1456 - tex.width * baseRatio) / 2 + scrollOffset;
+                sprite.tilePosition.x = (compositionWidth - tex.width * baseRatio) / 2 + scrollOffset;
             }
 
             // Cálculo de Ripple Determinístico e em Loop (Texture size 2048)
@@ -3324,7 +3702,8 @@
             // Aplica Fogo Procedural
             while (fireFilters.length < settings.fires.length) {
                 fireFilters.push(new PIXI.Filter(null, fireShader, {
-                    uNoise: fireNoiseTex, uPos: [0.5, 0.5], uSize: 1.0, uIntensity: 1.0, uTime: 0
+                    uNoise: fireNoiseTex, uPos: [0.5, 0.5], uSize: 1.0, uIntensity: 1.0, uTime: 0,
+                    uAspect: compositionWidth / compositionHeight
                 }));
             }
             settings.fires.forEach((fire, i) => {
@@ -3339,7 +3718,8 @@
             while (lightFilters.length < settings.lights.length) {
                 lightFilters.push(new PIXI.Filter(null, lightShader, {
                     uPos: [0.5, 0.2], uAngle: 90, uSize: 0.5, uSpread: 0.5, 
-                    uSourceSize: 0, uTime: 0, uFlicker: 0, uColor: [1, 1, 1]
+                    uSourceSize: 0, uTime: 0, uFlicker: 0, uColor: [1, 1, 1],
+                    uAspect: compositionWidth / compositionHeight
                 }));
             }
 
@@ -3423,6 +3803,14 @@
             settings.windDirX = getInterpolatedValue(time, 'windDirX', 'wind');
             settings.windDirY = getInterpolatedValue(time, 'windDirY', 'wind');
             settings.particles = getInterpolatedValue(time, 'particles', 'particles');
+            settings.cameraYaw = getInterpolatedValue(time, 'cameraYaw', 'camera3d');
+            settings.cameraPitch = getInterpolatedValue(time, 'cameraPitch', 'camera3d');
+            settings.cameraHorizon = getInterpolatedValue(time, 'cameraHorizon', 'camera3d');
+            settings.cameraFov = getInterpolatedValue(time, 'cameraFov', 'camera3d');
+            threeYaw = settings.cameraYaw;
+            threePitch = settings.cameraPitch;
+            threeHorizon = settings.cameraHorizon;
+            threeFov = settings.cameraFov;
 
             // OTIMIZAÇÃO: Não atualizar inputs da UI durante o play para não travar a linha do tempo
             if (updateUI && !isPlaying) {
@@ -3516,6 +3904,7 @@
                 document.getElementById('wind-dir-x').value = settings.windDirX;
                 document.getElementById('wind-dir-y').value = settings.windDirY;
                 syncParticleUI();
+                syncCameraControls();
             }
 
             // Garante que se o canvas mudar (re-import), o 3D pegue a nova referência
@@ -3542,8 +3931,8 @@
             btn.innerText = "INICIANDO...";
             statusLabel.style.display = 'block';
 
-            const width = 1456;
-            const height = 728;
+            const width = compositionWidth;
+            const height = compositionHeight;
             const fps = EXPORT_FPS;
             const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
             const totalFrames = normalizedLoop.frames;
@@ -3633,6 +4022,89 @@
 
         document.getElementById('btn-render').addEventListener('click', startSequence);
 
+        // --- EXPORTAÇÃO GIF NO TAMANHO/ASPECTO DA IMAGEM ORIGINAL ---
+        async function startGifSequence() {
+            if (!app) return alert('A composição ainda não foi iniciada.');
+
+            const btn = document.getElementById('btn-render-gif');
+            const originalText = btn.innerText;
+            const statusLabel = document.getElementById('status-indicator');
+            const timerDisplay = document.getElementById('timer');
+            const pixelCount = compositionWidth * compositionHeight;
+
+            if (pixelCount > 8_000_000 && !confirm(`O GIF terá ${compositionWidth}×${compositionHeight} e pode ficar muito pesado. Deseja continuar?`)) return;
+            if (isPlaying) togglePlay();
+
+            btn.disabled = true;
+            btn.innerText = 'CARREGANDO GIF...';
+            statusLabel.style.display = 'block';
+
+            try {
+                const { GIFEncoder, quantize, applyPalette } = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm');
+                const gif = GIFEncoder();
+                const fps = EXPORT_FPS;
+                const normalizedLoop = normalizeLoopDuration(document.getElementById('render-duration').value);
+                const totalFrames = normalizedLoop.frames;
+                settings.renderDuration = normalizedLoop.duration;
+                document.getElementById('render-duration').value = Number(normalizedLoop.duration.toFixed(6));
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = compositionWidth;
+                captureCanvas.height = compositionHeight;
+                const captureContext = captureCanvas.getContext('2d', { willReadFrequently: true });
+
+                app.ticker.stop();
+                for (let i = 0; i < totalFrames; i++) {
+                    if (i % 2 === 0) {
+                        const pct = Math.round((i / totalFrames) * 100);
+                        timerDisplay.innerText = `${pct}%`;
+                        btn.innerText = `⏳ GIF ${pct}%`;
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+
+                    seek(i / fps, false);
+                    app.renderer.render(app.stage);
+                    captureContext.clearRect(0, 0, compositionWidth, compositionHeight);
+                    captureContext.drawImage(app.view, 0, 0);
+                    const rgba = captureContext.getImageData(0, 0, compositionWidth, compositionHeight).data;
+                    const palette = quantize(rgba, 256, { format: 'rgba4444', oneBitAlpha: 127 });
+                    const indexed = applyPalette(rgba, palette, 'rgba4444');
+                    let transparentIndex = palette.findIndex(color => color.length > 3 && color[3] === 0);
+                    const frameStartCs = Math.round(i * 100 / fps);
+                    const frameEndCs = Math.round((i + 1) * 100 / fps);
+                    gif.writeFrame(indexed, compositionWidth, compositionHeight, {
+                        palette,
+                        delay: Math.max(1, frameEndCs - frameStartCs) * 10,
+                        repeat: 0,
+                        transparent: transparentIndex >= 0,
+                        transparentIndex: transparentIndex >= 0 ? transparentIndex : 0,
+                        dispose: transparentIndex >= 0 ? 2 : 1
+                    });
+                }
+
+                gif.finish();
+                const blob = new Blob([gif.bytes()], { type: 'image/gif' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = settings.effectsOnly ? 'vfx-transparente.gif' : 'fx-studio-export.gif';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                btn.innerText = 'CONCLUÍDO!';
+            } catch (err) {
+                console.error('Erro na exportação GIF:', err);
+                alert('Falha na exportação GIF: ' + err.message);
+            } finally {
+                if (app) app.ticker.start();
+                statusLabel.style.display = 'none';
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }, 1200);
+            }
+        }
+
+        document.getElementById('btn-render-gif').addEventListener('click', startGifSequence);
+
         // --- EXPORTAÇÃO DE SEQUÊNCIA PNG (TRANSPARENTE) ---
         async function startPngSequence() {
             if (!app) return alert("A composição ainda não foi iniciada.");
@@ -3709,7 +4181,7 @@
         // Inicia uma composição vazia para criar e exportar VFX sem exigir imagem.
         const blankSource = document.createElement('canvas');
         blankSource.width = 1456; blankSource.height = 728;
-        initPixi(blankSource.toDataURL('image/png'));
+        initPixi(blankSource.toDataURL('image/png'), blankSource.width, blankSource.height);
         updateCompositionPreview();
 
         // --- LÓGICA DE ACORDEÃO PARA A LISTA DE VFX ---

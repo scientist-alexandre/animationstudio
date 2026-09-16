@@ -1576,14 +1576,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         .background-timeline { min-height: 18px; height: 18px; overflow: visible; padding: 0; }
         .background-keyframe {
             height: 18px; border: 1px solid #4d5560; border-radius: 0;
-            background: #292d33; color: #87909c; cursor: pointer; font-size: 10px; position: relative; flex-shrink: 0;
+            background: #292d33; color: #87909c; cursor: pointer; font-size: 10px; position: relative; flex-shrink: 0; overflow: hidden;
         }
         .background-keyframe::after { content: ''; width: 1px; height: 100%; position: absolute; right: -1px; top: 0; background: #3d424a; }
         .background-keyframe.keyframe { color: #ffd60a; border-color: #ffd60a; background: rgba(255,214,10,.14); }
         .background-keyframe.active { outline: 2px solid var(--active-blue); outline-offset: -2px; }
         .background-keyframe:hover { background: #3a4048; }
-        .background-keyframe .transition-mode { position: absolute; right: 2px; top: 2px; display: none; width: 16px; height: 16px; border: 0; border-radius: 3px; background: #515863; color: #fff; cursor: pointer; font-size: 12px; line-height: 16px; padding: 0; }
-        .background-keyframe.keyframe:not(.first-keyframe):hover .transition-mode { display: block; }
+        .background-keyframe .transition-mode { position: absolute; right: 1px; top: 1px; display: block; width: 14px; height: 14px; border: 0; border-radius: 2px; background: #515863; color: #fff; cursor: pointer; font-size: 10px; line-height: 14px; padding: 0; }
         .background-keyframe .transition-mode.cut { background: #ff9500; }
 
         .frame-thumb {
@@ -1739,13 +1738,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 <div class="dropdown-content" id="menuDropdown">
                     <a href="#" id="importImgMenu">Importar Imagem</a>
                     <hr style="border: 0; border-top: 1px solid var(--border-color);">
-                    <a href="#" id="exportPngSequenceMenu">Exportar Seq. PNG (Transparente)</a>
+                    <a href="#" id="exportPngSequenceMenu">Exportar Sequência PNG</a>
+                    <a href="#" id="exportPngSequenceTransparentMenu">Exportar Sequência PNG (Transparente)</a>
                     <a href="#" id="exportVideoMenu">Exportar Vídeo</a>
                     <a href="#" id="exportVideoTransparentMenu">Exportar Vídeo (Transparente)</a>
                     <hr style="border: 0; border-top: 1px solid var(--border-color);">
                     <a href="#" id="exportCurrentFrameBgMenu">Download Frame Atual (Com Fundo)</a>
                     <a href="#" id="exportCurrentFrameTransparentMenu">Download Frame Atual (Transparente)</a>
-                    <a href="#" id="exportCurrentFramePsdMenu">Exportar Frame Atual como PSD</a>
                     <a href="#" id="exportCurrentFrameLayersMenu">Exportar Camadas Transparentes</a>
                     <hr style="border: 0; border-top: 1px solid var(--border-color);">
                     <a href="#" id="saveProjectMenu">Salvar Projeto</a>
@@ -1760,8 +1759,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <input type="file" id="importInput" accept="image/*" style="display: none;">
             <input type="file" id="projectInput" accept=".json" style="display: none;">
             <div class="fps-control">
-                <span>FPS: <span id="fpsValue">8</span></span>
-                <input type="range" id="fpsSlider" min="1" max="24" value="8">
+                <span>FPS: <span id="fpsValue">6</span></span>
+                <input type="range" id="fpsSlider" min="1" max="24" value="6">
             </div>
             <div class="onion-control">
                 <span>Onion <input type="checkbox" id="onionToggle" checked></span>
@@ -2049,11 +2048,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const importInput = document.getElementById('importInput');
         const importImgMenu = document.getElementById('importImgMenu');
         const exportPngSequenceMenu = document.getElementById('exportPngSequenceMenu');
+        const exportPngSequenceTransparentMenu = document.getElementById('exportPngSequenceTransparentMenu');
         const exportVideoMenu = document.getElementById('exportVideoMenu');
         const exportVideoTransparentMenu = document.getElementById('exportVideoTransparentMenu');
         const exportCurrentFrameBgMenu = document.getElementById('exportCurrentFrameBgMenu');
         const exportCurrentFrameTransparentMenu = document.getElementById('exportCurrentFrameTransparentMenu');
-        const exportCurrentFramePsdMenu = document.getElementById('exportCurrentFramePsdMenu');
         const exportCurrentFrameLayersMenu = document.getElementById('exportCurrentFrameLayersMenu');
         const saveProjectMenu = document.getElementById('saveProjectMenu');
         const loadProjectMenu = document.getElementById('loadProjectMenu');
@@ -2224,7 +2223,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let lastX = 0, lastY = 0;
         let lastMidX = 0, lastMidY = 0;
         let isPlaying = false;
-        let fps = 24;
+        let fps = 6;
         let currentTool = 'brush'; 
         
         let cachedSize = 3;
@@ -4496,8 +4495,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         });
         if (window.visualViewport) window.visualViewport.addEventListener('resize', refreshLayoutAfterFullscreen);
         syncFullscreenMenu();
-        importImgMenu.onclick = (e) => { e.preventDefault(); importInput.click(); }; exportPngSequenceMenu.onclick = (e) => { e.preventDefault(); exportPngSequence(); }; exportVideoMenu.onclick = (e) => { e.preventDefault(); exportVideo(false); }; exportVideoTransparentMenu.onclick = (e) => { e.preventDefault(); exportVideo(true); };
-        exportCurrentFrameBgMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrame(true); }; exportCurrentFrameTransparentMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrame(false); }; exportCurrentFramePsdMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrameAsPsd(); }; exportCurrentFrameLayersMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrameLayersSeparately(); };
+        importImgMenu.onclick = (e) => { e.preventDefault(); importInput.click(); }; exportPngSequenceMenu.onclick = (e) => { e.preventDefault(); exportPngSequence(false); }; exportPngSequenceTransparentMenu.onclick = (e) => { e.preventDefault(); exportPngSequence(true); }; exportVideoMenu.onclick = (e) => { e.preventDefault(); exportVideo(false); }; exportVideoTransparentMenu.onclick = (e) => { e.preventDefault(); exportVideo(true); };
+        exportCurrentFrameBgMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrame(true); }; exportCurrentFrameTransparentMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrame(false); }; exportCurrentFrameLayersMenu.onclick = (e) => { e.preventDefault(); exportCurrentFrameLayersSeparately(); };
         async function exportCurrentFrame(withBackground) {
             finishSelection();
             await saveFrameState(currentFrameIndex);
@@ -4522,129 +4521,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             showNotification("Frame atual baixado com sucesso!");
         }
 
-        // Gera um PSD RGB de 8 bits inteiramente no navegador, mantendo todas as
-        // camadas do frame atual, sua ordem, nome, opacidade, visibilidade e alpha.
-        async function exportCurrentFrameAsPsd() {
-            finishSelection();
-            await saveFrameState(currentFrameIndex);
-            const frame = frames[currentFrameIndex];
-            if (!frame) { showNotification("Nenhum frame para exportar"); return; }
-
-            try {
-                const width = sharedUtilCanvas.width;
-                const height = sharedUtilCanvas.height;
-                const pixelCount = width * height;
-                const encoder = new TextEncoder();
-                const chunks = [];
-
-                const bytes = size => new Uint8Array(size);
-                const u16 = value => { const b = bytes(2); new DataView(b.buffer).setUint16(0, value, false); return b; };
-                const i16 = value => { const b = bytes(2); new DataView(b.buffer).setInt16(0, value, false); return b; };
-                const u32 = value => { const b = bytes(4); new DataView(b.buffer).setUint32(0, value, false); return b; };
-                const ascii = value => encoder.encode(value);
-                const concat = parts => {
-                    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
-                    const result = bytes(total); let offset = 0;
-                    parts.forEach(part => { result.set(part, offset); offset += part.byteLength; });
-                    return result;
-                };
-                const pascalName = value => {
-                    const clean = String(value || 'Camada').replace(/[\x00-\x1f]/g, '').slice(0, 255);
-                    const source = encoder.encode(clean).slice(0, 255);
-                    const paddedLength = Math.ceil((source.length + 1) / 4) * 4;
-                    const result = bytes(paddedLength);
-                    result[0] = source.length; result.set(source, 1);
-                    return result;
-                };
-                const planarChannels = imageData => {
-                    const rgba = imageData.data;
-                    const channels = [bytes(pixelCount), bytes(pixelCount), bytes(pixelCount), bytes(pixelCount)];
-                    for (let p = 0, q = 0; p < pixelCount; p++, q += 4) {
-                        channels[0][p] = rgba[q]; channels[1][p] = rgba[q + 1];
-                        channels[2][p] = rgba[q + 2]; channels[3][p] = rgba[q + 3];
-                    }
-                    return channels;
-                };
-
-                const layerEntries = [];
-                // Mantém no PSD a mesma ordem interna usada pelo editor
-                // (índice 0 = fundo; último índice = camada superior).
-                for (let i = 0; i < frame.layers.length; i++) {
-                    const tCtx = sharedUtilCtx;
-                    tCtx.globalCompositeOperation = 'source-over'; tCtx.globalAlpha = 1;
-                    tCtx.clearRect(0, 0, width, height);
-                    if (frame.layers[i]) tCtx.drawImage(frame.layers[i], 0, 0);
-                    const channels = planarChannels(tCtx.getImageData(0, 0, width, height));
-                    const meta = layersMeta[i] || {};
-                    const channelLength = pixelCount + 2; // compressão RAW + pixels
-                    const channelInfo = concat([
-                        i16(0), u32(channelLength), i16(1), u32(channelLength),
-                        i16(2), u32(channelLength), i16(-1), u32(channelLength)
-                    ]);
-                    const name = pascalName(meta.name || `Camada ${i + 1}`);
-                    const extra = concat([u32(0), u32(0), name]);
-                    const record = concat([
-                        u32(0), u32(0), u32(height), u32(width), u16(4), channelInfo,
-                        ascii('8BIM'), ascii('norm'),
-                        Uint8Array.of(Math.round(Math.max(0, Math.min(1, Number(meta.opacity ?? 1))) * 255)),
-                        Uint8Array.of(0), Uint8Array.of(meta.visible === false ? 2 : 0), Uint8Array.of(0),
-                        u32(extra.byteLength), extra
-                    ]);
-                    const channelData = [];
-                    channels.forEach(channel => channelData.push(u16(0), channel));
-                    layerEntries.push({ record, channelData });
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
-
-                const records = concat(layerEntries.map(entry => entry.record));
-                const layerPixels = concat(layerEntries.flatMap(entry => entry.channelData));
-                let layerInfo = concat([i16(layerEntries.length), records, layerPixels]);
-                if (layerInfo.byteLength % 2) layerInfo = concat([layerInfo, bytes(1)]);
-                const layerAndMask = concat([u32(layerInfo.byteLength), layerInfo, u32(0)]);
-
-                const tCtx = sharedUtilCtx;
-                tCtx.globalCompositeOperation = 'source-over'; tCtx.globalAlpha = 1;
-                tCtx.clearRect(0, 0, width, height);
-                compositeFrameLayers(tCtx, currentFrameIndex);
-                const composite = planarChannels(tCtx.getImageData(0, 0, width, height));
-
-                chunks.push(ascii('8BPS'), u16(1), bytes(6), u16(4), u32(height), u32(width), u16(8), u16(3));
-                chunks.push(u32(0), u32(0)); // dados do modo de cor e recursos da imagem
-                chunks.push(u32(layerAndMask.byteLength), layerAndMask);
-                chunks.push(u16(0), ...composite); // imagem composta, compressão RAW
-
-                const blob = new Blob(chunks, { type: 'image/vnd.adobe.photoshop' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `frame_${String(currentFrameIndex + 1).padStart(3, '0')}_camadas.psd`;
-                link.click();
-                setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-                showNotification("PSD do frame atual exportado com todas as camadas!");
-            } catch (error) {
-                console.error(error);
-                showNotification("Erro ao exportar PSD: " + (error.message || error));
-            }
-        }
-
-        // Exporta o frame atual como um ZIP contendo um PNG transparente separado para cada camada
-        // (todas as camadas, independente de estarem visíveis ou não), nomeados conforme o nome da camada.
+        // Salva o frame atual como um ZIP contendo um PNG transparente por camada.
+        // Inclui todas as camadas, mesmo invisíveis ou vazias, mantendo nomes e ordem.
         async function exportCurrentFrameLayersSeparately() {
             finishSelection();
             await saveFrameState(currentFrameIndex);
             const frame = frames[currentFrameIndex];
-            if (!frame || frame.layers.every(l => !l)) { showNotification("Nenhuma camada com conteúdo para exportar"); return; }
+            if (!frame) { showNotification("Nenhum frame para exportar"); return; }
+            menuDropdown.classList.remove('show');
 
             const zip = new JSZip();
             const imgFolder = zip.folder(`frame_${String(currentFrameIndex + 1).padStart(3, '0')}_camadas`);
             const tCtx = sharedUtilCtx;
             const usedNames = new Set();
+            const totalLayers = Math.max(frame.layers.length, layersMeta.length);
 
-            for (let i = 0; i < frame.layers.length; i++) {
+            for (let i = 0; i < totalLayers; i++) {
                 const layerData = frame.layers[i];
-                if (!layerData) continue;
                 tCtx.globalCompositeOperation = 'source-over'; tCtx.globalAlpha = 1;
                 tCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height);
-                tCtx.drawImage(layerData, 0, 0);
+                if (layerData) tCtx.drawImage(layerData, 0, 0);
 
                 const meta = layersMeta[i];
                 let baseName = (meta && meta.name ? meta.name : `Camada ${i + 1}`)
@@ -4662,21 +4558,134 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             link.href = URL.createObjectURL(content);
             link.download = `frame_${String(currentFrameIndex + 1).padStart(3, '0')}_camadas.zip`;
             link.click();
-            showNotification("Camadas do frame atual exportadas com sucesso!");
+            setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+            showNotification("Todas as camadas do frame atual foram salvas em PNG!");
         }
 
-        async function exportPngSequence() {
-            if (frames.length === 0) { showNotification("Nenhum frame para exportar"); return; } finishSelection(); await saveFrameState(currentFrameIndex);
+        async function exportPngSequence(withTransparency = false) {
+            if (!frames.length) { showNotification('Nenhum frame para exportar'); return; }
+            if (isExporting) { showNotification('Uma exportação já está em andamento'); return; }
+            if (!window.showDirectoryPicker) {
+                showNotification('Este navegador não permite escolher uma pasta para a sequência PNG');
+                return;
+            }
+
+            finishSelection();
+            await saveFrameState(currentFrameIndex);
+            menuDropdown.classList.remove('show');
+
+            // Mesma duração, amostragem e composição visual da exportação de vídeo.
+            const drawingFps = Math.max(1, Number(fps) || 24);
+            const exportFps = 24;
+            const width = sharedUtilCanvas.width;
+            const height = sharedUtilCanvas.height;
+            const totalTicks = frames.reduce((sum, item) => sum + Math.max(1, Number(item.duration) || 1), 0);
+            const totalDurationUs = Math.max(1, Math.round((totalTicks * 1000000) / drawingFps));
+            const totalOutputFrames = Math.max(1, Math.ceil(totalDurationUs * exportFps / 1000000));
+            const frameStarts = [];
+            let accumulatedTicks = 0;
+            for (const item of frames) {
+                frameStarts.push(accumulatedTicks);
+                accumulatedTicks += Math.max(1, Number(item.duration) || 1);
+            }
+
+            const overlay = document.getElementById('exportOverlay');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const cancelButton = document.getElementById('cancelExportBtn');
+            let cancelled = false;
+            cancelButton.onclick = () => {
+                cancelled = true;
+                cancelButton.textContent = 'Cancelando...';
+            };
+
             try {
-                const dirHandle = await window.showDirectoryPicker(); const exportFps = 24; let totalTicks = 0; const frameStarts = frames.map(f => { const start = totalTicks; totalTicks += (f.duration || 1); return start; }); const totalExportFrames = Math.max(1, Math.floor((totalTicks / fps) * exportFps)); const tCtx = sharedUtilCtx;
-                for (let i = 0; i < totalExportFrames; i++) {
-                    const currentTimeInTicks = (i / exportFps) * fps; let targetFrame = 0; for (let j = 0; j < frameStarts.length; j++) { if (frameStarts[j] <= currentTimeInTicks) targetFrame = j; else break; }
-                    tCtx.globalCompositeOperation = 'source-over'; tCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height);
-                    compositeFrameLayers(tCtx, targetFrame);
-                    const blob = await new Promise(resolve => sharedUtilCanvas.toBlob(resolve, 'image/png')); const fileName = `frame_${String(i + 1).padStart(5, '0')}.png`; const fileHandle = await dirHandle.getFileHandle(fileName, { create: true }); const writable = await fileHandle.createWritable(); await writable.write(blob); await writable.close();
+                const dirHandle = await window.showDirectoryPicker();
+                const tCtx = sharedUtilCtx;
+                let drawingFrameIndex = 0;
+
+                isExporting = true;
+                overlay.style.display = 'flex';
+                progressBar.style.width = '0%';
+                progressText.textContent = `Preparando ${totalOutputFrames} imagens${withTransparency ? ' transparentes' : ''} a ${exportFps} FPS...`;
+                cancelButton.textContent = 'Cancelar Exportação';
+
+                // No tablet, codificar PNG e gravar arquivo sem pausas pode
+                // bloquear a interface. Um frame de tela entre cada imagem
+                // mantém o botão Cancelar, o progresso e os gestos responsivos.
+                const yieldToTablet = () => new Promise(resolve => {
+                    requestAnimationFrame(() => setTimeout(resolve, 4));
+                });
+                await yieldToTablet();
+
+                for (let outputIndex = 0; outputIndex < totalOutputFrames; outputIndex++) {
+                    if (cancelled) break;
+
+                    const timestamp = Math.round(outputIndex * 1000000 / exportFps);
+                    const logicalTick = (timestamp / 1000000) * drawingFps;
+                    while (
+                        drawingFrameIndex + 1 < frames.length &&
+                        frameStarts[drawingFrameIndex + 1] <= logicalTick
+                    ) drawingFrameIndex++;
+
+                    tCtx.globalCompositeOperation = 'source-over';
+                    tCtx.globalAlpha = 1;
+                    tCtx.clearRect(0, 0, width, height);
+
+                    if (!withTransparency) {
+                        tCtx.fillStyle = '#ffffff';
+                        tCtx.fillRect(0, 0, width, height);
+
+                        if (window.has3DBackground && window.has3DBackground()) {
+                            if (window.render3DBackgroundForExport) {
+                                window.render3DBackgroundForExport(drawingFrameIndex, logicalTick, timestamp / 1000000);
+                            } else if (window.render3DBackgroundForPlayback) {
+                                window.render3DBackgroundForPlayback(drawingFrameIndex, logicalTick);
+                            }
+                            tCtx.drawImage(bgCanvas, 0, 0, width, height);
+                        }
+                    }
+
+                    compositeFrameLayers(tCtx, drawingFrameIndex);
+
+                    const blob = await new Promise((resolve, reject) => {
+                        sharedUtilCanvas.toBlob(
+                            result => result ? resolve(result) : reject(new Error('Falha ao gerar PNG')),
+                            'image/png'
+                        );
+                    });
+                    const fileName = `frame_${String(outputIndex + 1).padStart(5, '0')}.png`;
+                    const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+
+                    const percent = Math.round(((outputIndex + 1) / totalOutputFrames) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressText.textContent = `${percent}% — imagem ${outputIndex + 1} de ${totalOutputFrames}`;
+
+                    // Libera memória temporária e devolve o controle ao tablet
+                    // após cada PNG, sem acumular canvases ou blobs na RAM.
+                    await yieldToTablet();
                 }
-                showNotification(`Exportação concluída: ${totalExportFrames} frames`);
-            } catch (e) { if (e.name !== 'AbortError') showNotification("Erro: " + e.message); }
+
+                showNotification(cancelled
+                    ? 'Exportação da sequência PNG cancelada'
+                    : `Sequência PNG${withTransparency ? ' transparente' : ''} exportada: ${totalOutputFrames} imagens a ${exportFps} FPS.`);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error(error);
+                    showNotification('Erro na exportação PNG: ' + (error.message || error));
+                }
+            } finally {
+                isExporting = false;
+                overlay.style.display = 'none';
+                cancelButton.onclick = null;
+                cancelButton.textContent = 'Cancelar Exportação';
+                if (window.render3DBackgroundForFrame) {
+                    window.render3DBackgroundForFrame(currentFrameIndex);
+                }
+            }
         }
 
         async function exportVideo(withTransparency = false) {
@@ -4692,10 +4701,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
             // A duração do arquivo vem EXCLUSIVAMENTE da timeline do projeto.
             // O FPS do desenho NÃO controla o FPS de amostragem do fundo/câmera.
-            // Exportamos em 60 FPS para preservar o movimento/interpolação do
-            // background 3D com independência do FPS escolhido para o desenho.
+            // Vídeo e sequência de imagens são exportados em 24 FPS; o desenho
+            // mantém seu FPS próprio (6 por padrão) para controlar a timeline.
             const drawingFps = Math.max(1, Number(fps) || 24);
-            const exportFps = 60;
+            const exportFps = 24;
             const width = sharedUtilCanvas.width;
             const height = sharedUtilCanvas.height;
             const totalTicks = frames.reduce((sum, item) => sum + Math.max(1, Number(item.duration) || 1), 0);
@@ -4929,7 +4938,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         projectInput.onchange = async (e) => {
             const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = async (event) => {
-                const data = JSON.parse(event.target.result); fps = data.fps || 24; document.getElementById('fpsSlider').value = fps; document.getElementById('fpsValue').textContent = fps;
+                const data = JSON.parse(event.target.result); fps = data.fps || 6; document.getElementById('fpsSlider').value = fps; document.getElementById('fpsValue').textContent = fps;
                 if (data.layersMeta) { layersMeta = data.layersMeta; }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
                 const bgImg = new Image(); bgImg.onload = () => { bgCtx.globalCompositeOperation = 'source-over'; bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.drawImage(bgImg, 0, 0); }; bgImg.src = data.background;
@@ -5917,7 +5926,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const file = event.target.files[0]; if (!file) return;
             try {
                 const data = JSON.parse(await file.text());
-                fps = data.fps || 24; fpsSlider.value = fps; fpsValue.textContent = fps; updateGlobalFrameDurationControl();
+                fps = data.fps || 6; fpsSlider.value = fps; fpsValue.textContent = fps; updateGlobalFrameDurationControl();
                 if (data.layersMeta) { layersMeta = data.layersMeta.map((m, i) => ({ opacity: m.opacity != null ? m.opacity : 1, visible: m.visible !== false, name: m.name || `Camada ${i + 1}` })); }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
                 else { layersMeta = [{ opacity: 1, visible: true, name: 'Camada 1' }]; }

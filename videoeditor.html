@@ -1409,9 +1409,15 @@ if (typeof module === "object" && typeof module.exports === "object") {
             initMedia() {
                 if (this.type === 'video' || this.type === 'audio') {
                     this.mediaElement = document.createElement(this.type);
-                    this.mediaElement.src = this.src;
                     this.mediaElement.preload = 'auto';
+                    this.mediaElement.playsInline = true;
                     this.mediaElement.muted = this.isMuted;
+                    this.mediaElement.src = this.src;
+                    this.mediaElement.load();
+                    this.mediaElement.addEventListener('loadeddata', requestUpdate);
+                    this.mediaElement.addEventListener('error', () => {
+                        console.error('Falha ao decodificar mídia:', this.name, this.mediaElement.error);
+                    });
                 } else {
                     this.mediaElement = new Image();
                     this.mediaElement.src = this.src;
@@ -1439,12 +1445,20 @@ if (typeof module === "object" && typeof module.exports === "object") {
             else if (file.name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) type = 'image';
             
             const tempMedia = type === 'image' ? new Image() : document.createElement(type);
-            tempMedia.src = URL.createObjectURL(file);
+            const probeUrl = URL.createObjectURL(file);
+            tempMedia.preload = 'metadata';
+            tempMedia.playsInline = true;
+            tempMedia.muted = true;
+            tempMedia.src = probeUrl;
 
-            const onLoad = () => {
+            let importFinished = false;
+            const finishImport = async () => {
+                if (importFinished) return;
+                importFinished = true;
+
                 let duration = 5;
-                if (type !== 'image') duration = tempMedia.duration || 10;
-                if (!duration || isNaN(duration)) duration = 10;
+                if (type !== 'image') duration = await getReliableMediaDuration(tempMedia);
+                if (!Number.isFinite(duration) || duration <= 0) duration = 10;
 
                 const clip = new Clip(file, type, duration);
                 
@@ -1467,10 +1481,42 @@ if (typeof module === "object" && typeof module.exports === "object") {
                 
                 requestUpdate();
                 document.getElementById('preview-placeholder').classList.add('hidden');
+                URL.revokeObjectURL(probeUrl);
             };
 
-            if (type === 'image') tempMedia.onload = onLoad;
-            else tempMedia.onloadedmetadata = onLoad;
+            tempMedia.onerror = () => {
+                if (importFinished) return;
+                importFinished = true;
+                URL.revokeObjectURL(probeUrl);
+                alert(`Não foi possível abrir "${file.name}". O codec do WebM pode não ser compatível com este navegador.`);
+            };
+
+            if (type === 'image') tempMedia.onload = finishImport;
+            else tempMedia.onloadedmetadata = finishImport;
+            if (type !== 'image') tempMedia.load();
+        }
+
+        // Alguns WebM (principalmente os criados por MediaRecorder) chegam com
+        // duração Infinity. Buscar um ponto distante força Chromium/Android a
+        // ler o último cluster e calcular a duração real.
+        async function getReliableMediaDuration(media) {
+            if (Number.isFinite(media.duration) && media.duration > 0) return media.duration;
+            if (media.duration !== Infinity) return 10;
+
+            return new Promise(resolve => {
+                const timeoutId = setTimeout(() => resolve(10), 4000);
+                const finish = () => {
+                    clearTimeout(timeoutId);
+                    media.removeEventListener('durationchange', finish);
+                    media.removeEventListener('seeked', finish);
+                    const duration = media.duration;
+                    try { media.currentTime = 0; } catch {}
+                    resolve(Number.isFinite(duration) && duration > 0 ? duration : 10);
+                };
+                media.addEventListener('durationchange', finish);
+                media.addEventListener('seeked', finish);
+                try { media.currentTime = 1e10; } catch { finish(); }
+            });
         }
         
       
@@ -1771,11 +1817,16 @@ if (typeof module === "object" && typeof module.exports === "object") {
                     if (!state.isPlaying && !el.paused) el.pause();
                 }
 
-                if (el && clip.w && clip.h) {
+                const frameReady = el && (clip.type !== 'video' || el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+                if (frameReady && clip.w && clip.h) {
                     ctx.save();
                     ctx.translate(clip.x + clip.w / 2, clip.y + clip.h / 2);
                     ctx.rotate(clip.rotation * Math.PI / 180);
-                    ctx.drawImage(el, -clip.w / 2, -clip.h / 2, clip.w, clip.h);
+                    try {
+                        ctx.drawImage(el, -clip.w / 2, -clip.h / 2, clip.w, clip.h);
+                    } catch (error) {
+                        console.warn('Quadro ainda indisponível:', clip.name, error);
+                    }
                     ctx.restore();
                 }
             });
@@ -2339,11 +2390,16 @@ if (typeof module === "object" && typeof module.exports === "object") {
                     ];
                 }
 
-                if (el && clip.w && clip.h) {
+                const frameReady = el && (clip.type !== 'video' || el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA);
+                if (frameReady && clip.w && clip.h) {
                     eCtx.save();
                     eCtx.translate(clip.x + clip.w / 2, clip.y + clip.h / 2);
                     eCtx.rotate(clip.rotation * Math.PI / 180);
-                    eCtx.drawImage(el, -clip.w / 2, -clip.h / 2, clip.w, clip.h);
+                    try {
+                        eCtx.drawImage(el, -clip.w / 2, -clip.h / 2, clip.w, clip.h);
+                    } catch (error) {
+                        console.warn('Quadro ignorado na exportação:', clip.name, error);
+                    }
                     eCtx.restore();
                 }
             }
