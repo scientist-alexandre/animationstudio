@@ -1352,15 +1352,23 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         .viewport-controls {
             position: absolute; right: 14px; top: 50%; bottom: auto; transform: translateY(-50%); z-index: 60;
-            display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 8px 7px;
+            display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 9px 8px;
             border: 1px solid rgba(255,255,255,.14); border-radius: 10px;
             background: rgba(34,34,34,.88); box-shadow: 0 4px 16px rgba(0,0,0,.35);
             backdrop-filter: blur(7px); touch-action: none;
         }
-        .viewport-controls #viewportZoom {
+        .viewport-control-column {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+        }
+        .viewport-control-column + .viewport-control-column {
+            padding-top: 9px; border-top: 1px solid rgba(255,255,255,.12);
+        }
+        .viewport-controls #viewportZoom,
+        .viewport-controls #cloneSourceSize {
             width: 28px; height: 150px; margin: 0; writing-mode: vertical-lr; direction: rtl;
             accent-color: var(--active-blue); cursor: pointer;
         }
+        .viewport-controls #cloneSourceSize { accent-color: #34c759; }
         .viewport-controls .viewport-zoom-value {
             font-size: 10px; min-width: 38px; text-align: center; line-height: 1.1;
         }
@@ -1558,6 +1566,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         #mainCanvas { pointer-events: auto; } 
         #playbackCanvas { display: none; z-index: 100; pointer-events: none; background: white; }
         #drawingCanvas { display: none; } 
+        #cloneBtn.active { color: #fff; border-color: #34c759; background: rgba(52,199,89,.24); }
+        #canvasContainer.clone-tool-active { cursor: crosshair; }
 
         /* --- ANIMATION ASSIST (RODAPÉ) --- */
         .bottom-bar {
@@ -1759,8 +1769,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <input type="file" id="importInput" accept="image/*" style="display: none;">
             <input type="file" id="projectInput" accept=".json" style="display: none;">
             <div class="fps-control">
-                <span>FPS: <span id="fpsValue">6</span></span>
-                <input type="range" id="fpsSlider" min="1" max="24" value="6">
+                <span>FPS: <span id="fpsValue">4</span></span>
+                <input type="range" id="fpsSlider" min="1" max="24" value="4">
             </div>
             <div class="onion-control">
                 <span>Onion <input type="checkbox" id="onionToggle" checked></span>
@@ -1850,15 +1860,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     <div class="workspace">
         <div id="threeRendererHost" aria-hidden="true"></div>
         <div class="viewport-controls" id="viewportControls" aria-label="Controles de zoom e pan">
-            <button type="button" class="viewport-reset-btn" id="viewportResetBtn" title="Voltar o zoom para 100%" aria-label="Voltar o zoom para 100%">↺</button>
-            <input type="range" id="viewportZoom" min="25" max="300" step="5" value="100" aria-label="Zoom da área de desenho">
-            <span class="viewport-zoom-value" id="viewportZoomValue">100%</span>
-            <button type="button" class="viewport-pan-btn" id="viewportPanBtn" title="Ativar Pan para arrastar a tela. Clique duas vezes para centralizar." aria-label="Ativar Pan">✋</button>
+            <div class="viewport-control-column">
+                <button type="button" class="viewport-reset-btn" id="viewportResetBtn" title="Voltar o zoom para 100%" aria-label="Voltar o zoom para 100%">↺</button>
+                <input type="range" id="viewportZoom" min="25" max="300" step="5" value="100" aria-label="Zoom da área de desenho">
+                <span class="viewport-zoom-value" id="viewportZoomValue">100%</span>
+                <button type="button" class="viewport-pan-btn" id="viewportPanBtn" title="Ativar Pan para arrastar a tela. Clique duas vezes para centralizar." aria-label="Ativar Pan">✋</button>
+            </div>
+            <div class="viewport-control-column">
+                <button class="icon-btn" id="cloneBtn" title="Clonador: arraste a bola para escolher a origem e desenhe para clonar" aria-label="Clonador">◎</button>
+                <input type="range" id="cloneSourceSize" min="16" max="300" value="70" aria-label="Tamanho da bola do clonador">
+                <span class="viewport-zoom-value">Clone</span>
+            </div>
         </div>
         <div class="sidebar-left">
             <div class="slider-container" title="Tamanho do Pincel">
                 <div style="display: flex; align-items: center; gap: 5px; transform: translateX(6px);">
-                    <input class="brush-default-input" id="brushDefaultSize" type="number" min="1" value="3" title="Tamanho para o botão resetar">
+                    <input class="brush-default-input" id="brushDefaultSize" type="number" min="1" value="7" title="Tamanho para o botão resetar">
                     <button id="resetBrushSizeBtn" style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; transition: 0.2s;" onmouseover="this.style.color='#007aff'" onmouseout="this.style.color='#666'" title="Voltar ao tamanho padrão">↺</button>
                 </div>
                 <div class="slider-row">
@@ -1868,7 +1885,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                         <div class="preset-dot" title="30px" onclick="setBrushSize(30)"></div>
                         <div class="preset-dot" title="60px" onclick="setBrushSize(60)"></div>
                     </div>
-                    <input type="range" id="brushSize" min="1" max="100" value="3">
+                    <input type="range" id="brushSize" min="1" max="100" value="7">
                 </div>
                 <span>Tam</span>
             </div>
@@ -1880,7 +1897,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     <path d="M10 16L13 6H21L18 16H10Z" fill="#2b5a91" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" />
                 </svg>
             </button>
-
             <div class="slider-container" title="Opacidade do Pincel">
                 <div style="display: flex; align-items: center; gap: 5px;">
                     <input class="brush-default-input" id="brushDefaultOpacity" type="number" min="1" max="100" value="100" title="Opacidade para o botão resetar">
@@ -2585,6 +2601,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         const brushBtn = document.getElementById('brushBtn');
         const eraserBtn = document.getElementById('eraserBtn');
+        const cloneBtn = document.getElementById('cloneBtn');
+        const cloneSourceSizeInput = document.getElementById('cloneSourceSize');
         const selectionBtn = document.getElementById('selectionBtn');
         const selectAllBtn = document.getElementById('selectAllBtn');
         const perspectiveBtn = document.getElementById('perspectiveBtn');
@@ -2605,6 +2623,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         brushBtn.onclick = () => setTool('brush');
         eraserBtn.onclick = () => setTool('eraser');
+        cloneBtn.onclick = () => setTool(currentTool === 'clone' ? 'brush' : 'clone');
         document.getElementById('bucketBtn').onclick = () => setTool('bucket');
         document.getElementById('eyedropperBtn').onclick = () => setTool('eyedropper');
         selectionBtn.onclick = () => setTool('lasso');
@@ -2672,12 +2691,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         function updateToolUI() {
             brushBtn.classList.toggle('active', currentTool === 'brush');
             eraserBtn.classList.toggle('active', currentTool === 'eraser');
+            cloneBtn.classList.toggle('active', currentTool === 'clone');
+            canvasContainer.classList.toggle('clone-tool-active', currentTool === 'clone');
             selectionBtn.classList.toggle('active', currentTool === 'lasso');
             perspectiveBtn.classList.toggle('active', currentTool === 'perspective');
             warpBtn.classList.toggle('active', currentTool === 'warp');
             headSphereBtn.classList.toggle('active', currentTool === 'headSphere');
             document.getElementById('bucketBtn').classList.toggle('active', currentTool === 'bucket');
             document.getElementById('eyedropperBtn').classList.toggle('active', currentTool === 'eyedropper');
+            if (currentTool === 'clone') drawCloneSourceIndicator();
+            else uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
         }
 
         async function switchLayer(index) {
@@ -3130,6 +3153,63 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             return `rgba(${r}, ${g}, ${b}, ${opacity / 100})`;
         }
 
+        // --- CLONADOR ---
+        // A bola indica a origem da amostra. Ao começar um traço fora dela,
+        // preservamos a distância origem/destino durante todo o movimento.
+        const cloneSourceCanvas = document.createElement('canvas');
+        cloneSourceCanvas.width = mainCanvas.width; cloneSourceCanvas.height = mainCanvas.height;
+        const cloneSourceCtx = cloneSourceCanvas.getContext('2d');
+        let cloneSource = { x: mainCanvas.width / 2, y: mainCanvas.height / 2 };
+        let cloneOffset = { x: 0, y: 0 };
+        let isDraggingCloneSource = false;
+
+        function cloneRadius() {
+            return Math.max(8, Number(cloneSourceSizeInput.value) / 2);
+        }
+
+        cloneSourceSizeInput.addEventListener('input', drawCloneSourceIndicator);
+
+        function drawCloneSourceIndicator() {
+            if (currentTool !== 'clone') return;
+            uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+            const radius = cloneRadius();
+            uiCtx.save();
+            uiCtx.beginPath(); uiCtx.arc(cloneSource.x, cloneSource.y, radius, 0, Math.PI * 2);
+            uiCtx.fillStyle = 'rgba(52,199,89,.13)'; uiCtx.fill();
+            uiCtx.lineWidth = Math.max(2, 2 / viewportScale);
+            uiCtx.strokeStyle = '#fff'; uiCtx.stroke();
+            uiCtx.setLineDash([8, 6]); uiCtx.strokeStyle = '#34c759'; uiCtx.stroke();
+            uiCtx.setLineDash([]);
+            uiCtx.beginPath();
+            uiCtx.moveTo(cloneSource.x - 6, cloneSource.y); uiCtx.lineTo(cloneSource.x + 6, cloneSource.y);
+            uiCtx.moveTo(cloneSource.x, cloneSource.y - 6); uiCtx.lineTo(cloneSource.x, cloneSource.y + 6);
+            uiCtx.strokeStyle = '#fff'; uiCtx.lineWidth = 1.5; uiCtx.stroke();
+            uiCtx.restore();
+        }
+
+        function stampCloneAt(x, y, size) {
+            const radius = Math.max(.5, size / 2);
+            const sourceX = x + cloneOffset.x;
+            const sourceY = y + cloneOffset.y;
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = cachedOpacity / 100;
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.clip();
+            ctx.drawImage(cloneSourceCanvas, sourceX - radius, sourceY - radius, size, size, x - radius, y - radius, size, size);
+            ctx.restore();
+            hasUnsavedChanges = true;
+        }
+
+        function cloneSegment(fromX, fromY, toX, toY, size) {
+            const distance = Math.hypot(toX - fromX, toY - fromY);
+            const spacing = Math.max(1, size * .16);
+            const steps = Math.max(1, Math.ceil(distance / spacing));
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                stampCloneAt(fromX + (toX - fromX) * t, fromY + (toY - fromY) * t, size);
+            }
+        }
+
         function startDrawing(e) {
             if (isPlaying) return;
             if (isPalmTouch(e)) return; // ignora toques largos demais (palma da mão)
@@ -3141,6 +3221,26 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
             const pos = getMousePos(e); 
             if (currentTool === 'eyedropper') { sampleColorFn(pos.x, pos.y); isDrawing = false; activePointerId = null; return; }
+
+            if (currentTool === 'clone') {
+                cachedSize = Number(brushSizeInput.dataset.actualSize || brushSizeInput.value);
+                cachedOpacity = parseFloat(document.getElementById('brushOpacity').value);
+                if (Math.hypot(pos.x - cloneSource.x, pos.y - cloneSource.y) <= cloneRadius() + 12) {
+                    isDraggingCloneSource = true;
+                    cloneSource = { x: pos.x, y: pos.y };
+                    drawCloneSourceIndicator();
+                    return;
+                }
+                cloneSourceCtx.globalCompositeOperation = 'copy';
+                cloneSourceCtx.drawImage(mainCanvas, 0, 0);
+                cloneSourceCtx.globalCompositeOperation = 'source-over';
+                cloneOffset = { x: cloneSource.x - pos.x, y: cloneSource.y - pos.y };
+                lastX = pos.x; lastY = pos.y;
+                let clonePressure = (e.pointerType === 'pen' && e.pressure > 0) ? e.pressure : 1;
+                stampCloneAt(pos.x, pos.y, cachedSize * (.2 + .8 * clonePressure));
+                drawCloneSourceIndicator();
+                return;
+            }
             
             if (currentTool === 'lasso' || currentTool === 'perspective' || currentTool === 'warp' || currentTool === 'headSphere') {
                 if (isTransforming && currentTool === 'headSphere') {
@@ -3215,6 +3315,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (e.pointerId !== activePointerId) return; // ignora outros toques (ex: palma) enquanto desenha
             if (isPalmTouch(e)) return;
             const events = (e.getCoalescedEvents && e.getCoalescedEvents().length > 0) ? e.getCoalescedEvents() : [e];
+
+            if (currentTool === 'clone') {
+                if (isDraggingCloneSource) {
+                    const pos = getMousePos(e);
+                    cloneSource.x = Math.max(0, Math.min(mainCanvas.width, pos.x));
+                    cloneSource.y = Math.max(0, Math.min(mainCanvas.height, pos.y));
+                    drawCloneSourceIndicator();
+                    return;
+                }
+                for (const event of events) {
+                    const pos = getMousePos(event);
+                    if (Math.hypot(pos.x - lastX, pos.y - lastY) < .5) continue;
+                    let pressure = (event.pointerType === 'pen' && event.pressure > 0) ? event.pressure : 1;
+                    cloneSegment(lastX, lastY, pos.x, pos.y, cachedSize * (.2 + .8 * pressure));
+                    lastX = pos.x; lastY = pos.y;
+                }
+                drawCloneSourceIndicator();
+                return;
+            }
             
             if (currentTool === 'lasso' || currentTool === 'perspective' || currentTool === 'warp' || currentTool === 'headSphere' || currentTool === 'bucket') {
                 const pos = getMousePos(e);
@@ -3350,6 +3469,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (!isDrawing) return;
             if (e && activePointerId !== null && e.pointerId !== activePointerId) return; // não deixa a palma encerrar o traço da caneta/dedo
             if (e && e.pointerId) { try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err) {} }
+
+            if (currentTool === 'clone') {
+                const movedSource = isDraggingCloneSource;
+                isDraggingCloneSource = false; isDrawing = false; activePointerId = null;
+                drawCloneSourceIndicator();
+                if (!movedSource && e && e.type !== 'pointercancel') saveFrameState(currentFrameIndex);
+                return;
+            }
 
             if (currentTool !== 'lasso' && currentTool !== 'perspective' && currentTool !== 'warp' && currentTool !== 'headSphere' && currentTool !== 'bucket' && e && e.type !== 'pointercancel') {
                 const isDirectDraw = cachedOpacity == 100;
