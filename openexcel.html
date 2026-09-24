@@ -1,0 +1,3739 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Open Excel</title>
+<style>
+:root{
+  --bg:#202020;--panel:#292929;--panel2:#303030;--cell:#252525;
+  --line:#414141;--text:#f2f2f2;--muted:#bdbdbd;--head:#272727;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:Segoe UI,Arial,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:#343434;border:1px solid #454545;border-radius:4px;min-height:34px;padding:4px 10px}
+button:active{background:#444}
+.app{height:100%;width:100%;display:flex;flex-direction:column;min-width:0}
+.tabs{height:42px;flex:0 0 42px;display:flex;align-items:end;gap:2px;padding:0 8px;background:#222;border-bottom:1px solid #3b3b3b;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+.app-name{height:40px;display:flex;align-items:center;flex:0 0 auto;padding:0 12px 0 4px;font-weight:700;color:#fff;letter-spacing:.2px;border-right:1px solid #444}
+.tabs button{height:40px;background:transparent;border:0;border-bottom:2px solid transparent;border-radius:0}
+.tabs button.active{background:#2e2e2e;border-bottom-color:#ddd}
+.offline-badge{align-self:center;flex:0 0 auto;margin-left:4px;padding:3px 7px;border:1px solid #496b49;border-radius:10px;color:#bfe8bf;font-size:10px}
+.ribbon{height:104px;flex:0 0 104px;display:flex;gap:4px;padding:6px;background:#303030;border-bottom:1px solid #444;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+.group{height:92px;flex:0 0 auto;min-width:130px;padding:3px 8px;border-right:1px solid #4a4a4a;display:flex;flex-direction:column;justify-content:space-between;gap:4px}
+.group-title{font-size:11px;color:var(--muted);text-align:center;line-height:14px}
+.row{display:flex;gap:4px;align-items:center;flex-wrap:nowrap}
+.ribbon select,.ribbon input{height:34px;background:#252525;border:1px solid #4a4a4a;border-radius:4px;padding:0 7px}
+#fontFamily{width:120px} #fontSize{width:58px} #numberFormat{width:120px}
+.color{width:38px!important;padding:2px!important}
+.menu-wrap{position:relative}
+.popup{position:fixed;display:none;min-width:200px;background:#252525;border:1px solid #555;border-radius:5px;padding:4px;z-index:9999;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.popup.show{display:block}
+.popup button{display:block;width:100%;text-align:left;margin:1px 0}
+.mathbar{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:4px;padding:5px 6px;background:#262626;border-bottom:1px solid #444;overflow-x:auto;overflow-y:hidden}
+.mathbar button{min-width:44px;height:38px;flex:0 0 auto;font-size:16px;font-weight:600}
+.formulabar{height:42px;flex:0 0 42px;display:grid;grid-template-columns:90px 42px minmax(0,1fr);background:#242424;border-bottom:1px solid #444}
+.namebox,.formula{border:0;background:#242424;outline:none;padding:0 9px;font-size:16px}
+.namebox{border-right:1px solid #444}
+.fx{display:flex;align-items:center;justify-content:center;border-right:1px solid #444;font-style:italic;color:#ccc}
+.workspace{flex:1;min-height:0;display:flex;flex-direction:column}
+.sheetwrap{flex:1;min-height:0;overflow:auto;position:relative;background:#202020}
+.sheet{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;min-width:0;user-select:none}
+.sheet th,.sheet td{
+  height:28px;
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  padding:0 5px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:clip;
+  font-size:13px;
+}
+.sheet td{
+  background:var(--cell);
+  min-width:0;
+  touch-action:pan-x pan-y;
+}
+/* Excel-like overflow: the column keeps its size while visible content can
+   continue over empty cells. A later filled cell is painted above it and
+   naturally stops the overflow without moving or duplicating the value. */
+.sheet td:not(:empty){
+  overflow:visible;
+  position:relative;
+  z-index:2;
+}
+.sheet td.selected,.sheet td.range{
+  position:relative;
+  z-index:3;
+}
+.sheet th{
+  background:var(--head);
+  color:#ddd;
+  font-weight:400;
+  text-align:center;
+  position:sticky;
+  z-index:4;
+  overflow:visible;
+  white-space:nowrap;
+}
+.sheet thead th{top:0;overflow:visible}
+.rowhead{left:0;position:sticky!important;z-index:5!important;width:54px;min-width:54px;max-width:54px}
+.corner{top:0;z-index:8!important}
+.sheet td.selected{outline:2px solid #eee;outline-offset:-2px;background:#303030}
+.sheet td.range{background:#303030}
+.sheet.no-grid td{border-right-color:transparent!important;border-bottom-color:transparent!important}
+.col-resizer{position:absolute;right:-12px;top:0;width:24px;height:100%;z-index:30;touch-action:none;cursor:col-resize}
+.row-resizer{position:absolute;left:0;bottom:-10px;width:100%;height:20px;z-index:30;touch-action:none;cursor:row-resize}
+.handle{position:absolute;width:30px;height:30px;border:3px solid #eee;background:#2c2c2c;border-radius:50%;z-index:50;display:none;touch-action:none;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.page-outline{position:absolute;display:none;pointer-events:none;border:2px solid #8b8b8b;background:transparent;z-index:3}
+.page-outline.show{display:block}
+.bottom{height:32px;flex:0 0 32px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:#202020;border-top:1px solid #3b3b3b;font-size:12px;color:#ccc}
+@media print{
+  .tabs,.ribbon,.mathbar,.formulabar,.bottom{display:none!important}
+  html,body,.app,.workspace,.sheetwrap{overflow:visible!important;height:auto!important;background:#fff!important}
+  .sheet td{background:#fff;color:#000}
+  .sheet th{background:#eee;color:#000}
+  .handle,.page-outline{display:none!important}
+}
+
+@media print{
+  @page{margin:8mm}
+  html,body{background:#fff!important}
+  body{overflow:visible!important}
+  .app{height:auto!important;overflow:visible!important}
+  .tabs,.ribbon,.mathbar,.formulabar,.bottom,.handle,.page-outline{display:none!important}
+  .workspace,.sheetwrap{height:auto!important;overflow:visible!important;background:#fff!important}
+  .sheet{
+    zoom:1!important;
+    transform-origin:top left!important;
+    background:#fff!important;
+    color:#000!important;
+  }
+  .sheet th,.sheet td{
+    color:#000!important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  .sheet tr.print-hide-row,
+  .sheet col.print-hide-col,
+  .sheet th.print-hide-col,
+  .sheet td.print-hide-col{
+    display:none!important;
+  }
+  .sheet .selected,.sheet .range{outline:none!important;box-shadow:none!important}
+}
+
+.app.hide-formulabar .formulabar{display:none!important}
+.sheet.hide-headings thead{display:none!important}
+.sheet.hide-headings .rowhead{display:none!important}
+.sheet.hide-headings col:first-child{display:none!important}
+
+@media print{
+  /* Screen-only Exibir settings must never blank the PDF. */
+  .sheet.hide-headings thead{display:table-header-group!important}
+  .sheet.hide-headings .rowhead{display:table-cell!important}
+  .sheet.hide-headings col:first-child{display:table-column!important}
+
+  .sheet{display:table!important;visibility:visible!important}
+  .sheet tbody{display:table-row-group!important;visibility:visible!important}
+  .sheet tr:not(.print-hide-row){display:table-row!important;visibility:visible!important}
+  .sheet td:not(.print-hide-col),
+  .sheet th:not(.print-hide-col){
+    display:table-cell!important;
+    visibility:visible!important;
+  }
+
+  .sheet.no-grid td{
+    visibility:visible!important;
+    color:#000!important;
+  }
+}
+
+#printHost{display:none}
+
+@media print{
+  @page{margin:8mm}
+  html,body{background:#fff!important;overflow:visible!important}
+  body > .app{display:none!important}
+  #printHost{
+    display:block!important;
+    visibility:visible!important;
+    background:#fff!important;
+    color:#000!important;
+    width:auto!important;
+    height:auto!important;
+    overflow:visible!important;
+  }
+  #printHost .print-sheet{
+    border-collapse:collapse;
+    table-layout:fixed;
+    transform-origin:top left;
+    break-inside:avoid!important;
+    page-break-inside:avoid!important;
+    color:#000!important;
+    background:#fff!important;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+  }
+  #printHost .print-sheet td{
+    border:none;
+    padding:0 5px;
+    white-space:nowrap;
+    overflow:hidden;
+    color:#000!important;
+    background:#fff!important;
+    font-family:Segoe UI,Arial,sans-serif;
+    font-size:13px;
+    vertical-align:middle;
+  }
+}
+
+.sheet-tabs{
+  display:flex;align-items:center;gap:2px;min-width:0;max-width:70vw;
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap
+}
+.sheet-tab{
+  height:28px;min-width:84px;max-width:180px;padding:0 10px;border:0;border-radius:0;
+  background:#252525;color:#ddd;border-bottom:2px solid transparent;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.sheet-tab.active{background:#343434;border-bottom-color:#ddd;color:#fff}
+.sheet-add{
+  height:28px;min-width:34px;width:34px;padding:0;border:0;border-radius:0;
+  background:#252525;font-size:20px;line-height:26px
+}
+
+.formula-help{
+  display:flex;
+  align-items:stretch;
+  gap:8px;
+  height:92px;
+  min-width:max-content;
+}
+.formula-help-group{
+  min-width:250px;
+  max-width:360px;
+  height:92px;
+  padding:6px 8px;
+  border-right:1px solid #4a4a4a;
+  overflow:hidden;
+}
+.formula-help-title{
+  font-size:12px;
+  font-weight:700;
+  margin-bottom:5px;
+  color:#fff;
+}
+.formula-help-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  align-content:flex-start;
+  max-height:62px;
+  overflow:auto;
+}
+.formula-chip{
+  display:inline-block;
+  padding:3px 6px;
+  border:1px solid #4a4a4a;
+  border-radius:4px;
+  background:#252525;
+  font-family:Consolas,monospace;
+  font-size:11px;
+  white-space:nowrap;
+}
+.formula-help-note{
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.3;
+}
+.formula-help-group.developer-help{
+  min-width:340px;
+  max-width:440px;
+  overflow:visible;
+}
+.developer-help .formula-help-list{
+  display:block;
+  max-height:66px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  padding-right:3px;
+}
+.developer-help .formula-chip{
+  display:block;
+  width:100%;
+  margin-bottom:4px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.35;
+}
+
+.custom-fn-modal{
+  position:fixed;inset:0;z-index:12000;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(0,0,0,.62);padding:18px
+}
+.custom-fn-modal.show{display:flex}
+.custom-fn-box{
+  width:min(760px,96vw);max-height:90vh;overflow:auto;
+  background:#262626;border:1px solid #555;border-radius:8px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5);padding:14px
+}
+.custom-fn-box h3{margin:0 0 12px;font-size:17px}
+.custom-fn-row{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px;align-items:center;margin:8px 0}
+.custom-fn-row input,.custom-fn-row textarea{
+  width:100%;background:#1f1f1f;border:1px solid #555;border-radius:4px;
+  padding:8px;color:#fff;outline:none
+}
+.custom-fn-row textarea{min-height:170px;resize:vertical;font-family:Consolas,monospace}
+.custom-fn-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+#customFnSelect{min-width:170px;max-width:260px}
+.macro-help-box{width:min(920px,96vw)}
+.macro-help-box h4{margin:16px 0 6px;font-size:14px}
+.macro-help-box p,.macro-help-box li{font-size:13px;line-height:1.45;color:#ddd}
+.help-code{
+  width:100%;min-height:108px;resize:vertical;white-space:pre;overflow:auto;
+  background:#171717;color:#dff4df;border:1px solid #555;border-radius:5px;
+  padding:10px;font:12px/1.45 Consolas,monospace
+}
+#aiHelpPrompt{min-height:62vh;white-space:pre;overflow:auto}
+</style>
+<style id="dynamicPrintStyle"></style>
+</head>
+<body>
+<div class="app">
+  <div class="tabs" id="tabs">
+    <div class="app-name" aria-label="Nome do software">Open Excel</div>
+    <button data-tab="arquivo">Arquivo</button>
+    <button class="active" data-tab="inicio">Início</button>
+    <button data-tab="layout">Layout da Página</button>
+    <button data-tab="exibir">Exibir</button>
+    <button data-tab="personalizar">Personalizar</button>
+    <button data-tab="macros">Macros</button>
+    <button data-tab="formulaHelp">Ajuda Fórmulas</button>
+    <span class="offline-badge" title="Aplicativo independente, sem conexão">OFFLINE</span>
+  </div>
+
+  <div class="ribbon" id="ribbon"></div>
+
+  <div class="mathbar" id="mathbar">
+    <button data-key="=">=</button>
+    <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+    <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+    <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button data-key="0">0</button>
+    <button id="decimalKey" data-key=",">,</button>
+    <button data-key="+">+</button><button data-key="-">−</button><button data-key="*">×</button><button data-key="/">÷</button>
+    <button data-key="^">^</button><button data-key="%">%</button><button data-key="(">(</button><button data-key=")">)</button>
+    <button data-act="back">⌫</button><button data-act="clear">C</button><button data-act="commit">✓</button>
+  </div>
+
+  <div class="formulabar">
+    <input class="namebox" id="namebox" value="A1" readonly>
+    <div class="fx">fx</div>
+    <input class="formula" id="formula" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+
+  <div class="workspace">
+    <div class="sheetwrap" id="sheetwrap">
+      <div class="page-outline" id="pageOutline"></div>
+      <div class="handle" id="handle"></div>
+      <table class="sheet" id="sheet"></table>
+    </div>
+    <div class="bottom"><div class="sheet-tabs" id="sheetTabs"></div><span id="status">Pronto</span><span id="zoomText">100%</span></div>
+  </div>
+</div>
+
+
+<div class="custom-fn-modal" id="customFnModal">
+  <div class="custom-fn-box">
+    <h3 id="customFnTitle">Nova função personalizada</h3>
+    <div class="custom-fn-row">
+      <label for="customFnName">Nome</label>
+      <input id="customFnName" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="DOBRO">
+    </div>
+    <div class="custom-fn-row">
+      <label for="customFnParams">Parâmetros</label>
+      <input id="customFnParams" autocomplete="off" spellcheck="false" placeholder="x">
+    </div>
+    <div class="custom-fn-row">
+      <label for="customFnCode">Código</label>
+      <textarea id="customFnCode" spellcheck="false" placeholder="return x * 2;"></textarea>
+    </div>
+    <div class="custom-fn-actions">
+      <button id="customFnCancel">Cancelar</button>
+      <button id="customFnSave">Salvar função</button>
+    </div>
+  </div>
+</div>
+
+<div class="custom-fn-modal" id="macroEditorModal">
+  <div class="custom-fn-box">
+    <h3 id="macroEditorTitle">Nova macro</h3>
+    <div class="custom-fn-row">
+      <label for="macroEditorName">Nome</label>
+      <input id="macroEditorName" autocomplete="off" placeholder="Minha macro">
+    </div>
+    <div class="custom-fn-row">
+      <label for="macroEditorCode">Código</label>
+      <textarea id="macroEditorCode" spellcheck="false" placeholder="sheet.getCell(&quot;A1&quot;).value = 10;"></textarea>
+    </div>
+    <div class="custom-fn-actions">
+      <button id="macroEditorCancel">Cancelar</button>
+      <button id="macroEditorSave">Salvar macro</button>
+    </div>
+  </div>
+</div>
+
+<div class="custom-fn-modal" id="macroHelpModal">
+  <div class="custom-fn-box macro-help-box">
+    <h3>Ajuda completa — Macros, funções próprias e IA</h3>
+    <p>Todo o manual abaixo é copiado como um único texto.</p>
+    <textarea class="help-code" id="aiHelpPrompt" readonly>OPEN EXCEL — MANUAL PARA MACROS, FUNÇÕES PERSONALIZADAS E INTELIGÊNCIA ARTIFICIAL
+
+============================================================
+1. COMO AS MACROS FUNCIONAM
+============================================================
+
+O Editor de Macros executa diretamente o código JavaScript e já entrega o objeto chamado sheet.
+Você pode criar várias macros com nomes diferentes usando Nova macro, escolher uma no seletor, Editar, Executar ou Excluir.
+
+IMPORTANTE:
+- Escreva o corpo executável da macro diretamente.
+- Não escreva apenas: function minhaMacro(sheet) { ... }
+- Uma função declarada não executa sozinha.
+- Se usar function minhaMacro(sheet), será obrigatório chamar minhaMacro(sheet) no final.
+- A forma recomendada é não envolver o código em outra função.
+
+API PERMITIDA:
+
+sheet.getCell("A1").value
+Lê o conteúdo bruto da célula A1.
+
+sheet.getCell("A1").value = 10;
+Escreve um valor.
+
+sheet.getCell("A1").value = "Texto";
+Escreve um texto.
+
+sheet.getCell("A1").value = "=SOMA(A2;A3)";
+Escreve uma fórmula. Fórmulas começam com = e usam ; entre argumentos.
+
+sheet.setColumnWidth("A", 160);
+Define a largura da coluna A em pixels.
+
+sheet.select("A1");
+Seleciona uma célula.
+
+sheet.activeSheetName
+Informa o nome da planilha ativa.
+
+sheet.listSheets()
+Retorna a lista com os nomes de todas as planilhas.
+
+sheet.setActiveSheet("Planilha2");
+Muda a planilha ativa pelo nome.
+
+sheet.getSheet("Planilha2").getCell("A1").value
+Lê ou escreve uma célula de uma planilha específica sem depender da planilha ativa.
+
+Não use import, require, fetch, document, window, bibliotecas externas ou APIs não listadas.
+
+============================================================
+2. EXEMPLOS DE MACROS
+============================================================
+
+EXEMPLO A — SOMAR A1 E A2 E COLOCAR EM A3:
+
+const a1 = Number(sheet.getCell("A1").value) || 0;
+const a2 = Number(sheet.getCell("A2").value) || 0;
+sheet.getCell("A3").value = a1 + a2;
+sheet.select("A3");
+
+EXEMPLO B — USAR UMA FÓRMULA PARA SOMAR:
+
+sheet.getCell("A3").value = "=SOMA(A1;A2)";
+sheet.select("A3");
+
+EXEMPLO C — PREENCHER VALORES E FÓRMULAS:
+
+sheet.getCell("A1").value = "Experimento";
+sheet.getCell("A2").value = 10;
+sheet.getCell("B2").value = 20;
+sheet.getCell("C2").value = "=SOMA(A2:B2)";
+sheet.setColumnWidth("A", 160);
+sheet.select("C2");
+
+EXEMPLO D — CRIAR UMA SEQUÊNCIA CIENTÍFICA:
+
+for (let linha = 1; linha &lt;= 20; linha++) {
+  sheet.getCell("A" + linha).value = linha;
+  sheet.getCell("B" + linha).value = "=POTÊNCIA(A" + linha + ";2)";
+  sheet.getCell("C" + linha).value = "=RAIZ(B" + linha + ")";
+}
+sheet.select("A1");
+
+EXEMPLO E — COPIAR O VALOR DE A1 PARA B1:
+
+sheet.getCell("B1").value = sheet.getCell("A1").value;
+sheet.select("B1");
+
+EXEMPLO F — TRABALHAR NA PLANILHA ATIVA:
+
+const nome = sheet.activeSheetName;
+sheet.getCell("A1").value = "Planilha ativa: " + nome;
+
+EXEMPLO G — COPIAR ENTRE PLANILHAS PELO NOME:
+
+const origem = sheet.getSheet("Planilha1");
+const destino = sheet.getSheet("Planilha2");
+destino.getCell("A1").value = origem.getCell("A1").value;
+sheet.setActiveSheet("Planilha2");
+sheet.select("A1");
+
+============================================================
+3. COMO CRIAR FUNÇÕES PERSONALIZADAS
+============================================================
+
+Abra Macros e use Nova função. Preencha exatamente três campos:
+
+NOME:
+- Use letras, números, ponto ou sublinhado.
+- Não comece com número.
+- Não use o nome de uma função nativa.
+
+PARÂMETROS:
+- Use nomes JavaScript separados por vírgula.
+- Exemplo: a,b
+
+CÓDIGO:
+- Escreva somente o corpo da função.
+- O código precisa usar return para devolver o resultado.
+- Para números, use Number(valor).
+- Não escreva function NOME(...).
+
+EXEMPLO A — DOBRO:
+
+Nome: DOBRO
+Parâmetros: x
+Código:
+return Number(x) * 2;
+
+Uso na célula:
+=DOBRO(A1)
+
+EXEMPLO B — HIPOTENUSA:
+
+Nome: HIPOTENUSA
+Parâmetros: a,b
+Código:
+return Math.sqrt(Number(a) ** 2 + Number(b) ** 2);
+
+Uso na célula:
+=HIPOTENUSA(A1;B1)
+
+EXEMPLO C — CONVERTER KM/H PARA M/S:
+
+Nome: KMH_PARA_MS
+Parâmetros: velocidade
+Código:
+return Number(velocidade) / 3.6;
+
+Uso na célula:
+=KMH_PARA_MS(A1)
+
+EXEMPLO D — CLASSIFICAR UM VALOR:
+
+Nome: CLASSIFICAR
+Parâmetros: valor,limite
+Código:
+return Number(valor) &gt;= Number(limite) ? "ALTO" : "BAIXO";
+
+Uso na célula:
+=CLASSIFICAR(A1;10)
+
+============================================================
+4. PROMPT PARA PEDIR UMA MACRO A UMA IA
+============================================================
+
+Crie uma macro compatível com o Open Excel.
+
+Regras obrigatórias:
+- A linguagem é JavaScript.
+- O código já recebe o objeto sheet.
+- Retorne somente o corpo executável da macro, sem Markdown.
+- NÃO envolva o código em function minhaMacro(sheet).
+- Se declarar alguma função auxiliar, chame essa função no próprio código.
+- Para a planilha ativa, use sheet.getCell("A1").value.
+- Para uma planilha pelo nome, use sheet.getSheet("Planilha2").getCell("A1").value.
+- Também pode usar sheet.activeSheetName, sheet.listSheets(), sheet.setActiveSheet("Planilha2"), sheet.setColumnWidth("A", largura) e sheet.select("A1").
+- Fórmulas devem começar com = e usar ; entre argumentos.
+- Não use import, require, fetch, document, window ou bibliotecas externas.
+- Converta células numéricas usando Number(sheet.getCell("A1").value) || 0.
+
+O que a macro deve fazer:
+[ESCREVA AQUI O PEDIDO]
+
+============================================================
+5. PROMPT PARA PEDIR UMA FUNÇÃO PERSONALIZADA A UMA IA
+============================================================
+
+Crie uma função personalizada compatível com o Open Excel.
+
+Regras obrigatórias:
+- Responda separando Nome, Parâmetros, Código e Exemplo de uso.
+- O Nome não pode começar com número.
+- Parâmetros são nomes JavaScript separados por vírgula.
+- O Código é somente o corpo da função e precisa usar return.
+- NÃO escreva function NOME(...).
+- Converta entradas numéricas com Number(valor).
+- Não use import, require, fetch, document, window ou bibliotecas externas.
+- O exemplo deve usar ; entre argumentos: =NOME(A1;B1).
+
+O que a função deve calcular ou transformar:
+[ESCREVA AQUI O PEDIDO]
+
+============================================================
+6. COMO CORRIGIR UMA RESPOSTA ERRADA DA IA
+============================================================
+
+Se a IA responder assim:
+
+function minhaMacro(sheet) {
+  sheet.getCell("A3").value = "=SOMA(A1;A2)";
+}
+
+Ela apenas declarou a função e não executou nada. Peça:
+
+"Remova o invólucro function minhaMacro(sheet). Retorne somente o corpo executável da macro, pois o Open Excel já fornece e executa o objeto sheet."
+
+Código correto:
+
+sheet.getCell("A3").value = "=SOMA(A1;A2)";
+sheet.select("A3");</textarea>
+
+    <div class="custom-fn-actions">
+      <button id="macroHelpCopy">Copiar ajuda completa</button>
+      <button id="macroHelpClose">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const ROWS=3000, COLS=200, DEFAULT_COL=100, DEFAULT_ROW=28;
+
+  const state={
+    tab:'inicio',
+    sheets:[],
+    activeSheetIndex:0,
+    nextSheetNumber:2,
+    customFunctionDefs:[],
+    customFunctionRuntime:{},
+    editingCustomFunction:null,
+    selected:{row:1,col:1},
+    anchor:{row:1,col:1},
+    range:null,
+    clearStart:null,
+    clearEnd:null,
+    clearing:false,
+    dragSelectionStart:null,
+    dragSelectionEnd:null,
+    lastRange:null,
+    cells:{},
+    styles:{},
+    colWidths:{},
+    rowHeights:{},
+    clipboard:null,
+    clipboardSource:null,
+    locale:'pt-BR',
+    zoom:1,
+    grid:true,
+    showFormulaBar:true,
+    showHeadings:true,
+    printViewBackup:null,
+    pageMode:false,
+    pageSize:'A4',
+    orientation:'portrait',
+    formulaPicking:false,
+    formulaPointerFocus:false,
+    editing:false,
+    caret:0,
+    paintedSelection:[],
+    virtualStartRow:1,
+    virtualEndRow:1,
+    virtualBuffer:8,
+    macroDefs:[],
+    editingMacro:null,
+    macroCode:''
+  };
+
+  const $=s=>document.querySelector(s);
+  const sheet=$('#sheet'), wrap=$('#sheetwrap'), ribbon=$('#ribbon');
+  const formula=$('#formula'), namebox=$('#namebox'), handle=$('#handle');
+  const status=$('#status'), zoomText=$('#zoomText'), pageOutline=$('#pageOutline');
+  const sheetTabs=$('#sheetTabs');
+  const cellCache=new Map();
+
+  function key(r,c){return r+':'+c}
+
+  function isRemovedDefaultMacro(m){
+    const code=String(m?.code??m??'')
+      .replace(/\/\/\s*Macro JavaScript/gi,'')
+      .replace(/\s+/g,'');
+    return code==='sheet.getCell("A1").value=10;sheet.getCell("B1").value=20;';
+  }
+
+  function sanitizeMacroDefs(list){
+    return (Array.isArray(list)?list:[])
+      .map(m=>({name:String(m?.name||'Macro').trim(),code:String(m?.code||'')}))
+      .filter(m=>!isRemovedDefaultMacro(m));
+  }
+  function colName(n){let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
+  function colIndex(s){let n=0;for(const ch of String(s).toUpperCase())n=n*26+ch.charCodeAt(0)-64;return n}
+  function parseAddr(a){
+    const m=String(a).match(/^\$?([A-Za-z]+)\$?(\d+)$/);
+    if(!m)return null;
+    const c=colIndex(m[1]),r=+m[2];
+    return r>=1&&r<=ROWS&&c>=1&&c<=COLS?{row:r,col:c}:null
+  }
+  function addr(r,c){return colName(c)+r}
+  function data(r,c){return state.cells[key(r,c)]||(state.cells[key(r,c)]={raw:''})}
+  function style(r,c){return state.styles[key(r,c)]||(state.styles[key(r,c)]={})}
+  function tdAt(r,c){return cellCache.get(key(r,c))||null}
+
+  function decimalSep(){return state.locale==='pt-BR'?',':'.'}
+
+  function parseNumber(v){
+    let s=String(v??'').trim();
+    if(!s)return null;
+    if(state.locale==='pt-BR'){
+      if(/^[+-]?\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(s)){
+        s=s.replace(/\./g,'').replace(',','.');
+      }else{
+        s=s.replace(',','.');
+      }
+    }else{
+      if(/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(s)){
+        s=s.replace(/,/g,'');
+      }
+    }
+    const n=Number(s);
+    return Number.isFinite(n)?n:null;
+  }
+
+  function flattenArgs(v){
+    const out=[];
+    const walk=x=>{
+      if(Array.isArray(x)) x.forEach(walk);
+      else out.push(x);
+    };
+    walk(v);
+    return out;
+  }
+
+  function nums(args){
+    return flattenArgs(args).map(v=>{
+      const n=typeof v==='number' ? v : parseNumber(v);
+      return n===null ? 0 : n;
+    });
+  }
+
+  function factorial(n){
+    n=Math.trunc(Number(n));
+    if(n<0 || !Number.isFinite(n)) return NaN;
+    let r=1;
+    for(let i=2;i<=n;i++) r*=i;
+    return r;
+  }
+
+  function gcd2(a,b){
+    a=Math.abs(Math.trunc(a)); b=Math.abs(Math.trunc(b));
+    while(b){const t=b;b=a%b;a=t}
+    return a;
+  }
+
+  function lcm2(a,b){
+    if(!a || !b) return 0;
+    return Math.abs(a*b)/gcd2(a,b);
+  }
+
+  function comb(n,k){
+    n=Math.trunc(n);k=Math.trunc(k);
+    if(n<0||k<0||k>n)return NaN;
+    k=Math.min(k,n-k);
+    let r=1;
+    for(let i=1;i<=k;i++)r=r*(n-k+i)/i;
+    return r;
+  }
+
+  function excelText(value,pattern){
+    const p=String(pattern??'');
+    if(typeof value==='number'){
+      if(/0[,.]0+/.test(p)){
+        const m=p.match(/0[,.](0+)/);
+        const d=m?m[1].length:0;
+        return new Intl.NumberFormat(
+          state.locale==='pt-BR'?'pt-BR':'en-US',
+          {minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:p.includes('.')||p.includes(',')}
+        ).format(value);
+      }
+      if(p.includes('%')){
+        const d=(p.split(/[,.]/)[1]||'').replace(/[^0]/g,'').length;
+        return new Intl.NumberFormat(
+          state.locale==='pt-BR'?'pt-BR':'en-US',
+          {style:'percent',minimumFractionDigits:d,maximumFractionDigits:d}
+        ).format(value);
+      }
+    }
+    return String(value??'');
+  }
+
+  const F={
+    SUM:(...a)=>nums(a).reduce((s,v)=>s+v,0),
+    PRODUCT:(...a)=>nums(a).reduce((s,v)=>s*v,1),
+    AVERAGE:(...a)=>{const n=nums(a);return n.length?n.reduce((s,v)=>s+v,0)/n.length:0},
+    MIN:(...a)=>Math.min(...nums(a)),
+    MAX:(...a)=>Math.max(...nums(a)),
+    COUNT:(...a)=>flattenArgs(a).filter(v=>typeof v==='number'||parseNumber(v)!==null).length,
+    COUNTA:(...a)=>flattenArgs(a).filter(v=>String(v??'')!=='').length,
+
+    ABS:n=>Math.abs(n),
+    INT:n=>Math.floor(n),
+    ROUND:(n,d=0)=>{const p=Math.pow(10,Math.trunc(d));return Math.round(n*p)/p},
+    ROUNDUP:(n,d=0)=>{const p=Math.pow(10,Math.trunc(d));return (n>=0?Math.ceil(n*p):Math.floor(n*p))/p},
+    ROUNDDOWN:(n,d=0)=>{const p=Math.pow(10,Math.trunc(d));return (n>=0?Math.floor(n*p):Math.ceil(n*p))/p},
+    MOD:(n,d)=>((n%d)+d)%d,
+    QUOTIENT:(n,d)=>Math.trunc(n/d),
+    POWER:(a,b)=>Math.pow(a,b),
+    SQRT:n=>Math.sqrt(n),
+    EXP:n=>Math.exp(n),
+    LN:n=>Math.log(n),
+    LOG:(n,b=10)=>Math.log(n)/Math.log(b),
+    LOG10:n=>Math.log10(n),
+    PI:()=>Math.PI,
+    SIN:n=>Math.sin(n),
+    COS:n=>Math.cos(n),
+    TAN:n=>Math.tan(n),
+    ASIN:n=>Math.asin(n),
+    ACOS:n=>Math.acos(n),
+    ATAN:n=>Math.atan(n),
+    SINH:n=>Math.sinh(n),
+    COSH:n=>Math.cosh(n),
+    TANH:n=>Math.tanh(n),
+    RADIANS:n=>n*Math.PI/180,
+    DEGREES:n=>n*180/Math.PI,
+    FACT:n=>factorial(n),
+    GCD:(...a)=>nums(a).reduce((r,v)=>gcd2(r,v),0),
+    LCM:(...a)=>nums(a).reduce((r,v)=>lcm2(r,v),1),
+    COMBIN:(n,k)=>comb(n,k),
+
+    IF:(cond,a,b)=>cond?a:b,
+    IFERROR:(v,alt)=>v==='#ERRO!'?alt:v,
+    AND:(...a)=>flattenArgs(a).every(Boolean),
+    OR:(...a)=>flattenArgs(a).some(Boolean),
+    NOT:a=>!a,
+    TRUE:()=>true,
+    FALSE:()=>false,
+
+    LEFT:(t,n=1)=>String(t??'').slice(0,Math.max(0,Math.trunc(n))),
+    RIGHT:(t,n=1)=>String(t??'').slice(-Math.max(0,Math.trunc(n))),
+    MID:(t,start,n)=>String(t??'').substr(Math.max(0,Math.trunc(start)-1),Math.max(0,Math.trunc(n))),
+    LEN:t=>String(t??'').length,
+    UPPER:t=>String(t??'').toUpperCase(),
+    LOWER:t=>String(t??'').toLowerCase(),
+    TRIM:t=>String(t??'').trim().replace(/\s+/g,' '),
+    CONCAT:(...a)=>flattenArgs(a).map(v=>String(v??'')).join(''),
+    CONCATENATE:(...a)=>flattenArgs(a).map(v=>String(v??'')).join(''),
+    SUBSTITUTE:(t,oldv,newv)=>String(t??'').split(String(oldv??'')).join(String(newv??'')),
+    REPT:(t,n)=>String(t??'').repeat(Math.max(0,Math.trunc(n))),
+    TEXT:(v,p)=>excelText(v,p),
+
+    VALUE:v=>{
+      if(typeof v==='number') return v;
+      const s=String(v??'').trim();
+      const n=parseNumber(s);
+      return n===null ? '#ERRO!' : n;
+    },
+
+    CHOOSE:(index,...items)=>{
+      const i=Math.trunc(toNum(index));
+      if(i<1 || i>items.length) return '#ERRO!';
+      return items[i-1];
+    }
+  };
+
+  const ALIAS={
+    SOMA:'SUM', MÉDIA:'AVERAGE', MEDIA:'AVERAGE',
+    MÍNIMO:'MIN', MINIMO:'MIN', MÁXIMO:'MAX', MAXIMO:'MAX',
+    'CONT.NÚM':'COUNT','CONT.NUM':'COUNT','CONT.VALORES':'COUNTA',
+    POTÊNCIA:'POWER',POTENCIA:'POWER',RAIZ:'SQRT',ARRED:'ROUND',
+    'ARREDONDAR.PARA.CIMA':'ROUNDUP','ARREDONDAR.PARA.BAIXO':'ROUNDDOWN',
+    QUOCIENTE:'QUOTIENT',SEN:'SIN',RADIANOS:'RADIANS',GRAUS:'DEGREES',
+    FATORIAL:'FACT',MDC:'GCD',MMC:'LCM',COMBINAÇÃO:'COMBIN',COMBINACAO:'COMBIN',
+
+    SE:'IF',SEERRO:'IFERROR',E:'AND',OU:'OR',NÃO:'NOT',NAO:'NOT',
+    VERDADEIRO:'TRUE',FALSO:'FALSE',
+
+    ESQUERDA:'LEFT',DIREITA:'RIGHT','EXT.TEXTO':'MID',
+    'NÚM.CARACT':'LEN','NUM.CARACT':'LEN',
+    MAIÚSCULA:'UPPER',MAIUSCULA:'UPPER',
+    MINÚSCULA:'LOWER',MINUSCULA:'LOWER',
+    ARRUMAR:'TRIM',CONCATENAR:'CONCATENATE',
+    SUBSTITUIR:'SUBSTITUTE',REPETIR:'REPT',TEXTO:'TEXT'
+  };
+
+  function canon(name){
+    const up=String(name||'').toLocaleUpperCase('pt-BR');
+    return ALIAS[up] || up;
+  }
+
+  function rangeArray(a,b,seen){
+    const p1=parseAddr(a),p2=parseAddr(b);
+    if(!p1||!p2)return [];
+    const out=[];
+    for(let r=Math.min(p1.row,p2.row);r<=Math.max(p1.row,p2.row);r++){
+      const row=[];
+      for(let c=Math.min(p1.col,p2.col);c<=Math.max(p1.col,p2.col);c++){
+        const k=key(r,c);
+        row.push(seen.has(k)?0:valueOf(r,c,new Set([...seen,k])));
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  function flattenValues(v){
+    const out=[];
+    const walk=x=>{
+      if(Array.isArray(x)) x.forEach(walk);
+      else out.push(x);
+    };
+    walk(v);
+    return out;
+  }
+
+  function toNum(v){
+    if(typeof v==='number') return v;
+    if(typeof v==='boolean') return v?1:0;
+    const n=parseNumber(v);
+    return n===null?0:n;
+  }
+
+  function factorial(n){
+    n=Math.trunc(toNum(n));
+    if(n<0 || !Number.isFinite(n)) return NaN;
+    let r=1;
+    for(let i=2;i<=n;i++) r*=i;
+    return r;
+  }
+
+  function gcd2(a,b){
+    a=Math.abs(Math.trunc(toNum(a)));
+    b=Math.abs(Math.trunc(toNum(b)));
+    while(b){const t=b;b=a%b;a=t}
+    return a;
+  }
+
+  function lcm2(a,b){
+    a=Math.trunc(toNum(a)); b=Math.trunc(toNum(b));
+    if(a===0 || b===0) return 0;
+    return Math.abs(a*b)/gcd2(a,b);
+  }
+
+  function combin(n,k){
+    n=Math.trunc(toNum(n)); k=Math.trunc(toNum(k));
+    if(n<0 || k<0 || k>n) return NaN;
+    k=Math.min(k,n-k);
+    let r=1;
+    for(let i=1;i<=k;i++) r=r*(n-k+i)/i;
+    return r;
+  }
+
+  function excelText(value,pattern){
+    const p=String(pattern??'');
+    const n=typeof value==='number'?value:parseNumber(value);
+    if(n!==null){
+      if(p.includes('%')){
+        const dec=(p.match(/[,.](0+)/)||[])[1]?.length||0;
+        return new Intl.NumberFormat(
+          state.locale==='pt-BR'?'pt-BR':'en-US',
+          {style:'percent',minimumFractionDigits:dec,maximumFractionDigits:dec}
+        ).format(n);
+      }
+      const m=p.match(/0[,.](0+)/);
+      if(m){
+        const d=m[1].length;
+        return new Intl.NumberFormat(
+          state.locale==='pt-BR'?'pt-BR':'en-US',
+          {minimumFractionDigits:d,maximumFractionDigits:d,useGrouping:false}
+        ).format(n);
+      }
+      if(/^0+$/.test(p)) return String(Math.round(n));
+    }
+    return String(value??'');
+  }
+
+  const FORMULAS={
+    SUM:(...a)=>flattenValues(a).reduce((s,v)=>s+toNum(v),0),
+    PRODUCT:(...a)=>flattenValues(a).reduce((s,v)=>s*toNum(v),1),
+    AVERAGE:(...a)=>{const n=flattenValues(a).map(toNum);return n.length?n.reduce((s,v)=>s+v,0)/n.length:0},
+    MIN:(...a)=>Math.min(...flattenValues(a).map(toNum)),
+    MAX:(...a)=>Math.max(...flattenValues(a).map(toNum)),
+    COUNT:(...a)=>flattenValues(a).filter(v=>typeof v==='number'||parseNumber(v)!==null).length,
+    COUNTA:(...a)=>flattenValues(a).filter(v=>String(v??'')!=='').length,
+
+    ABS:v=>Math.abs(toNum(v)),
+    INT:v=>Math.floor(toNum(v)),
+    ROUND:(v,d=0)=>{const p=Math.pow(10,Math.trunc(toNum(d)));return Math.round(toNum(v)*p)/p},
+    ROUNDUP:(v,d=0)=>{const n=toNum(v),p=Math.pow(10,Math.trunc(toNum(d)));return (n>=0?Math.ceil(n*p):Math.floor(n*p))/p},
+    ROUNDDOWN:(v,d=0)=>{const n=toNum(v),p=Math.pow(10,Math.trunc(toNum(d)));return (n>=0?Math.floor(n*p):Math.ceil(n*p))/p},
+    MOD:(a,b)=>((toNum(a)%toNum(b))+toNum(b))%toNum(b),
+    QUOTIENT:(a,b)=>Math.trunc(toNum(a)/toNum(b)),
+    POWER:(a,b)=>Math.pow(toNum(a),toNum(b)),
+    SQRT:v=>Math.sqrt(toNum(v)),
+    EXP:v=>Math.exp(toNum(v)),
+    LN:v=>Math.log(toNum(v)),
+    LOG:(v,b=10)=>Math.log(toNum(v))/Math.log(toNum(b)),
+    LOG10:v=>Math.log10(toNum(v)),
+    PI:()=>Math.PI,
+    SIN:v=>Math.sin(toNum(v)), COS:v=>Math.cos(toNum(v)), TAN:v=>Math.tan(toNum(v)),
+    ASIN:v=>Math.asin(toNum(v)), ACOS:v=>Math.acos(toNum(v)), ATAN:v=>Math.atan(toNum(v)),
+    SINH:v=>Math.sinh(toNum(v)), COSH:v=>Math.cosh(toNum(v)), TANH:v=>Math.tanh(toNum(v)),
+    RADIANS:v=>toNum(v)*Math.PI/180,
+    DEGREES:v=>toNum(v)*180/Math.PI,
+    FACT:v=>factorial(v),
+    GCD:(...a)=>flattenValues(a).reduce((r,v)=>gcd2(r,v),0),
+    LCM:(...a)=>flattenValues(a).reduce((r,v)=>lcm2(r,v),1),
+    COMBIN:(n,k)=>combin(n,k),
+    TRUNC:(v,d=0)=>{const p=10**Math.trunc(toNum(d));return Math.trunc(toNum(v)*p)/p},
+    CEILING:(v,s=1)=>{const step=Math.abs(toNum(s))||1;return Math.ceil(toNum(v)/step)*step},
+    FLOOR:(v,s=1)=>{const step=Math.abs(toNum(s))||1;return Math.floor(toNum(v)/step)*step},
+    SIGN:v=>Math.sign(toNum(v)),
+    CBRT:v=>Math.cbrt(toNum(v)),
+    LOG2:v=>Math.log2(toNum(v)),
+    HYPOT:(...a)=>Math.hypot(...flattenValues(a).map(toNum)),
+    SUMSQ:(...a)=>flattenValues(a).map(toNum).reduce((s,v)=>s+v*v,0),
+    MEDIAN:(...a)=>{const n=flattenValues(a).map(toNum).sort((x,y)=>x-y);const m=Math.floor(n.length/2);return n.length?(n.length%2?n[m]:(n[m-1]+n[m])/2):0},
+    GEOMEAN:(...a)=>{const n=flattenValues(a).map(toNum);return n.length?Math.pow(n.reduce((p,v)=>p*v,1),1/n.length):0},
+    STDEV:(...a)=>{const n=flattenValues(a).map(toNum);if(n.length<2)return 0;const m=n.reduce((s,v)=>s+v,0)/n.length;return Math.sqrt(n.reduce((s,v)=>s+(v-m)**2,0)/(n.length-1))},
+    VARIANCE:(...a)=>{const n=flattenValues(a).map(toNum);if(n.length<2)return 0;const m=n.reduce((s,v)=>s+v,0)/n.length;return n.reduce((s,v)=>s+(v-m)**2,0)/(n.length-1)},
+    PERMUT:(n,k)=>factorial(Math.trunc(toNum(n)))/factorial(Math.trunc(toNum(n))-Math.trunc(toNum(k))),
+
+    IF:(cond,a,b)=>cond?a:b,
+    IFERROR:(v,alt)=>v==='#ERRO!'?alt:v,
+    AND:(...a)=>flattenValues(a).every(Boolean),
+    OR:(...a)=>flattenValues(a).some(Boolean),
+    NOT:v=>!v,
+    TRUE:()=>true,
+    FALSE:()=>false,
+
+    LEFT:(t,n=1)=>String(t??'').slice(0,Math.max(0,Math.trunc(toNum(n)))),
+    RIGHT:(t,n=1)=>String(t??'').slice(-Math.max(0,Math.trunc(toNum(n)))),
+    MID:(t,start,n)=>String(t??'').substr(Math.max(0,Math.trunc(toNum(start))-1),Math.max(0,Math.trunc(toNum(n)))),
+    LEN:t=>String(t??'').length,
+    UPPER:t=>String(t??'').toUpperCase(),
+    LOWER:t=>String(t??'').toLowerCase(),
+    TRIM:t=>String(t??'').trim().replace(/\s+/g,' '),
+    CONCAT:(...a)=>flattenValues(a).map(v=>String(v??'')).join(''),
+    CONCATENATE:(...a)=>flattenValues(a).map(v=>String(v??'')).join(''),
+    SUBSTITUTE:(t,oldv,newv)=>String(t??'').split(String(oldv??'')).join(String(newv??'')),
+    REPT:(t,n)=>String(t??'').repeat(Math.max(0,Math.trunc(toNum(n)))),
+    TEXT:(v,p)=>excelText(v,p),
+    PROPER:t=>String(t??'').toLocaleLowerCase('pt-BR').replace(/(^|[\s\-])([\p{L}])/gu,(m,a,b)=>a+b.toLocaleUpperCase('pt-BR')),
+    EXACT:(a,b)=>String(a??'')===String(b??''),
+    FIND:(needle,text,start=1)=>{const i=String(text??'').indexOf(String(needle??''),Math.max(0,toNum(start)-1));return i<0?'#ERRO!':i+1},
+    SEARCH:(needle,text,start=1)=>{const i=String(text??'').toLocaleLowerCase('pt-BR').indexOf(String(needle??'').toLocaleLowerCase('pt-BR'),Math.max(0,toNum(start)-1));return i<0?'#ERRO!':i+1},
+    REPLACE:(text,start,count,newText)=>String(text??'').slice(0,Math.max(0,toNum(start)-1))+String(newText??'')+String(text??'').slice(Math.max(0,toNum(start)-1)+Math.max(0,toNum(count))),
+    CLEAN:t=>String(t??'').replace(/[\x00-\x1F\x7F]/g,''),
+    CHAR:n=>String.fromCharCode(Math.max(0,Math.trunc(toNum(n)))),
+    CODE:t=>String(t??'').charCodeAt(0)||0,
+    TEXTJOIN:(delimiter,ignoreEmpty,...a)=>flattenValues(a).filter(v=>!ignoreEmpty||String(v??'')!=='').map(v=>String(v??'')).join(String(delimiter??'')),
+    TEXTBEFORE:(text,delimiter)=>{const s=String(text??''),d=String(delimiter??''),i=s.indexOf(d);return i<0?s:s.slice(0,i)},
+    TEXTAFTER:(text,delimiter)=>{const s=String(text??''),d=String(delimiter??''),i=s.indexOf(d);return i<0?'':s.slice(i+d.length)},
+
+    VALUE:v=>{
+      if(typeof v==='number') return v;
+      const n=parseNumber(String(v??'').trim());
+      return n===null ? '#ERRO!' : n;
+    },
+
+    CHOOSE:(index,...items)=>{
+      const i=Math.trunc(toNum(index));
+      if(i<1 || i>items.length) return '#ERRO!';
+      return items[i-1];
+    },
+
+    // Funções nativas do desenvolvedor. Permanecem disponíveis em qualquer
+    // pasta de trabalho e não dependem das funções personalizadas do arquivo.
+    ENTROPIA:x=>toNum(x)*3.14**2*360/45**3,
+    EXPANSAO:x=>toNum(x)*45**3/360/3.14**2,
+    ATOMO:x=>(toNum(x)*45**3/360/3.14**2)/10-1,
+    PROTONS:x=>((toNum(x)+1)*10)*3.14**2*360/45**3
+    ,
+
+    // Física: entradas e saídas em unidades coerentes do SI.
+    VELOCITY:(distance,time)=>toNum(distance)/toNum(time),
+    ACCELERATION:(finalV,initialV,time)=>(toNum(finalV)-toNum(initialV))/toNum(time),
+    FORCE:(mass,acceleration)=>toNum(mass)*toNum(acceleration),
+    KINETIC_ENERGY:(mass,velocity)=>.5*toNum(mass)*toNum(velocity)**2,
+    POTENTIAL_ENERGY:(mass,height,gravity=9.80665)=>toNum(mass)*toNum(gravity)*toNum(height),
+    MOMENTUM:(mass,velocity)=>toNum(mass)*toNum(velocity),
+    PRESSURE:(force,area)=>toNum(force)/toNum(area),
+    DENSITY:(mass,volume)=>toNum(mass)/toNum(volume),
+    WORK:(force,distance,angleDegrees=0)=>toNum(force)*toNum(distance)*Math.cos(toNum(angleDegrees)*Math.PI/180),
+    PHYS_POWER:(work,time)=>toNum(work)/toNum(time),
+    FREQUENCY:period=>1/toNum(period),
+    PERIOD:frequency=>1/toNum(frequency),
+    WAVE_SPEED:(frequency,wavelength)=>toNum(frequency)*toNum(wavelength),
+    WAVELENGTH:(speed,frequency)=>toNum(speed)/toNum(frequency),
+    OHM_V:(current,resistance)=>toNum(current)*toNum(resistance),
+    OHM_I:(voltage,resistance)=>toNum(voltage)/toNum(resistance),
+    OHM_R:(voltage,current)=>toNum(voltage)/toNum(current),
+    ELECTRIC_CHARGE:(current,time)=>toNum(current)*toNum(time),
+    ELECTRIC_ENERGY:(power,time)=>toNum(power)*toNum(time),
+    KELVIN:celsius=>toNum(celsius)+273.15,
+    CELSIUS:kelvin=>toNum(kelvin)-273.15
+  };
+
+  const FORMULA_ALIASES={
+    SOMA:'SUM', MÉDIA:'AVERAGE', MEDIA:'AVERAGE',
+    MÍNIMO:'MIN', MINIMO:'MIN', MÁXIMO:'MAX', MAXIMO:'MAX',
+    'CONT.NÚM':'COUNT','CONT.NUM':'COUNT','CONT.VALORES':'COUNTA',
+    POTÊNCIA:'POWER',POTENCIA:'POWER',RAIZ:'SQRT',ARRED:'ROUND',
+    'ARREDONDAR.PARA.CIMA':'ROUNDUP','ARREDONDAR.PARA.BAIXO':'ROUNDDOWN',
+    QUOCIENTE:'QUOTIENT',SEN:'SIN',RADIANOS:'RADIANS',GRAUS:'DEGREES',
+    FATORIAL:'FACT',MDC:'GCD',MMC:'LCM',COMBINAÇÃO:'COMBIN',COMBINACAO:'COMBIN',
+    SE:'IF',SEERRO:'IFERROR',E:'AND',OU:'OR',NÃO:'NOT',NAO:'NOT',
+    VERDADEIRO:'TRUE',FALSO:'FALSE',
+    ESQUERDA:'LEFT',DIREITA:'RIGHT','EXT.TEXTO':'MID',
+    'NÚM.CARACT':'LEN','NUM.CARACT':'LEN',
+    MAIÚSCULA:'UPPER',MAIUSCULA:'UPPER',MINÚSCULA:'LOWER',MINUSCULA:'LOWER',
+    ARRUMAR:'TRIM',CONCATENAR:'CONCATENATE',SUBSTITUIR:'SUBSTITUTE',
+    REPETIR:'REPT',TEXTO:'TEXT',VALOR:'VALUE',ESCOLHER:'CHOOSE'
+    ,TRUNCAR:'TRUNC',TETO:'CEILING',PISO:'FLOOR',SINAL:'SIGN',RAIZCUBICA:'CBRT',HIPOT:'HYPOT',SOMARQUAD:'SUMSQ',MEDIANA:'MEDIAN',MEDIA_GEOMETRICA:'GEOMEAN',DESVPAD:'STDEV',VARIANCIA:'VARIANCE',PERMUTACAO:'PERMUT',
+    'PRI.MAIUSCULA':'PROPER',EXATO:'EXACT',LOCALIZAR:'FIND',PROCURAR:'SEARCH',SUBSTITUIR_POS:'REPLACE',LIMPAR_TEXTO:'CLEAN',CARACT:'CHAR',CODIGO:'CODE',UNIRTEXTO:'TEXTJOIN',TEXTOANTES:'TEXTBEFORE',TEXTODEPOIS:'TEXTAFTER',
+    VELOCIDADE:'VELOCITY',ACELERACAO:'ACCELERATION',ACELERAÇÃO:'ACCELERATION',FORCA:'FORCE',FORÇA:'FORCE',ENERGIA_CINETICA:'KINETIC_ENERGY',ENERGIA_POTENCIAL:'POTENTIAL_ENERGY',MOMENTO:'MOMENTUM',PRESSAO:'PRESSURE',PRESSÃO:'PRESSURE',DENSIDADE:'DENSITY',TRABALHO:'WORK',POTENCIA_FISICA:'PHYS_POWER',POTÊNCIA_FÍSICA:'PHYS_POWER',FREQUENCIA:'FREQUENCY',FREQUÊNCIA:'FREQUENCY',PERIODO:'PERIOD',PERÍODO:'PERIOD',VELOCIDADE_ONDA:'WAVE_SPEED',COMPRIMENTO_ONDA:'WAVELENGTH',CARGA_ELETRICA:'ELECTRIC_CHARGE',ENERGIA_ELETRICA:'ELECTRIC_ENERGY'
+  };
+
+  function normalizeCustomFunctionName(name){
+    return String(name||'').trim();
+  }
+
+  function customFunctionKey(name){
+    return String(name||'').trim().toLocaleUpperCase('pt-BR');
+  }
+
+  function compileCustomFunctions(){
+    const runtime={};
+
+    for(const def of state.customFunctionDefs){
+      const name=normalizeCustomFunctionName(def.name);
+      const key=customFunctionKey(name);
+      if(!key)continue;
+
+      try{
+        const params=String(def.params||'')
+          .split(',')
+          .map(x=>x.trim())
+          .filter(Boolean);
+
+        runtime[key]=Function(
+          ...params,
+          '"use strict";\n'+String(def.code||'')
+        );
+      }catch{}
+    }
+
+    state.customFunctionRuntime=runtime;
+  }
+
+  function getFormulaFunction(name){
+    const canonical=formulaName(name);
+    if(typeof FORMULAS[canonical]==='function') return FORMULAS[canonical];
+    return state.customFunctionRuntime[customFunctionKey(name)]||null;
+  }
+
+  function refreshCustomFnSelect(preferredName=''){
+    const sel=$('#customFnSelect');
+    if(!sel)return;
+
+    const preferred=customFunctionKey(preferredName||sel.value||'');
+    const count=state.customFunctionDefs.length;
+
+    sel.innerHTML='';
+    const first=document.createElement('option');
+    first.value='';
+    first.textContent=`Funções personalizadas (${count})`;
+    sel.appendChild(first);
+
+    for(const def of state.customFunctionDefs){
+      const name=normalizeCustomFunctionName(def.name);
+      const op=document.createElement('option');
+      op.value=customFunctionKey(name);
+      op.textContent=name;
+      sel.appendChild(op);
+    }
+
+    if(preferred && [...sel.options].some(o=>o.value===preferred)){
+      sel.value=preferred;
+    }
+  }
+
+
+  function customFnOpen(mode){
+    const modal=$('#customFnModal');
+    const name=$('#customFnName');
+    const params=$('#customFnParams');
+    const code=$('#customFnCode');
+    const title=$('#customFnTitle');
+
+    if(!modal||!name||!params||!code)return;
+
+    state.editingCustomFunction=null;
+
+    if(mode==='edit'){
+      const selected=$('#customFnSelect')?.value||'';
+      const idx=state.customFunctionDefs.findIndex(x=>customFunctionKey(x.name)===customFunctionKey(selected));
+      if(idx<0){status.textContent='Selecione uma função';return}
+      const def=state.customFunctionDefs[idx];
+      state.editingCustomFunction=idx;
+      title.textContent='Editar função personalizada';
+      name.value=def.name||'';
+      params.value=def.params||'';
+      code.value=def.code||'';
+    }else{
+      title.textContent='Nova função personalizada';
+      name.value='';
+      params.value='';
+      code.value='return ';
+    }
+
+    modal.classList.add('show');
+    name.focus();
+  }
+
+  function customFnClose(){
+    $('#customFnModal')?.classList.remove('show');
+    state.editingCustomFunction=null;
+  }
+
+  function customFnSave(){
+    const rawName=$('#customFnName')?.value||'';
+    const rawParams=$('#customFnParams')?.value||'';
+    const code=$('#customFnCode')?.value||'';
+    const name=normalizeCustomFunctionName(rawName);
+
+    if(!/^[A-ZÀ-Ý_][A-ZÀ-Ý0-9_.]*$/i.test(name)){
+      status.textContent='Nome de função inválido';
+      return;
+    }
+
+    if(typeof FORMULAS[formulaName(name)]==='function'){
+      status.textContent='Esse nome já é uma função padrão';
+      return;
+    }
+
+    const params=rawParams.split(',').map(x=>x.trim()).filter(Boolean);
+    if(params.some(p=>!/^[A-Za-z_][A-Za-z0-9_]*$/.test(p))){
+      status.textContent='Parâmetros inválidos';
+      return;
+    }
+
+    try{
+      Function(...params,'"use strict";\n'+code);
+    }catch(err){
+      status.textContent='Erro no código da função';
+      return;
+    }
+
+    const duplicate=state.customFunctionDefs.findIndex((x,i)=>
+      customFunctionKey(x.name)===customFunctionKey(name) && i!==state.editingCustomFunction
+    );
+    if(duplicate>=0){
+      status.textContent='Já existe uma função com esse nome';
+      return;
+    }
+
+    const def={name,params:params.join(','),code:String(code)};
+
+    if(state.editingCustomFunction===null){
+      state.customFunctionDefs.push(def);
+    }else{
+      state.customFunctionDefs[state.editingCustomFunction]=def;
+    }
+
+    compileCustomFunctions();
+    refreshCustomFnSelect(name);
+    refreshAll();
+    status.textContent=`✓ ${name} salva • ${state.customFunctionDefs.length} funções`;
+    customFnClose();
+  }
+
+  function customFnDelete(){
+    const selected=$('#customFnSelect')?.value||'';
+    const idx=state.customFunctionDefs.findIndex(x=>customFunctionKey(x.name)===customFunctionKey(selected));
+    if(idx<0){status.textContent='Selecione uma função';return}
+
+    const name=normalizeCustomFunctionName(state.customFunctionDefs[idx].name);
+    state.customFunctionDefs.splice(idx,1);
+    compileCustomFunctions();
+    refreshCustomFnSelect();
+    refreshAll();
+    status.textContent=`Função ${name} excluída • ${state.customFunctionDefs.length} personalizadas`;
+  }
+
+  function formulaName(name){
+    const n=String(name||'').toLocaleUpperCase('pt-BR');
+    return FORMULA_ALIASES[n]||n;
+  }
+
+  function tokenizeFormula(src){
+    const t=[];
+    let i=0;
+    const dec=state.locale==='pt-BR'?',':'.';
+
+    while(i<src.length){
+      const ch=src[i];
+      if(/\s/.test(ch)){i++;continue}
+
+      if(ch==='"'){
+        let s=''; i++;
+        while(i<src.length){
+          if(src[i]==='"'){
+            if(src[i+1]==='"'){s+='"';i+=2;continue}
+            i++;break;
+          }
+          s+=src[i++];
+        }
+        t.push({type:'string',value:s});continue;
+      }
+
+      if(/[0-9]/.test(ch) || (ch===dec && /[0-9]/.test(src[i+1]||''))){
+        let s='';
+        let hadDec=false;
+        while(i<src.length){
+          const c=src[i];
+          if(/[0-9]/.test(c)){s+=c;i++;continue}
+          if(c===dec && !hadDec && /[0-9]/.test(src[i+1]||'')){s+='.';hadDec=true;i++;continue}
+          break;
+        }
+        t.push({type:'number',value:Number(s)});continue;
+      }
+
+      const rest=src.slice(i);
+      const cell=rest.match(/^\$?[A-Za-z]+\$?\d+/);
+      if(cell){
+        t.push({type:'cell',value:cell[0]});
+        i+=cell[0].length;continue;
+      }
+
+      const id=rest.match(/^[A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_.]*/);
+      if(id){
+        t.push({type:'id',value:id[0]});
+        i+=id[0].length;continue;
+      }
+
+      const two=src.slice(i,i+2);
+      if(['<=','>=','<>'].includes(two)){
+        t.push({type:'op',value:two});i+=2;continue;
+      }
+
+      if('+-*/^%=<>() :;,'.includes(ch)){
+        const type='()+-*/^%=<>:;,'.includes(ch)?'op':'op';
+        t.push({type,value:ch});i++;continue;
+      }
+
+      throw new Error('token');
+    }
+    t.push({type:'eof',value:''});
+    return t;
+  }
+
+  function evalArithmetic(raw,seen=new Set()){
+    try{
+      const tokens=tokenizeFormula(String(raw||'').slice(1));
+      let pos=0;
+      const peek=()=>tokens[pos];
+      const take=v=>{
+        const x=peek();
+        if(v!==undefined && x.value!==v) throw new Error('esperado '+v);
+        pos++;return x;
+      };
+
+      const cellValue=ref=>{
+        const p=parseAddr(ref);
+        if(!p)return 0;
+        const k=key(p.row,p.col);
+        if(seen.has(k))return 0;
+        return valueOf(p.row,p.col,new Set([...seen,k]));
+      };
+
+      const rangeValue=(a,b)=>{
+        const p1=parseAddr(a),p2=parseAddr(b);
+        if(!p1||!p2)return [];
+        const rows=[];
+        for(let r=Math.min(p1.row,p2.row);r<=Math.max(p1.row,p2.row);r++){
+          const row=[];
+          for(let c=Math.min(p1.col,p2.col);c<=Math.max(p1.col,p2.col);c++){
+            const k=key(r,c);
+            row.push(seen.has(k)?0:valueOf(r,c,new Set([...seen,k])));
+          }
+          rows.push(row);
+        }
+        return rows;
+      };
+
+      function primary(){
+        const x=peek();
+        if(x.type==='number'){take();return x.value}
+        if(x.type==='string'){take();return x.value}
+        if(x.type==='cell'){
+          const a=take().value;
+          if(peek().value===':'){
+            take(':');
+            const b=take().value;
+            return rangeValue(a,b);
+          }
+          return cellValue(a);
+        }
+        if(x.type==='id'){
+          const name=formulaName(take().value);
+          if(peek().value==='('){
+            take('(');
+            const args=[];
+            if(peek().value!==')'){
+              while(true){
+                args.push(comparison());
+                if(peek().value===';' || peek().value===','){take();continue}
+                break;
+              }
+            }
+            take(')');
+            const fn=getFormulaFunction(name);
+            if(typeof fn!=='function')throw new Error('função');
+            return fn(...args);
+          }
+          if(name==='TRUE')return true;
+          if(name==='FALSE')return false;
+          throw new Error('id');
+        }
+        if(x.value==='('){
+          take('(');const v=comparison();take(')');return v;
+        }
+        throw new Error('primary');
+      }
+
+      function postfix(){
+        let v=primary();
+        while(peek().value==='%'){take('%');v=toNum(v)/100}
+        return v;
+      }
+
+      function unary(){
+        if(peek().value==='+'){take('+');return +toNum(unary())}
+        if(peek().value==='-'){take('-');return -toNum(unary())}
+        return postfix();
+      }
+
+      function power(){
+        let v=unary();
+        if(peek().value==='^'){take('^');v=Math.pow(toNum(v),toNum(power()))}
+        return v;
+      }
+
+      function mul(){
+        let v=power();
+        while(['*','/'].includes(peek().value)){
+          const op=take().value,r=power();
+          v=op==='*'?toNum(v)*toNum(r):toNum(v)/toNum(r);
+        }
+        return v;
+      }
+
+      function add(){
+        let v=mul();
+        while(['+','-'].includes(peek().value)){
+          const op=take().value,r=mul();
+          if(op==='+'){
+            if(typeof v==='string'||typeof r==='string')v=String(v)+String(r);
+            else v=toNum(v)+toNum(r);
+          }else v=toNum(v)-toNum(r);
+        }
+        return v;
+      }
+
+      function comparison(){
+        let v=add();
+        while(['=','<>','<','>','<=','>='].includes(peek().value)){
+          const op=take().value,r=add();
+          if(op==='=')v=v==r;
+          else if(op==='<>')v=v!=r;
+          else if(op==='<')v=toNum(v)<toNum(r);
+          else if(op==='>')v=toNum(v)>toNum(r);
+          else if(op==='<=')v=toNum(v)<=toNum(r);
+          else if(op==='>=')v=toNum(v)>=toNum(r);
+        }
+        return v;
+      }
+
+      const out=comparison();
+      if(peek().type!=='eof')throw new Error('extra');
+      if(typeof out==='number' && !Number.isFinite(out))return '#ERRO!';
+      return out;
+    }catch{
+      return '#ERRO!';
+    }
+  }
+
+
+  function valueOf(r,c,seen=new Set()){
+    const raw=String(data(r,c).raw??'');
+    if(raw==='')return '';
+    if(raw.startsWith('='))return evalArithmetic(raw,seen);
+    const n=parseNumber(raw);
+    return n===null?raw:n;
+  }
+
+  function fmtNumber(n,s){
+    const f=s.numberFormat||'general';
+    const decimals=Number.isInteger(s.decimals)?s.decimals:null;
+    const loc=state.locale==='pt-BR'?'pt-BR':'en-US';
+
+    if(f==='scientific'){
+      const out=n.toExponential(decimals??2).replace('e','E');
+      return state.locale==='pt-BR'?out.replace('.',','):out;
+    }
+    if(f==='thousands'){
+      return new Intl.NumberFormat(loc,{
+        useGrouping:true,
+        minimumFractionDigits:decimals??2,
+        maximumFractionDigits:decimals??2
+      }).format(n);
+    }
+    if(f==='number'){
+      return new Intl.NumberFormat(loc,{
+        useGrouping:false,
+        minimumFractionDigits:decimals??2,
+        maximumFractionDigits:decimals??2
+      }).format(n);
+    }
+    if(decimals!==null){
+      return new Intl.NumberFormat(loc,{
+        useGrouping:false,
+        minimumFractionDigits:decimals,
+        maximumFractionDigits:decimals
+      }).format(n);
+    }
+    return String(n).replace('.',decimalSep());
+  }
+
+  function display(r,c){
+    const raw=String(data(r,c).raw??'');
+    if(raw.startsWith('=')){
+      const v=valueOf(r,c,new Set([key(r,c)]));
+      // Enquanto a fórmula está incompleta, mostre a própria fórmula.
+      if(v==='#ERRO!')return raw;
+      return typeof v==='number'?fmtNumber(v,style(r,c)):String(v??'');
+    }
+    const v=valueOf(r,c);
+    return typeof v==='number'?fmtNumber(v,style(r,c)):String(v??'');
+  }
+
+  function applyStyle(td,s){
+    td.style.fontWeight=s.bold?'700':'';
+    td.style.fontStyle=s.italic?'italic':'';
+    td.style.textDecoration=s.underline?'underline':'';
+    td.style.textAlign=s.align||'';
+    td.style.fontFamily=s.fontFamily||'';
+    td.style.fontSize=s.fontSize?s.fontSize+'px':'';
+    td.style.color=s.color||'';
+    td.style.backgroundColor=s.fill||'';
+
+    if(s.bt) td.style.setProperty('border-top',s.bt,'important');
+    else td.style.removeProperty('border-top');
+
+    if(s.bb) td.style.setProperty('border-bottom',s.bb,'important');
+    else td.style.removeProperty('border-bottom');
+
+    if(s.bl) td.style.setProperty('border-left',s.bl,'important');
+    else td.style.removeProperty('border-left');
+
+    if(s.br) td.style.setProperty('border-right',s.br,'important');
+    else td.style.removeProperty('border-right');
+  }
+
+
+  function refreshCell(r,c){
+    const td=tdAt(r,c);
+    if(!td)return;
+    td.textContent=display(r,c);
+    applyStyle(td,style(r,c));
+  }
+
+  function refreshAll(){
+    for(const [k,td] of cellCache){
+      const [r,c]=k.split(':').map(Number);
+      td.textContent=display(r,c);
+      applyStyle(td,style(r,c));
+    }
+    applyViewState();
+    refreshSelection();
+    markOfflineDirty();
+  }
+
+
+  function loadFx(){
+    const {row,col}=state.selected;
+    const raw=String(data(row,col).raw??'');
+    formula.value=raw;
+    state.caret=raw.length;
+    namebox.value=addr(row,col);
+    state.editing=false;
+  }
+
+
+  function selectCell(r,c){
+    // Selecting a cell on tablet must never summon the virtual keyboard.
+    if(document.activeElement===formula){
+      try{formula.blur()}catch{}
+    }
+
+    state.formulaPointerFocus=false;
+    state.selected={row:r,col:c};
+    state.anchor={row:r,col:c};
+    state.range=null;
+    state.formulaPicking=false;
+    state.editing=false;
+
+    refreshSelection();
+    loadFx();
+  }
+
+
+
+
+  function refreshSelection(){
+    for(const item of state.paintedSelection){
+      const td=tdAt(item.row,item.col);
+      if(td) td.classList.remove('selected','range');
+    }
+    state.paintedSelection=[];
+
+    if(state.range){
+      state.lastRange={...state.range};
+
+      const r1=Math.max(state.range.r1,state.virtualStartRow);
+      const r2=Math.min(state.range.r2,state.virtualEndRow);
+
+      for(let r=r1;r<=r2;r++){
+        for(let c=state.range.c1;c<=state.range.c2;c++){
+          const td=tdAt(r,c);
+          if(td){
+            td.classList.add('range');
+            state.paintedSelection.push({row:r,col:c});
+          }
+        }
+      }
+    }
+
+    const active=tdAt(state.selected.row,state.selected.col);
+    if(active){
+      active.classList.add('selected');
+      if(!state.paintedSelection.some(x=>x.row===state.selected.row&&x.col===state.selected.col)){
+        state.paintedSelection.push({row:state.selected.row,col:state.selected.col});
+      }
+    }
+
+    positionHandle();
+  }
+
+
+  function refreshFormulaCells(){
+    for(const [k,d] of Object.entries(state.cells)){
+      if(!d || typeof d.raw!=='string' || !d.raw.startsWith('=')) continue;
+      const parts=k.split(':');
+      const r=Number(parts[0]), c=Number(parts[1]);
+      refreshCell(r,c);
+    }
+  }
+
+
+  function refreshLiveChange(row,col){
+    refreshCell(row,col);
+
+    // Recalculate every stored formula after any input change.
+    // This keeps dependent formulas live without redrawing all 4,800 cells.
+    for(const [k,d] of Object.entries(state.cells)){
+      if(!d || typeof d.raw!=='string' || !d.raw.startsWith('=')) continue;
+      const [r,c]=k.split(':').map(Number);
+      if(r===row && c===col) continue;
+      refreshCell(r,c);
+    }
+
+    sheet.classList.toggle('no-grid',!state.grid);
+    markOfflineDirty();
+  }
+
+
+  function writeSelectedRaw(raw){
+    const {row,col}=state.selected;
+    const value=String(raw??'');
+
+    data(row,col).raw=value;
+    formula.value=value;
+
+    refreshLiveChange(row,col);
+    namebox.value=addr(row,col);
+    status.textContent='Editando';
+  }
+
+
+  function insertAtCaret(str){
+    // Starting an edit NEVER erases the current cell.
+    // Existing content is loaded and the caret starts at the end.
+    if(!state.editing){
+      state.editing=true;
+
+      const current=String(data(state.selected.row,state.selected.col).raw??'');
+      formula.value=current;
+
+      if(document.activeElement===formula){
+        state.caret=formula.selectionStart??current.length;
+      }else{
+        state.caret=current.length;
+      }
+    }
+
+    const v=String(formula.value??'');
+    const p=Math.max(0,Math.min(v.length,state.caret));
+    const next=v.slice(0,p)+String(str)+v.slice(p);
+
+    formula.value=next;
+    state.caret=p+String(str).length;
+
+    writeSelectedRaw(next);
+    state.caret=p+String(str).length;
+  }
+
+
+  function rowHeightAt(r){ return state.rowHeights[r]||DEFAULT_ROW; }
+
+  function rowFromScrollTop(y){
+    y=Math.max(0,y-28);
+    let r=Math.floor(y/DEFAULT_ROW)+1;
+    return Math.max(1,Math.min(ROWS,r));
+  }
+
+  function renderVirtualRows(force=false){
+    if(!sheet.tBodies.length) return;
+    const first=rowFromScrollTop(wrap.scrollTop);
+    const visible=Math.ceil(Math.max(400,wrap.clientHeight||600)/DEFAULT_ROW);
+    // Render in blocks instead of rebuilding the table after every row.
+    const chunk=Math.max(12,state.virtualBuffer);
+    const blockStart=Math.floor((first-1)/chunk)*chunk+1;
+    const start=Math.max(1,blockStart-state.virtualBuffer);
+    const end=Math.min(ROWS,blockStart+visible+state.virtualBuffer*2);
+    if(!force && start===state.virtualStartRow && end===state.virtualEndRow) return;
+
+    state.virtualStartRow=start;
+    state.virtualEndRow=end;
+    const tb=sheet.tBodies[0];
+    tb.innerHTML='';
+    cellCache.clear();
+
+    if(start>1){
+      const tr=document.createElement('tr');
+      tr.className='virtual-spacer';
+      const td=document.createElement('td');
+      td.colSpan=COLS+1;
+      td.style.height=((start-1)*DEFAULT_ROW)+'px';
+      td.style.padding='0';
+      td.style.border='0';
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    }
+
+    for(let r=start;r<=end;r++){
+      const tr=document.createElement('tr');
+      tr.dataset.row=r;
+      tr.style.height=rowHeightAt(r)+'px';
+
+      const rh=document.createElement('th');
+      rh.className='rowhead';
+      rh.textContent=r;
+      const rz=document.createElement('span');
+      rz.className='row-resizer';
+      rz.addEventListener('pointerdown',e=>resizeRow(e,r));
+      rh.appendChild(rz);
+      tr.appendChild(rh);
+
+      for(let c=1;c<=COLS;c++){
+        const td=document.createElement('td');
+        td.dataset.row=r; td.dataset.col=c;
+        td.addEventListener('pointerdown',cellDown);
+        cellCache.set(key(r,c),td);
+        td.textContent=display(r,c);
+        applyStyle(td,style(r,c));
+        tr.appendChild(td);
+      }
+      tb.appendChild(tr);
+    }
+
+    if(end<ROWS){
+      const tr=document.createElement('tr');
+      tr.className='virtual-spacer';
+      const td=document.createElement('td');
+      td.colSpan=COLS+1;
+      td.style.height=((ROWS-end)*DEFAULT_ROW)+'px';
+      td.style.padding='0';
+      td.style.border='0';
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    }
+
+    applyViewState();
+    refreshSelection();
+  }
+
+  function createSheetModel(name){
+    return {
+      name:String(name),
+      cells:{},
+      styles:{},
+      colWidths:{},
+      rowHeights:{},
+      scrollLeft:0,
+      scrollTop:0,
+      selected:{row:1,col:1}
+    };
+  }
+
+  function currentSheetModel(){
+    return state.sheets[state.activeSheetIndex]||null;
+  }
+
+  function syncCurrentSheetModel(){
+    const sh=currentSheetModel();
+    if(!sh)return;
+    sh.cells=state.cells;
+    sh.styles=state.styles;
+    sh.colWidths=state.colWidths;
+    sh.rowHeights=state.rowHeights;
+    sh.scrollLeft=wrap.scrollLeft||0;
+    sh.scrollTop=wrap.scrollTop||0;
+    sh.selected={...state.selected};
+  }
+
+  function renderSheetTabs(){
+    if(!sheetTabs)return;
+    sheetTabs.innerHTML='';
+
+    state.sheets.forEach((sh,index)=>{
+      const b=document.createElement('button');
+      b.className='sheet-tab'+(index===state.activeSheetIndex?' active':'');
+      b.textContent=sh.name;
+      b.title=sh.name;
+      b.dataset.sheetIndex=index;
+      b.addEventListener('pointerdown',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        if(index!==state.activeSheetIndex) loadSheetModel(index);
+      });
+      sheetTabs.appendChild(b);
+    });
+
+    const plus=document.createElement('button');
+    plus.className='sheet-add';
+    plus.textContent='+';
+    plus.title='Nova planilha';
+    plus.setAttribute('aria-label','Nova planilha');
+    plus.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      addSheet();
+    });
+    sheetTabs.appendChild(plus);
+
+    const active=sheetTabs.querySelector('.sheet-tab.active');
+    if(active) active.scrollIntoView({block:'nearest',inline:'nearest'});
+  }
+
+  function uniqueSheetName(){
+    let name;
+    do{
+      name='Planilha'+state.nextSheetNumber++;
+    }while(state.sheets.some(s=>s.name===name));
+    return name;
+  }
+
+  function loadSheetModel(index){
+    if(index<0 || index>=state.sheets.length)return;
+
+    syncCurrentSheetModel();
+    state.activeSheetIndex=index;
+
+    const sh=state.sheets[index];
+    state.cells=sh.cells||{};
+    state.styles=sh.styles||{};
+    state.colWidths=sh.colWidths||{};
+    state.rowHeights=sh.rowHeights||{};
+
+    state.selected=sh.selected?{...sh.selected}:{row:1,col:1};
+    state.anchor={...state.selected};
+    state.range=null;
+    state.formulaPicking=false;
+    state.formulaPointerFocus=false;
+    state.editing=false;
+    state.paintedSelection=[];
+    state.virtualStartRow=1;
+    state.virtualEndRow=1;
+
+    build();
+
+    requestAnimationFrame(()=>{
+      wrap.scrollLeft=Number(sh.scrollLeft)||0;
+      wrap.scrollTop=Number(sh.scrollTop)||0;
+      renderVirtualRows(true);
+      refreshSelection();
+      loadFx();
+    });
+
+    renderSheetTabs();
+    status.textContent=sh.name;
+  }
+
+  function addSheet(){
+    syncCurrentSheetModel();
+    const sh=createSheetModel(uniqueSheetName());
+    state.sheets.push(sh);
+    markOfflineDirty();
+    loadSheetModel(state.sheets.length-1);
+  }
+
+  function build(){
+    sheet.innerHTML='';
+    cellCache.clear();
+
+    const cg=document.createElement('colgroup');
+    const rc=document.createElement('col');
+    rc.style.width='54px';
+    cg.appendChild(rc);
+
+    for(let c=1;c<=COLS;c++){
+      const col=document.createElement('col');
+      col.dataset.col=c;
+      const cw=state.colWidths[c]||DEFAULT_COL;
+      col.style.width=cw+'px';
+      col.style.minWidth=cw+'px';
+      col.style.maxWidth=cw+'px';
+      cg.appendChild(col);
+    }
+    sheet.appendChild(cg);
+
+    const thead=document.createElement('thead');
+    const hr=document.createElement('tr');
+    const corner=document.createElement('th');
+    corner.className='rowhead corner';
+    hr.appendChild(corner);
+
+    for(let c=1;c<=COLS;c++){
+      const th=document.createElement('th');
+      th.dataset.col=c;
+      th.textContent=colName(c);
+      const rz=document.createElement('span');
+      rz.className='col-resizer';
+      rz.addEventListener('pointerdown',e=>resizeCol(e,c));
+      th.appendChild(rz);
+      hr.appendChild(th);
+    }
+    thead.appendChild(hr);
+    sheet.appendChild(thead);
+
+    sheet.appendChild(document.createElement('tbody'));
+    updateSheetWidth();
+    state.virtualStartRow=1;
+    state.virtualEndRow=1;
+    renderVirtualRows(true);
+    state.selected=state.selected||{row:1,col:1};
+    state.anchor={...state.selected};
+    state.range=null;
+    loadFx();
+    refreshSelection();
+  }
+
+
+  function cellFromPoint(x,y){
+    const stack=document.elementsFromPoint ? document.elementsFromPoint(x,y) : [document.elementFromPoint(x,y)];
+    for(const el of stack){
+      const td=el && el.closest ? el.closest('td[data-row][data-col]') : null;
+      if(td && sheet.contains(td)) return td;
+    }
+    return null;
+  }
+
+  function cellDown(e){
+    if(e.pointerType==='mouse' && e.button!==0) return;
+
+    const td=e.currentTarget;
+    const r=+td.dataset.row;
+    const c=+td.dataset.col;
+
+    // No celular, um dedo serve para navegar pela planilha. Um toque curto
+    // ainda seleciona a célula, mas um arrasto fica totalmente com o scroll
+    // nativo do navegador e não vira seleção/atalho por acidente.
+    if(e.pointerType==='touch'){
+      const sx=e.clientX, sy=e.clientY;
+      let moved=false;
+
+      const move=ev=>{
+        if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>=8) moved=true;
+      };
+      const finish=()=>{
+        td.removeEventListener('pointermove',move);
+        td.removeEventListener('pointerup',finish);
+        td.removeEventListener('pointercancel',cancel);
+        if(moved) return;
+
+        if(state.formulaPicking && formula.value.startsWith('=')){
+          insertAtCaret(addr(r,c));
+          return;
+        }
+
+        if(document.activeElement===formula){
+          try{formula.blur()}catch{}
+        }
+        state.formulaPointerFocus=false;
+        state.selected={row:r,col:c};
+        state.anchor={row:r,col:c};
+        state.range=null;
+        state.clearStart={row:r,col:c};
+        state.clearEnd={row:r,col:c};
+        refreshSelection();
+        loadFx();
+      };
+      const cancel=()=>{
+        moved=true;
+        td.removeEventListener('pointermove',move);
+        td.removeEventListener('pointerup',finish);
+        td.removeEventListener('pointercancel',cancel);
+      };
+
+      td.addEventListener('pointermove',move,{passive:true});
+      td.addEventListener('pointerup',finish,{once:true});
+      td.addEventListener('pointercancel',cancel,{once:true});
+      return;
+    }
+
+    if(state.formulaPicking && formula.value.startsWith('=')){
+      e.preventDefault();
+      e.stopPropagation();
+      insertAtCaret(addr(r,c));
+      return;
+    }
+
+    e.preventDefault();
+
+    if(document.activeElement===formula){
+      try{formula.blur()}catch{}
+    }
+    state.formulaPointerFocus=false;
+
+    const start={row:r,col:c};
+    state.selected={...start};
+    state.anchor={...start};
+    state.range=null;
+    state.clearStart={...start};
+    state.clearEnd={...start};
+
+    refreshSelection();
+    loadFx();
+
+    const sx=e.clientX, sy=e.clientY;
+    let dragging=false;
+    const id=e.pointerId;
+
+    try{td.setPointerCapture(id)}catch{}
+
+    const findCell=(x,y)=>{
+      let hit=cellFromPoint(x,y);
+      if(hit) return hit;
+
+      for(const cand of sheet.querySelectorAll('td[data-row][data-col]')){
+        const b=cand.getBoundingClientRect();
+        if(x>=b.left && x<=b.right && y>=b.top && y<=b.bottom) return cand;
+      }
+      return null;
+    };
+
+    const updateRange=(rr,cc)=>{
+      const end={row:rr,col:cc};
+
+      state.clearStart={...start};
+      state.clearEnd={...end};
+      state.anchor={...start};
+      state.selected={...end};
+      state.range={
+        r1:Math.min(start.row,end.row),
+        r2:Math.max(start.row,end.row),
+        c1:Math.min(start.col,end.col),
+        c2:Math.max(start.col,end.col)
+      };
+
+      refreshSelection();
+      namebox.value=`${addr(state.range.r1,state.range.c1)}:${addr(state.range.r2,state.range.c2)}`;
+    };
+
+    const move=ev=>{
+      if(!dragging && Math.hypot(ev.clientX-sx,ev.clientY-sy)>=7){
+        dragging=true;
+      }
+      if(!dragging) return;
+
+      ev.preventDefault();
+
+      const hit=findCell(ev.clientX,ev.clientY);
+      if(!hit) return;
+
+      updateRange(+hit.dataset.row,+hit.dataset.col);
+    };
+
+    const finish=()=>{
+      td.removeEventListener('pointermove',move);
+      td.removeEventListener('pointerup',finish);
+      td.removeEventListener('pointercancel',finish);
+      try{td.releasePointerCapture(id)}catch{}
+
+      if(dragging){
+        const end=state.clearEnd||start;
+        updateRange(end.row,end.col);
+      }else{
+        state.clearStart={...start};
+        state.clearEnd={...start};
+        state.selected={...start};
+        state.anchor={...start};
+        state.range=null;
+        refreshSelection();
+        loadFx();
+      }
+    };
+
+    td.addEventListener('pointermove',move,{passive:false});
+    td.addEventListener('pointerup',finish,{once:true});
+    td.addEventListener('pointercancel',finish,{once:true});
+  }
+
+
+  formula.addEventListener('pointerdown',()=>{
+    state.formulaPointerFocus=true;
+  });
+
+  formula.addEventListener('focus',()=>{
+    if(!state.formulaPointerFocus){
+      try{formula.blur()}catch{}
+      return;
+    }
+    state.editing=true;
+    state.caret=formula.selectionStart??formula.value.length;
+  });
+
+  formula.addEventListener('blur',()=>{
+    state.formulaPointerFocus=false;
+    state.editing=false;
+  });
+
+  formula.addEventListener('input',()=>{
+    state.editing=true;
+    state.caret=formula.selectionStart??formula.value.length;
+    writeSelectedRaw(formula.value);
+    state.formulaPicking=formula.value.startsWith('=');
+  });
+
+  formula.addEventListener('click',()=>{
+    state.caret=formula.selectionStart??formula.value.length;
+  });
+
+  formula.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){
+      e.preventDefault();
+      e.stopPropagation();
+
+      const row=state.selected.row;
+      const col=state.selected.col;
+      const raw=String(formula.value??'');
+
+      data(row,col).raw=raw;
+      refreshLiveChange(row,col);
+
+      state.formulaPicking=false;
+      state.formulaPointerFocus=false;
+      state.editing=false;
+
+      const nextRow=Math.min(ROWS,row+1);
+      state.selected={row:nextRow,col};
+      state.anchor={row:nextRow,col};
+      state.range=null;
+
+      refreshSelection();
+      loadFx();
+
+      try{formula.blur()}catch{}
+      status.textContent='Pronto';
+    }
+  });
+
+  $('#mathbar').addEventListener('click',e=>{
+    const b=e.target.closest('button');
+    if(!b)return;
+
+    e.stopPropagation();
+
+    // Math buttons edit without opening the tablet keyboard.
+    if(document.activeElement===formula){
+      try{formula.blur()}catch{}
+    }
+    state.formulaPointerFocus=false;
+
+    if(b.dataset.key!==undefined){
+      insertAtCaret(b.dataset.key);
+      if(formula.value.startsWith('='))state.formulaPicking=true;
+      return;
+    }
+
+    if(b.dataset.act==='back'){
+      if(!state.editing){
+        state.editing=true;
+        formula.value=String(data(state.selected.row,state.selected.col).raw??'');
+        state.caret=formula.value.length;
+      }
+
+      const v=String(formula.value??'');
+      const p=Math.max(0,Math.min(v.length,state.caret));
+
+      if(p>0){
+        const next=v.slice(0,p-1)+v.slice(p);
+        formula.value=next;
+        state.caret=p-1;
+        writeSelectedRaw(next);
+        state.caret=p-1;
+        state.formulaPicking=next.startsWith('=');
+      }
+    }else if(b.dataset.act==='clear'){
+      // C clears the whole current selection, just like the ribbon Limpar button.
+      state.formulaPicking=false;
+      state.editing=false;
+      state.caret=0;
+      clearSelectionSequentially();
+    }else if(b.dataset.act==='commit'){
+      const row=state.selected.row;
+      const col=state.selected.col;
+      data(row,col).raw=String(formula.value??'');
+      refreshLiveChange(row,col);
+
+      state.formulaPicking=false;
+      state.editing=false;
+
+      const nextRow=Math.min(ROWS,row+1);
+      state.selected={row:nextRow,col};
+      state.anchor={row:nextRow,col};
+      state.range=null;
+      refreshSelection();
+      loadFx();
+      status.textContent='Pronto';
+    }
+  });
+
+  // Column width changes only here: manual drag/reset.
+  // Typing, formulas and formatting never resize columns.
+  function updateSheetWidth(){
+    let total=54;
+    for(let c=1;c<=COLS;c++) total += state.colWidths[c] || DEFAULT_COL;
+    sheet.style.width=total+'px';
+    sheet.style.minWidth=total+'px';
+    sheet.style.maxWidth=total+'px';
+  }
+
+  function setColWidth(c,w){
+    w=Math.max(36,Math.min(600,Math.round(w)));
+    state.colWidths[c]=w;
+
+    const col=sheet.querySelector(`col[data-col="${c}"]`);
+    if(col){
+      col.style.width=w+'px';
+      col.style.minWidth=w+'px';
+      col.style.maxWidth=w+'px';
+    }
+
+    updateSheetWidth();
+    positionHandle();
+    markOfflineDirty();
+  }
+
+  function autoFitSelectedColumns(){
+    const rg=state.range||{
+      r1:state.selected.row,r2:state.selected.row,
+      c1:state.selected.col,c2:state.selected.col
+    };
+    const c1=Math.max(1,Math.min(rg.c1,rg.c2));
+    const c2=Math.min(COLS,Math.max(rg.c1,rg.c2));
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d');
+    const rowsByColumn=new Map();
+
+    // One pass through stored cells, even when many columns are selected.
+    for(const k of Object.keys(state.cells)){
+      const split=k.split(':');
+      const r=Number(split[0]);
+      const c=Number(split[1]);
+      if(c<c1||c>c2)continue;
+      if(!rowsByColumn.has(c))rowsByColumn.set(c,[]);
+      rowsByColumn.get(c).push(r);
+    }
+
+    for(let c=c1;c<=c2;c++){
+      let widest=ctx ? ctx.measureText(colName(c)).width+20 : 36;
+
+      for(const r of rowsByColumn.get(c)||[]){
+        const text=String(display(r,c)??'');
+        if(!text)continue;
+        const s=style(r,c);
+        const fontSize=Math.max(8,Number(s.fontSize)||13);
+        const family=s.fontFamily||'Segoe UI, Arial, sans-serif';
+        if(ctx){
+          ctx.font=`${s.italic?'italic ':''}${s.bold?'700 ':'400 '}${fontSize}px ${family}`;
+          widest=Math.max(widest,ctx.measureText(text).width+14);
+        }else{
+          widest=Math.max(widest,text.length*fontSize*.62+14);
+        }
+      }
+
+      setColWidth(c,widest);
+    }
+
+    status.textContent=c1===c2
+      ? `Coluna ${colName(c1)} autoajustada`
+      : `Colunas ${colName(c1)}:${colName(c2)} autoajustadas`;
+  }
+
+
+  function resizeCol(e,c){
+    e.preventDefault();
+    e.stopPropagation();
+
+    const h=e.currentTarget,id=e.pointerId,start=e.clientX,w0=state.colWidths[c]||DEFAULT_COL;
+
+    try{h.setPointerCapture(id)}catch{}
+
+    const mv=ev=>{
+      ev.preventDefault();
+      setColWidth(c,w0+ev.clientX-start);
+      status.textContent=`Coluna ${colName(c)}: ${state.colWidths[c]} px`;
+    };
+
+    const up=()=>{
+      h.removeEventListener('pointermove',mv);
+      try{h.releasePointerCapture(id)}catch{}
+    };
+
+    h.addEventListener('pointermove',mv,{passive:false});
+    h.addEventListener('pointerup',up,{once:true});
+    h.addEventListener('pointercancel',up,{once:true});
+  }
+
+  function resizeRow(e,r){
+    e.preventDefault();
+    e.stopPropagation();
+
+    const h=e.currentTarget,id=e.pointerId,start=e.clientY,h0=state.rowHeights[r]||DEFAULT_ROW;
+
+    try{h.setPointerCapture(id)}catch{}
+
+    const mv=ev=>{
+      ev.preventDefault();
+      const nh=Math.max(20,Math.min(180,Math.round(h0+ev.clientY-start)));
+      state.rowHeights[r]=nh;
+      markOfflineDirty();
+      const tr=sheet.querySelector(`tbody tr[data-row="${r}"]`);
+      if(tr)tr.style.height=nh+'px';
+      positionHandle();
+    };
+
+    const up=()=>{
+      h.removeEventListener('pointermove',mv);
+      try{h.releasePointerCapture(id)}catch{}
+    };
+
+    h.addEventListener('pointermove',mv,{passive:false});
+    h.addEventListener('pointerup',up,{once:true});
+    h.addEventListener('pointercancel',up,{once:true});
+  }
+
+  function resetCol(c){
+    delete state.colWidths[c];
+    const col=sheet.querySelector(`col[data-col="${c}"]`);
+    if(col){
+      col.style.width=DEFAULT_COL+'px';
+      col.style.minWidth=DEFAULT_COL+'px';
+      col.style.maxWidth=DEFAULT_COL+'px';
+    }
+    updateSheetWidth();
+    positionHandle();
+    markOfflineDirty();
+  }
+
+
+  function resetRow(r){
+    delete state.rowHeights[r];
+    const tr=sheet.querySelector(`tbody tr[data-row="${r}"]`);
+    if(tr)tr.style.height=DEFAULT_ROW+'px';
+    positionHandle();
+    markOfflineDirty();
+  }
+
+  function resetAllCols(){
+    state.colWidths={};
+    for(let c=1;c<=COLS;c++){
+      const col=sheet.querySelector(`col[data-col="${c}"]`);
+      if(col){
+        col.style.width=DEFAULT_COL+'px';
+        col.style.minWidth=DEFAULT_COL+'px';
+        col.style.maxWidth=DEFAULT_COL+'px';
+      }
+    }
+    updateSheetWidth();
+    positionHandle();
+    markOfflineDirty();
+  }
+
+
+  function resetAllRows(){
+    state.rowHeights={};
+    sheet.querySelectorAll('tbody tr[data-row]').forEach(tr=>tr.style.height=DEFAULT_ROW+'px');
+    positionHandle();
+    markOfflineDirty();
+  }
+
+  function eachSel(fn){
+    const rg=state.range||{
+      r1:state.selected.row,r2:state.selected.row,
+      c1:state.selected.col,c2:state.selected.col
+    };
+    for(let r=rg.r1;r<=rg.r2;r++){
+      for(let c=rg.c1;c<=rg.c2;c++)fn(r,c);
+    }
+  }
+
+  function border(kind){
+    const rg=state.range||{
+      r1:state.selected.row,r2:state.selected.row,
+      c1:state.selected.col,c2:state.selected.col
+    };
+    const line='1px solid #ddd';
+
+    // Reset only when requested.
+    if(kind==='none'){
+      for(let r=rg.r1;r<=rg.r2;r++){
+        for(let c=rg.c1;c<=rg.c2;c++){
+          const s=style(r,c);
+          s.bt=''; s.bb=''; s.bl=''; s.br='';
+        }
+      }
+      refreshAll();
+      return;
+    }
+
+    for(let r=rg.r1;r<=rg.r2;r++){
+      for(let c=rg.c1;c<=rg.c2;c++){
+        const s=style(r,c);
+
+        if(kind==='all'){
+          s.bt=line; s.bb=line; s.bl=line; s.br=line;
+          continue;
+        }
+
+        if(kind==='top' && r===rg.r1) s.bt=line;
+        if(kind==='bottom' && r===rg.r2) s.bb=line;
+        if(kind==='left' && c===rg.c1) s.bl=line;
+        if(kind==='right' && c===rg.c2) s.br=line;
+
+        if(kind==='outer'){
+          if(r===rg.r1) s.bt=line;
+          if(r===rg.r2) s.bb=line;
+          if(c===rg.c1) s.bl=line;
+          if(c===rg.c2) s.br=line;
+        }
+      }
+    }
+
+    refreshAll();
+  }
+
+
+  function clone(x){return JSON.parse(JSON.stringify(x))}
+
+  function copySel(){
+    const rg=state.range||{
+      r1:state.selected.row,r2:state.selected.row,
+      c1:state.selected.col,c2:state.selected.col
+    };
+
+    state.clipboard=[];
+    state.clipboardSource={...rg};
+
+    for(let r=rg.r1;r<=rg.r2;r++){
+      const row=[];
+      for(let c=rg.c1;c<=rg.c2;c++){
+        row.push({
+          raw:String(data(r,c).raw??''),
+          value:String(display(r,c)??''),
+          style:clone(style(r,c))
+        });
+      }
+      state.clipboard.push(row);
+    }
+
+    status.textContent='Copiado';
+  }
+
+
+  function shiftFormulaReferences(formulaText, rowOffset, colOffset){
+    return String(formulaText||'').replace(
+      /(\$?)([A-Za-z]+)(\$?)(\d+)/g,
+      (m,absCol,colLetters,absRow,rowDigits)=>{
+        let col=colIndex(colLetters);
+        let row=Number(rowDigits);
+
+        if(absCol!=='$') col += colOffset;
+        if(absRow!=='$') row += rowOffset;
+
+        if(col<1 || row<1 || col>COLS || row>ROWS) return '#REF!';
+
+        return (absCol==='$'?'$':'') + colName(col) + (absRow==='$'?'$':'') + row;
+      }
+    );
+  }
+
+  function paste(mode){
+    if(!state.clipboard)return;
+
+    const sr=state.selected.row;
+    const sc=state.selected.col;
+    const sourceStartRow=state.clipboardSource?.r1 || sr;
+    const sourceStartCol=state.clipboardSource?.c1 || sc;
+
+    state.clipboard.forEach((row,ri)=>row.forEach((it,ci)=>{
+      const r=sr+ri;
+      const c=sc+ci;
+      if(r>ROWS||c>COLS)return;
+
+      const sourceRow=sourceStartRow+ri;
+      const sourceCol=sourceStartCol+ci;
+      const rowOffset=r-sourceRow;
+      const colOffset=c-sourceCol;
+      const raw=String(it.raw??'');
+
+      if(mode==='all'){
+        state.cells[key(r,c)]={
+          raw:raw.startsWith('=')
+            ? shiftFormulaReferences(raw,rowOffset,colOffset)
+            : raw
+        };
+        state.styles[key(r,c)]=clone(it.style||{});
+      }
+
+      else if(mode==='text'){
+        state.cells[key(r,c)]={raw:String(it.value??'')};
+      }
+
+      else if(mode==='formula'){
+        if(raw.startsWith('=')){
+          state.cells[key(r,c)]={raw:shiftFormulaReferences(raw,rowOffset,colOffset)};
+        }
+      }
+
+      else if(mode==='format'){
+        state.styles[key(r,c)]=clone(it.style||{});
+      }
+    }));
+
+    refreshAll();
+    loadFx();
+    status.textContent='Colado';
+  }
+
+
+  function positionHandle(){
+    const td=tdAt(state.selected.row,state.selected.col);
+    if(!td){
+      handle.style.display='none';
+      return;
+    }
+
+    const a=td.getBoundingClientRect();
+    const w=wrap.getBoundingClientRect();
+
+    handle.style.display='block';
+    handle.style.left=(a.right-w.left+wrap.scrollLeft-15)+'px';
+    handle.style.top=(a.bottom-w.top+wrap.scrollTop-15)+'px';
+  }
+
+  handle.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    e.stopPropagation();
+
+    const start=state.range
+      ? {row:state.range.r1,col:state.range.c1}
+      : {...state.anchor};
+
+    const pointerId=e.pointerId;
+    try{handle.setPointerCapture(pointerId)}catch{}
+
+    const move=ev=>{
+      ev.preventDefault();
+      const hit=cellFromPoint(ev.clientX,ev.clientY);
+      if(!hit) return;
+
+      const rr=+hit.dataset.row;
+      const cc=+hit.dataset.col;
+
+      state.selected={row:rr,col:cc};
+      state.range={
+        r1:Math.min(start.row,rr),
+        r2:Math.max(start.row,rr),
+        c1:Math.min(start.col,cc),
+        c2:Math.max(start.col,cc)
+      };
+      refreshSelection();
+
+      const raw=String(data(start.row,start.col).raw??'');
+      formula.value=raw;
+      namebox.value=`${addr(state.range.r1,state.range.c1)}:${addr(state.range.r2,state.range.c2)}`;
+    };
+
+    const end=()=>{
+      handle.removeEventListener('pointermove',move);
+      handle.removeEventListener('pointerup',end);
+      handle.removeEventListener('pointercancel',end);
+      try{handle.releasePointerCapture(pointerId)}catch{}
+    };
+
+    handle.addEventListener('pointermove',move,{passive:false});
+    handle.addEventListener('pointerup',end,{once:true});
+    handle.addEventListener('pointercancel',end,{once:true});
+  });
+
+  let virtualScrollRAF=0;
+  wrap.addEventListener('scroll',()=>{
+    if(virtualScrollRAF)return;
+    virtualScrollRAF=requestAnimationFrame(()=>{
+      virtualScrollRAF=0;
+      renderVirtualRows(false);
+      positionHandle();
+    });
+  },{passive:true});
+
+  const ribbons={
+    inicio:`<div class="group"><div class="row"><button data-a="copy">Copiar</button><div class="menu-wrap"><button data-menu="paste">Colar ▾</button><div class="popup" id="paste"><button data-paste="all">Tudo</button><button data-paste="text">Texto/Valores</button><button data-paste="formula">Fórmulas</button><button data-paste="format">Formatação</button></div></div><button data-a="clear">Limpar</button></div><div class="group-title">Área de Transferência</div></div>
+    <div class="group"><div class="row"><select id="fontFamily"><option>Segoe UI</option><option>Arial</option><option>Calibri</option><option>Consolas</option></select><input id="fontSize" type="number" value="13" min="8" max="72"></div><div class="row"><button data-a="bold"><b>N</b></button><button data-a="italic"><i>I</i></button><button data-a="underline"><u>S</u></button><input id="fontColor" class="color" type="color" value="#f2f2f2"><input id="fillColor" class="color" type="color" value="#252525"></div><div class="group-title">Fonte</div></div>
+    <div class="group"><div class="row"><div class="menu-wrap"><button data-menu="border">Bordas ▾</button><div class="popup" id="border"><button data-border="top">Superior</button><button data-border="bottom">Inferior</button><button data-border="left">Esquerda</button><button data-border="right">Direita</button><button data-border="outer">Externas</button><button data-border="all">Todas</button><button data-border="none">Sem borda</button></div></div></div><div class="group-title">Bordas</div></div>
+    <div class="group"><div class="row"><select id="numberFormat"><option value="general">Geral</option><option value="number">Número</option><option value="thousands">Milhares</option><option value="scientific">Científico</option></select><button data-a="decDown">← ,0</button><button data-a="decUp">,00 →</button></div><div class="group-title">Número</div></div>
+    <div class="group"><div class="row"><button data-a="left">Esquerda</button><button data-a="center">Centro</button><button data-a="right">Direita</button></div><div class="group-title">Alinhamento</div></div>
+    <div class="group"><div class="row"><button data-a="autoFitCol">Autoajustar coluna</button><button data-a="resetCol">Resetar coluna</button><button data-a="resetRow">Resetar linha</button><button data-a="resetAllCols">Resetar colunas</button><button data-a="resetAllRows">Resetar linhas</button></div><div class="group-title">Tamanho</div></div>`,
+
+    arquivo:`<div class="group"><div class="row"><button data-a="new">Novo</button><button data-a="save">Salvar</button><button data-a="open">Abrir</button><button data-a="full">Maximizar</button></div><div class="group-title">Arquivo</div></div><div class="group"><div class="row"><select id="lang"><option value="pt-BR">Português (Brasil)</option><option value="en">English</option></select></div><div class="group-title">Idioma</div></div><div class="group"><div class="row"><button data-a="print">PDF / Imprimir</button></div><div class="group-title">Exportar</div></div>`,
+
+    layout:`<div class="group"><div class="row"><select id="pageSize"><option>A4</option><option>A3</option><option>Carta</option><option>Ofício</option></select><select id="orientation"><option value="portrait">Retrato</option><option value="landscape">Paisagem</option></select></div><div class="group-title">Página</div></div><div class="group"><div class="row"><button data-a="pageMode">Mostrar Página</button><button data-a="print">PDF / Imprimir</button></div><div class="group-title">Impressão</div></div>`,
+
+    exibir:`<div class="group"><div class="row"><button data-a="grid" id="viewGrid">Linhas de Grade</button><button data-a="headings" id="viewHeadings">Cabeçalhos</button><button data-a="formulaBar" id="viewFormulaBar">Barra de Fórmulas</button><button data-a="pageMode">Modo Página</button></div><div class="group-title">Mostrar</div></div>`,
+
+    personalizar:`<div class="group"><div class="row"><button data-a="zoomOut">−</button><button id="zoomBtn" data-a="zoomReset">100%</button><button data-a="zoomIn">+</button></div><div class="group-title">Zoom</div></div>`,
+
+    macros:`<div class="group"><div class="row"><select id="macroSelect"><option value="">Macros</option></select><button data-a="macroNew">Nova macro</button><button data-a="macroEdit">Editar</button><button data-a="macroDelete">Excluir</button><button data-a="macroRun">Executar</button><button data-a="macroHelp">Ajuda Macros e Funções</button></div><div class="group-title">Macros JavaScript</div></div>
+    <div class="group"><div class="row"><select id="customFnSelect"><option value="">Funções personalizadas</option></select><button data-a="customFnNew">Nova função</button><button data-a="customFnEdit">Editar</button><button data-a="customFnDelete">Excluir</button></div><div class="group-title">Funções Personalizadas</div></div>`
+  };
+
+  function escHtml(s){
+    return String(s).replace(/[&<>"']/g,ch=>({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[ch]);
+  }
+
+  function formulaExample(name){
+    const examples={
+      SUM:'=SOMA(A1:A10)', PRODUCT:'=PRODUCT(A1:A3)', AVERAGE:'=MÉDIA(A1:A10)',
+      MIN:'=MIN(A1:A10)', MAX:'=MAX(A1:A10)', COUNT:'=COUNT(A1:A10)', COUNTA:'=CONT.VALORES(A1:A10)',
+      ABS:'=ABS(-5)', INT:'=INT(4,9)', ROUND:'=ARRED(3,14159;2)',
+      ROUNDUP:'=ARREDONDAR.PARA.CIMA(3,14159;2)', ROUNDDOWN:'=ARREDONDAR.PARA.BAIXO(3,14159;2)',
+      MOD:'=MOD(10;3)', QUOTIENT:'=QUOCIENTE(10;3)', POWER:'=POTÊNCIA(2;3)',
+      SQRT:'=RAIZ(9)', EXP:'=EXP(1)', LN:'=LN(10)', LOG:'=LOG(100;10)', LOG10:'=LOG10(1000)',
+      PI:'=PI()', SIN:'=SEN(PI()/2)', COS:'=COS(0)', TAN:'=TAN(PI()/4)',
+      ASIN:'=ASIN(1)', ACOS:'=ACOS(1)', ATAN:'=ATAN(1)', SINH:'=SINH(1)', COSH:'=COSH(1)',
+      TANH:'=TANH(1)', RADIANS:'=RADIANOS(180)', DEGREES:'=GRAUS(PI())',
+      FACT:'=FATORIAL(5)', GCD:'=MDC(12;18)', LCM:'=MMC(4;6)', COMBIN:'=COMBINAÇÃO(5;2)',
+      TRUNC:'=TRUNCAR(3,14159;2)', CEILING:'=TETO(4,2;1)', FLOOR:'=PISO(4,8;1)', SIGN:'=SINAL(-8)',
+      CBRT:'=RAIZCUBICA(27)', LOG2:'=LOG2(8)', HYPOT:'=HIPOT(3;4)', SUMSQ:'=SOMARQUAD(A1:A5)',
+      MEDIAN:'=MEDIANA(A1:A10)', GEOMEAN:'=MEDIA_GEOMETRICA(A1:A10)', STDEV:'=DESVPAD(A1:A10)',
+      VARIANCE:'=VARIANCIA(A1:A10)', PERMUT:'=PERMUTACAO(5;2)',
+      IF:'=SE(A1>0;"SIM";"NÃO")', IFERROR:'=SEERRO(A1/B1;0)', AND:'=E(A1>0;B1>0)',
+      OR:'=OU(A1>0;B1>0)', NOT:'=NÃO(A1>0)', TRUE:'=VERDADEIRO()', FALSE:'=FALSO()',
+      LEFT:'=ESQUERDA("ABCDE";2)', RIGHT:'=DIREITA("ABCDE";2)', MID:'=EXT.TEXTO("ABCDE";2;3)',
+      LEN:'=NÚM.CARACT("ABCDE")', UPPER:'=MAIÚSCULA("abc")', LOWER:'=MINÚSCULA("ABC")',
+      TRIM:'=ARRUMAR("  A   B  ")', CONCAT:'=CONCAT("A";"B";"C")', CONCATENATE:'=CONCATENAR("A";"B")',
+      SUBSTITUTE:'=SUBSTITUIR("ABC";"B";"X")', REPT:'=REPETIR("A";3)', TEXT:'=TEXTO(3,14159;"0,00")',
+      VALUE:'=VALOR("3,14")', CHOOSE:'=ESCOLHER(2;"A";"B";"C")',
+      PROPER:'=PRI.MAIUSCULA("campo magnético")', EXACT:'=EXATO("Átomo";"átomo")',
+      FIND:'=LOCALIZAR("onda";A1)', SEARCH:'=PROCURAR("ONDA";A1)',
+      REPLACE:'=SUBSTITUIR_POS(A1;1;3;"novo")', CLEAN:'=LIMPAR_TEXTO(A1)',
+      CHAR:'=CARACT(65)', CODE:'=CODIGO("A")', TEXTJOIN:'=UNIRTEXTO("; ";VERDADEIRO();A1:A5)',
+      TEXTBEFORE:'=TEXTOANTES(A1;":")', TEXTAFTER:'=TEXTODEPOIS(A1;":")',
+      VELOCITY:'=VELOCIDADE(distância;tempo)', ACCELERATION:'=ACELERACAO(vFinal;vInicial;tempo)',
+      FORCE:'=FORCA(massa;aceleração)', KINETIC_ENERGY:'=ENERGIA_CINETICA(massa;velocidade)',
+      POTENTIAL_ENERGY:'=ENERGIA_POTENCIAL(massa;altura;gravidade)', MOMENTUM:'=MOMENTO(massa;velocidade)',
+      PRESSURE:'=PRESSAO(força;área)', DENSITY:'=DENSIDADE(massa;volume)',
+      WORK:'=TRABALHO(força;distância;ângulo)', PHYS_POWER:'=POTENCIA_FISICA(trabalho;tempo)',
+      FREQUENCY:'=FREQUENCIA(período)', PERIOD:'=PERIODO(frequência)',
+      WAVE_SPEED:'=VELOCIDADE_ONDA(frequência;comprimento)', WAVELENGTH:'=COMPRIMENTO_ONDA(velocidade;frequência)',
+      OHM_V:'=OHM_V(corrente;resistência)', OHM_I:'=OHM_I(tensão;resistência)', OHM_R:'=OHM_R(tensão;corrente)',
+      ELECTRIC_CHARGE:'=CARGA_ELETRICA(corrente;tempo)', ELECTRIC_ENERGY:'=ENERGIA_ELETRICA(potência;tempo)',
+      KELVIN:'=KELVIN(celsius)', CELSIUS:'=CELSIUS(kelvin)',
+      ENTROPIA:'=ENTROPIA(A1)', EXPANSAO:'=EXPANSAO(A1)',
+      ATOMO:'=ATOMO(A1)', PROTONS:'=PROTONS(A1)'
+    };
+    return examples[name]||('='+name+'(...)');
+  }
+
+  function renderFormulaHelp(){
+    const aliasesByCanonical={};
+    for(const [alias,canonical] of Object.entries(FORMULA_ALIASES||{})){
+      (aliasesByCanonical[canonical]||(aliasesByCanonical[canonical]=[])).push(alias);
+    }
+
+    const mathNames=[
+      'SUM','PRODUCT','AVERAGE','MIN','MAX','COUNT','COUNTA','ABS','INT','ROUND','ROUNDUP','ROUNDDOWN',
+      'MOD','QUOTIENT','POWER','SQRT','EXP','LN','LOG','LOG10','PI','SIN','COS','TAN','ASIN','ACOS','ATAN',
+      'SINH','COSH','TANH','RADIANS','DEGREES','FACT','GCD','LCM','COMBIN','TRUNC','CEILING','FLOOR',
+      'SIGN','CBRT','LOG2','HYPOT','SUMSQ','PERMUT'
+    ];
+    const statisticsNames=['MEDIAN','GEOMEAN','STDEV','VARIANCE'];
+    const logicNames=['IF','IFERROR','AND','OR','NOT','TRUE','FALSE'];
+    const textNames=['LEFT','RIGHT','MID','LEN','UPPER','LOWER','TRIM','CONCAT','CONCATENATE','SUBSTITUTE','REPT','TEXT','VALUE','CHOOSE','PROPER','EXACT','FIND','SEARCH','REPLACE','CLEAN','CHAR','CODE','TEXTJOIN','TEXTBEFORE','TEXTAFTER'];
+    const physicsNames=['VELOCITY','ACCELERATION','FORCE','KINETIC_ENERGY','POTENTIAL_ENERGY','MOMENTUM','PRESSURE','DENSITY','WORK','PHYS_POWER','FREQUENCY','PERIOD','WAVE_SPEED','WAVELENGTH','OHM_V','OHM_I','OHM_R','ELECTRIC_CHARGE','ELECTRIC_ENERGY','KELVIN','CELSIUS'];
+    const developerFunctions=[
+      ['ENTROPIA','x × 3,14² × 360 ÷ 45³'],
+      ['EXPANSAO','x × 45³ ÷ 360 ÷ 3,14²'],
+      ['ATOMO','(EXPANSAO(x) ÷ 10) − 1'],
+      ['PROTONS','((x + 1) × 10) × 3,14² × 360 ÷ 45³']
+    ];
+
+    const makeGroup=(title,names)=>{
+      const chips=names.filter(n=>typeof FORMULAS[n]==='function').map(n=>{
+        const aliases=(aliasesByCanonical[n]||[]).join(' / ');
+        const titleText=[n,aliases,formulaExample(n)].filter(Boolean).join(' — ');
+        return `<span class="formula-chip" title="${escHtml(titleText)}">${escHtml(n)}${aliases?` / ${escHtml(aliases)}`:''}</span>`;
+      }).join('');
+      return `<div class="formula-help-group"><div class="formula-help-title">${escHtml(title)}</div><div class="formula-help-list">${chips}</div></div>`;
+    };
+
+    ribbon.innerHTML=`<div class="formula-help">
+      ${makeGroup('Matemática avançada',mathNames)}
+      ${makeGroup('Estatística científica',statisticsNames)}
+      ${makeGroup('Física — unidades SI',physicsNames)}
+      ${makeGroup('Lógicas',logicNames)}
+      ${makeGroup('Texto científico',textNames)}
+      <div class="formula-help-group developer-help">
+        <div class="formula-help-title">Funções do desenvolvedor</div>
+        <div class="formula-help-list">
+          ${developerFunctions.map(([n,calculation])=>`<span class="formula-chip" title="${escHtml(formulaExample(n))}">${escHtml(n)}(x) = ${escHtml(calculation)}</span>`).join('')}
+        </div>
+      </div>
+      ${state.customFunctionDefs.length ? `<div class="formula-help-group"><div class="formula-help-title">Personalizadas</div><div class="formula-help-list">${state.customFunctionDefs.map(d=>`<span class="formula-chip">${escHtml(normalizeCustomFunctionName(d.name))}(${escHtml(d.params||'')})</span>`).join('')}</div></div>` : ''}
+    </div>`;
+  }
+
+  function renderRibbon(){
+    if(state.tab==='formulaHelp'){
+      renderFormulaHelp();
+      return;
+    }
+    ribbon.innerHTML=ribbons[state.tab]||ribbons.inicio;
+    bindRibbon();
+    applyViewState();
+    if(state.tab==='macros'){
+      refreshCustomFnSelect();
+      refreshMacroSelect();
+    }
+  }
+
+  function popup(button,id){
+    const menu=$('#'+id);
+    if(!menu)return;
+
+    const alreadyOpen=menu.classList.contains('show');
+    document.querySelectorAll('.popup.show').forEach(x=>x.classList.remove('show'));
+    if(alreadyOpen)return;
+
+    menu.classList.add('show');
+    const b=button.getBoundingClientRect();
+    const m=menu.getBoundingClientRect();
+    const gap=4;
+    const left=Math.max(gap,Math.min(b.left,window.innerWidth-m.width-gap));
+    let top=b.bottom+gap;
+    if(top+m.height>window.innerHeight-gap){
+      top=Math.max(gap,b.top-m.height-gap);
+    }
+    menu.style.left=left+'px';
+    menu.style.top=top+'px';
+  }
+
+
+  function bindRibbon(){
+    ribbon.querySelectorAll('[data-a]').forEach(b=>{
+      b.onclick=()=>act(b.dataset.a);
+
+      if(b.dataset.a==='clear'){
+        b.onclick=null;
+        b.onpointerdown=e=>{
+          e.preventDefault();
+          e.stopPropagation();
+          clearSelectionSequentially();
+        };
+      }
+    });
+    ribbon.querySelectorAll('[data-menu]').forEach(b=>b.onclick=e=>{
+      e.stopPropagation();
+      popup(b,b.dataset.menu);
+    });
+    ribbon.querySelectorAll('[data-paste]').forEach(b=>b.onclick=()=>{
+      paste(b.dataset.paste);
+      document.querySelectorAll('.popup.show').forEach(x=>x.classList.remove('show'));
+    });
+    ribbon.querySelectorAll('[data-border]').forEach(b=>b.onclick=()=>{
+      border(b.dataset.border);
+      document.querySelectorAll('.popup.show').forEach(x=>x.classList.remove('show'));
+    });
+
+    const ff=$('#fontFamily');
+    if(ff)ff.onchange=()=>{
+      eachSel((r,c)=>style(r,c).fontFamily=ff.value);
+      refreshAll();
+    };
+
+    const fs=$('#fontSize');
+    if(fs)fs.onchange=()=>{
+      eachSel((r,c)=>style(r,c).fontSize=Math.max(8,Math.min(72,+fs.value||13)));
+      refreshAll();
+    };
+
+    const fc=$('#fontColor');
+    if(fc)fc.oninput=()=>{
+      eachSel((r,c)=>style(r,c).color=fc.value);
+      refreshAll();
+    };
+
+    const fill=$('#fillColor');
+    if(fill)fill.oninput=()=>{
+      eachSel((r,c)=>style(r,c).fill=fill.value);
+      refreshAll();
+    };
+
+    const nf=$('#numberFormat');
+    if(nf)nf.onchange=()=>{
+      eachSel((r,c)=>style(r,c).numberFormat=nf.value);
+      refreshAll();
+    };
+
+    const lang=$('#lang');
+    if(lang){
+      lang.value=state.locale;
+      lang.onchange=()=>{
+        state.locale=lang.value;
+        $('#decimalKey').textContent=decimalSep();
+        $('#decimalKey').dataset.key=decimalSep();
+        refreshAll();
+        loadFx();
+      };
+    }
+
+    const ps=$('#pageSize');
+    if(ps){
+      ps.value=state.pageSize;
+      ps.onchange=()=>{
+        state.pageSize=ps.value;
+        markOfflineDirty();
+        updatePage();
+      };
+    }
+
+    const or=$('#orientation');
+    if(or){
+      or.value=state.orientation;
+      or.onchange=()=>{
+        state.orientation=or.value;
+        markOfflineDirty();
+        updatePage();
+      };
+    }
+
+    const zb=$('#zoomBtn');
+    if(zb)zb.textContent=Math.round(state.zoom*100)+'%';
+  }
+
+  $('#tabs').onclick=e=>{
+    const b=e.target.closest('[data-tab]');
+    if(!b)return;
+
+    state.tab=b.dataset.tab;
+
+    document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+    renderRibbon();
+  };
+
+  document.addEventListener('pointerdown',e=>{
+    if(!e.target.closest('.menu-wrap')){
+      document.querySelectorAll('.popup.show').forEach(x=>x.classList.remove('show'));
+    }
+  });
+
+  function applyViewState(){
+    sheet.classList.toggle('no-grid',!state.grid);
+    sheet.classList.toggle('hide-headings',!state.showHeadings);
+    document.querySelector('.app')?.classList.toggle('hide-formulabar',!state.showFormulaBar);
+
+    const vg=$('#viewGrid');
+    if(vg) vg.textContent=(state.grid?'✓ ':'')+'Linhas de Grade';
+
+    const vh=$('#viewHeadings');
+    if(vh) vh.textContent=(state.showHeadings?'✓ ':'')+'Cabeçalhos';
+
+    const vf=$('#viewFormulaBar');
+    if(vf) vf.textContent=(state.showFormulaBar?'✓ ':'')+'Barra de Fórmulas';
+
+    positionHandle();
+  }
+
+
+
+
+
+
+
+
+
+
+
+  function currentClearRange(){
+    const rg=state.range || state.lastRange;
+    if(rg){
+      return {
+        r1:Math.min(rg.r1,rg.r2),
+        r2:Math.max(rg.r1,rg.r2),
+        c1:Math.min(rg.c1,rg.c2),
+        c2:Math.max(rg.c1,rg.c2)
+      };
+    }
+
+    return {
+      r1:state.selected.row,
+      r2:state.selected.row,
+      c1:state.selected.col,
+      c2:state.selected.col
+    };
+  }
+
+  function clearAnimationFrame(){
+    return new Promise(resolve=>requestAnimationFrame(resolve));
+  }
+
+  async function clearSelectionSequentially(){
+    if(state.clearing)return;
+    state.clearing=true;
+
+    try{
+      const rg=currentClearRange();
+      const total=(rg.r2-rg.r1+1)*(rg.c2-rg.c1+1);
+      let done=0;
+
+      for(let r=rg.r1;r<=rg.r2;r++){
+        for(let c=rg.c1;c<=rg.c2;c++){
+          // Move active cell automatically.
+          state.selected={row:r,col:c};
+          state.anchor={row:r,col:c};
+          state.range=null;
+          refreshSelection();
+          namebox.value=addr(r,c);
+
+          // Clear this cell.
+          delete state.cells[key(r,c)];
+          const td=tdAt(r,c);
+          if(td) td.textContent='';
+
+          done++;
+          status.textContent=`Limpando ${done}/${total} • ${addr(r,c)}`;
+
+          // Let user see cursor moving.
+          if(total<=100 || done%10===0){
+            await clearAnimationFrame();
+          }
+        }
+      }
+
+      // Restore whole rectangle selected at the end.
+      state.range={...rg};
+      state.lastRange={...rg};
+      state.anchor={row:rg.r1,col:rg.c1};
+      state.selected={row:rg.r2,col:rg.c2};
+
+      refreshAll();
+      refreshFormulaCells();
+      refreshSelection();
+      loadFx();
+
+      if(total>1){
+        namebox.value=`${addr(rg.r1,rg.c1)}:${addr(rg.r2,rg.c2)}`;
+      }
+
+      status.textContent=`${total} células limpas`;
+    }finally{
+      state.clearing=false;
+    }
+  }
+
+  function act(a){
+    if(a==='copy')copySel();
+
+    if(a==='clear'){
+      clearSelectionSequentially();
+    }
+
+
+    if(a==='bold'){
+      eachSel((r,c)=>style(r,c).bold=!style(r,c).bold);
+      refreshAll();
+    }
+
+    if(a==='italic'){
+      eachSel((r,c)=>style(r,c).italic=!style(r,c).italic);
+      refreshAll();
+    }
+
+    if(a==='underline'){
+      eachSel((r,c)=>style(r,c).underline=!style(r,c).underline);
+      refreshAll();
+    }
+
+    if(['left','center','right'].includes(a)){
+      eachSel((r,c)=>style(r,c).align=a);
+      refreshAll();
+    }
+
+    if(a==='decUp'){
+      eachSel((r,c)=>{
+        const s=style(r,c);
+        s.decimals=Math.min(12,(Number.isInteger(s.decimals)?s.decimals:2)+1);
+      });
+      refreshAll();
+    }
+
+    if(a==='decDown'){
+      eachSel((r,c)=>{
+        const s=style(r,c);
+        s.decimals=Math.max(0,(Number.isInteger(s.decimals)?s.decimals:2)-1);
+      });
+      refreshAll();
+    }
+
+    if(a==='resetCol')resetCol(state.selected.col);
+    if(a==='autoFitCol')autoFitSelectedColumns();
+    if(a==='resetRow')resetRow(state.selected.row);
+    if(a==='resetAllCols')resetAllCols();
+    if(a==='resetAllRows')resetAllRows();
+
+    if(a==='grid'){
+      state.grid=!state.grid;
+      applyViewState();
+    }
+
+    if(a==='headings'){
+      state.showHeadings=!state.showHeadings;
+      applyViewState();
+    }
+
+    if(a==='formulaBar'){
+      state.showFormulaBar=!state.showFormulaBar;
+      applyViewState();
+    }
+
+    if(a==='pageMode'){
+      state.pageMode=!state.pageMode;
+      wrap.scrollLeft=0;
+      wrap.scrollTop=0;
+      updatePage();
+    }
+
+    if(a==='zoomIn'){
+      state.zoom=Math.min(2,Math.round((state.zoom+.1)*10)/10);
+      applyZoom();
+    }
+
+    if(a==='zoomOut'){
+      state.zoom=Math.max(.5,Math.round((state.zoom-.1)*10)/10);
+      applyZoom();
+    }
+
+    if(a==='zoomReset'){
+      state.zoom=1;
+      applyZoom();
+    }
+
+    if(a==='print')printUsedCells();
+
+    if(a==='new'){state.sheets=[createSheetModel('Planilha1')];
+      state.activeSheetIndex=0;
+      state.nextSheetNumber=2;
+      state.customFunctionDefs=[];
+      state.customFunctionRuntime={};
+      state.macroDefs=[];
+      state.macroCode='';
+      state.cells=state.sheets[0].cells;
+      state.styles=state.sheets[0].styles;
+      state.colWidths=state.sheets[0].colWidths;
+      state.rowHeights=state.sheets[0].rowHeights;
+      state.selected={row:1,col:1};
+      build();
+      renderSheetTabs();
+      markOfflineDirty();
+      status.textContent='Planilha1';
+    }
+
+    if(a==='save')save();
+    if(a==='open')openFile();
+    if(a==='full')toggleFull();
+    if(a==='customFnNew')customFnOpen('new');
+    if(a==='customFnEdit')customFnOpen('edit');
+    if(a==='customFnDelete')customFnDelete();
+
+    if(a==='macroNew')macroEdit('new');
+    if(a==='macroEdit')macroEdit('edit');
+    if(a==='macroDelete')macroDelete();
+    if(a==='macroRun')runMacro();
+    if(a==='macroHelp')macroHelpOpen();
+  }
+
+  function applyZoom(){
+    sheet.style.zoom=state.zoom;
+    zoomText.textContent=Math.round(state.zoom*100)+'%';
+    const z=$('#zoomBtn');
+    if(z)z.textContent=zoomText.textContent;
+    updatePage();
+  }
+
+  function updatePage(){
+    pageOutline.classList.toggle('show',state.pageMode);
+    if(!state.pageMode)return;
+
+    const sizes={
+      A4:[210,297],
+      A3:[297,420],
+      Carta:[216,279],
+      Ofício:[216,356]
+    };
+
+    let [w,h]=sizes[state.pageSize]||sizes.A4;
+    if(state.orientation==='landscape')[w,h]=[h,w];
+
+    pageOutline.style.width=(w*3.7795)+'px';
+    pageOutline.style.height=(h*3.7795)+'px';
+    pageOutline.style.left='54px';
+    pageOutline.style.top='28px';
+  }
+
+  function usedPrintRange(){
+    let minRow=Infinity,minCol=Infinity,maxRow=0,maxCol=0;
+
+    for(const [k,d] of Object.entries(state.cells)){
+      if(!d) continue;
+      const raw=String(d.raw??'');
+
+      // Como no Excel: a área de impressão automática é definida pelas
+      // células realmente usadas (valor ou fórmula). Formatação aplicada a
+      // células vazias não deve criar páginas ou ampliar o PDF.
+      if(raw!==''){
+        const [r,c]=k.split(':').map(Number);
+        minRow=Math.min(minRow,r);
+        minCol=Math.min(minCol,c);
+        maxRow=Math.max(maxRow,r);
+        maxCol=Math.max(maxCol,c);
+      }
+    }
+
+    if(maxRow===0 || maxCol===0){
+      return {r1:1,c1:1,r2:1,c2:1};
+    }
+
+    return {r1:minRow,c1:minCol,r2:maxRow,c2:maxCol};
+  }
+
+  function pageMm(){
+    const sizes={
+      A4:[210,297],
+      A3:[297,420],
+      Carta:[216,279],
+      Ofício:[216,356]
+    };
+    let [w,h]=sizes[state.pageSize]||sizes.A4;
+    if(state.orientation==='landscape') [w,h]=[h,w];
+    return {w,h};
+  }
+
+  function buildPrintSnapshot(){
+    const host=$('#printHost');
+    if(!host) return null;
+
+    host.innerHTML='';
+    const rg=usedPrintRange();
+
+    const table=document.createElement('table');
+    table.className='print-sheet';
+
+    const cg=document.createElement('colgroup');
+    let usedWidth=0;
+
+    for(let c=rg.c1;c<=rg.c2;c++){
+      const col=document.createElement('col');
+      const w=state.colWidths[c]||DEFAULT_COL;
+      col.style.width=w+'px';
+      cg.appendChild(col);
+      usedWidth+=w;
+    }
+    table.appendChild(cg);
+
+    const tbody=document.createElement('tbody');
+    let usedHeight=0;
+
+    for(let r=rg.r1;r<=rg.r2;r++){
+      const tr=document.createElement('tr');
+      const h=state.rowHeights[r]||DEFAULT_ROW;
+      tr.style.height=h+'px';
+      usedHeight+=h;
+
+      for(let c=rg.c1;c<=rg.c2;c++){
+        const td=document.createElement('td');
+        td.textContent=display(r,c);
+
+        const s=style(r,c);
+        td.style.fontWeight=s.bold?'700':'';
+        td.style.fontStyle=s.italic?'italic':'';
+        td.style.textDecoration=s.underline?'underline':'';
+        td.style.textAlign=s.align||'';
+        td.style.fontFamily=s.fontFamily||'';
+        td.style.fontSize=s.fontSize?s.fontSize+'px':'13px';
+        td.style.color=s.color||'#000';
+        td.style.backgroundColor=s.fill||'#fff';
+
+        // PDF has no worksheet gridlines.
+        // Only borders explicitly applied by the user are printed.
+        td.style.border='none';
+        if(s.bt) td.style.borderTop=s.bt;
+        if(s.bb) td.style.borderBottom=s.bb;
+        if(s.bl) td.style.borderLeft=s.bl;
+        if(s.br) td.style.borderRight=s.br;
+
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+
+    table.appendChild(tbody);
+    host.appendChild(table);
+
+    const {w,h}=pageMm();
+    const pxPerMm=96/25.4;
+    const printableW=Math.max(20,w-16)*pxPerMm;
+    const printableH=Math.max(20,h-16)*pxPerMm;
+    const scale=Math.min(
+      1,
+      printableW/Math.max(1,usedWidth),
+      printableH/Math.max(1,usedHeight)
+    );
+
+    table.style.transform=`scale(${scale})`;
+
+    const dyn=$('#dynamicPrintStyle');
+    if(dyn){
+      dyn.textContent=`
+        @media print{
+          @page{
+            size:${state.pageSize==='Carta'?'Letter':state.pageSize==='Ofício'?'Legal':state.pageSize} ${state.orientation};
+            margin:8mm;
+          }
+          #printHost{
+            width:${usedWidth*scale}px!important;
+            height:${usedHeight*scale}px!important;
+            max-width:${printableW}px!important;
+            max-height:${printableH}px!important;
+            overflow:hidden!important;
+            break-after:avoid-page!important;
+            page-break-after:avoid!important;
+          }
+          #printHost .print-sheet{
+            break-inside:avoid!important;
+            page-break-inside:avoid!important;
+          }
+        }
+      `;
+    }
+
+    return {range:rg,scale,usedWidth,usedHeight};
+  }
+
+  function preparePrint(){
+    return buildPrintSnapshot();
+  }
+
+  function cleanupPrint(){
+    const host=$('#printHost');
+    if(host) host.innerHTML='';
+    const dyn=$('#dynamicPrintStyle');
+    if(dyn) dyn.textContent='';
+    applyViewState();
+  }
+
+  function printUsedCells(){
+    buildPrintSnapshot();
+    requestAnimationFrame(()=>window.print());
+  }
+
+  window.addEventListener('beforeprint',preparePrint);
+  window.addEventListener('afterprint',cleanupPrint);
+
+  const OFFLINE_STORAGE_KEY='open-excel-workbook-v1';
+  let offlineDirty=false;
+
+  function markOfflineDirty(){
+    offlineDirty=true;
+  }
+
+  function workbookSnapshot(){
+    syncCurrentSheetModel();
+    return {
+      version:2,
+      workbook:true,
+      sheets:state.sheets,
+      activeSheetIndex:state.activeSheetIndex,
+      nextSheetNumber:state.nextSheetNumber,
+      customFunctionDefs:state.customFunctionDefs,
+      locale:state.locale,
+      pageSize:state.pageSize,
+      orientation:state.orientation,
+      macroDefs:state.macroDefs,
+      macroCode:state.macroCode
+    };
+  }
+
+  function saveOfflineNow(force=false){
+    try{
+      if(!window.localStorage || !state.sheets.length)return false;
+      if(!offlineDirty && !force)return false;
+      window.localStorage.setItem(OFFLINE_STORAGE_KEY,JSON.stringify(workbookSnapshot()));
+      offlineDirty=false;
+      return true;
+    }catch{return false}
+  }
+
+  function restoreOfflineWorkbook(){
+    try{
+      if(!window.localStorage)return false;
+      const raw=window.localStorage.getItem(OFFLINE_STORAGE_KEY);
+      if(!raw)return false;
+      const x=JSON.parse(raw);
+      if(!Array.isArray(x.sheets)||!x.sheets.length)return false;
+
+      state.sheets=x.sheets.map((sh,index)=>({
+        name:String(sh.name||('Planilha'+(index+1))),
+        cells:sh.cells||{},styles:sh.styles||{},
+        colWidths:sh.colWidths||{},rowHeights:sh.rowHeights||{},
+        scrollLeft:Number(sh.scrollLeft)||0,scrollTop:Number(sh.scrollTop)||0,
+        selected:sh.selected||{row:1,col:1}
+      }));
+      state.activeSheetIndex=Math.max(0,Math.min(Number(x.activeSheetIndex)||0,state.sheets.length-1));
+      state.nextSheetNumber=Math.max(Number(x.nextSheetNumber)||state.sheets.length+1,state.sheets.length+1);
+      state.customFunctionDefs=Array.isArray(x.customFunctionDefs)?x.customFunctionDefs:[];
+      state.locale=x.locale||'pt-BR';
+      state.pageSize=x.pageSize||'A4';
+      state.orientation=x.orientation||'portrait';
+      state.macroCode=isRemovedDefaultMacro(x.macroCode)?'':String(x.macroCode||state.macroCode);
+      state.macroDefs=Array.isArray(x.macroDefs)
+        ? sanitizeMacroDefs(x.macroDefs)
+        : (x.macroCode&&!isRemovedDefaultMacro(x.macroCode)?[{name:'Macro importada',code:String(x.macroCode)}]:state.macroDefs);
+
+      const sh=state.sheets[state.activeSheetIndex];
+      state.cells=sh.cells;state.styles=sh.styles;
+      state.colWidths=sh.colWidths;state.rowHeights=sh.rowHeights;
+      state.selected={...(sh.selected||{row:1,col:1})};
+      compileCustomFunctions();
+      return true;
+    }catch{return false}
+  }
+
+
+  function save(){
+    const snapshot=workbookSnapshot();
+    const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:'application/json'});
+
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Open Excel Workbook.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+
+  function openFile(){
+    const i=document.createElement('input');
+    i.type='file';
+    i.accept='.json';
+
+    i.onchange=()=>{
+      const f=i.files[0];
+      if(!f)return;
+
+      const r=new FileReader();
+      r.onload=()=>{
+        try{
+          const x=JSON.parse(r.result);
+
+          if(Array.isArray(x.sheets) && x.sheets.length){
+            state.sheets=x.sheets.map((sh,index)=>({
+              name:String(sh.name||('Planilha'+(index+1))),
+              cells:sh.cells||{},
+              styles:sh.styles||{},
+              colWidths:sh.colWidths||{},
+              rowHeights:sh.rowHeights||{},
+              scrollLeft:Number(sh.scrollLeft)||0,
+              scrollTop:Number(sh.scrollTop)||0,
+              selected:sh.selected||{row:1,col:1}
+            }));
+            state.activeSheetIndex=Math.max(0,Math.min(Number(x.activeSheetIndex)||0,state.sheets.length-1));
+            state.nextSheetNumber=Math.max(Number(x.nextSheetNumber)||state.sheets.length+1,state.sheets.length+1);
+          }else{
+            // Arquivos JSON antigos continuam abrindo como Planilha1.
+            state.sheets=[{
+              name:'Planilha1',
+              cells:x.cells||{},
+              styles:x.styles||{},
+              colWidths:x.colWidths||{},
+              rowHeights:x.rowHeights||{},
+              scrollLeft:0,
+              scrollTop:0,
+              selected:{row:1,col:1}
+            }];
+            state.activeSheetIndex=0;
+            state.nextSheetNumber=2;
+          }
+
+          state.customFunctionDefs=Array.isArray(x.customFunctionDefs)
+            ? x.customFunctionDefs.map(def=>({
+                name:String(def.name||'').trim(),
+                params:String(def.params||''),
+                code:String(def.code||'')
+              }))
+            : [];
+          compileCustomFunctions();
+
+          state.locale=x.locale||'pt-BR';
+          state.pageSize=x.pageSize||'A4';
+          state.orientation=x.orientation||'portrait';
+          state.macroCode=isRemovedDefaultMacro(x.macroCode)?'':String(x.macroCode||state.macroCode);
+          state.macroDefs=Array.isArray(x.macroDefs)
+            ? sanitizeMacroDefs(x.macroDefs)
+            : (x.macroCode&&!isRemovedDefaultMacro(x.macroCode)?[{name:'Macro importada',code:String(x.macroCode)}]:[]);
+
+          const sh=state.sheets[state.activeSheetIndex];
+          state.cells=sh.cells;
+          state.styles=sh.styles;
+          state.colWidths=sh.colWidths;
+          state.rowHeights=sh.rowHeights;
+          state.selected={...(sh.selected||{row:1,col:1})};
+
+          build();
+          renderSheetTabs();
+
+          requestAnimationFrame(()=>{
+            wrap.scrollLeft=sh.scrollLeft||0;
+            wrap.scrollTop=sh.scrollTop||0;
+            renderVirtualRows(true);
+            refreshSelection();
+            loadFx();
+          });
+
+          $('#decimalKey').textContent=decimalSep();
+          $('#decimalKey').dataset.key=decimalSep();
+          markOfflineDirty();
+          status.textContent=sh.name;
+        }catch{
+          alert('Arquivo inválido');
+        }
+      };
+      r.readAsText(f);
+    };
+
+    i.click();
+  }
+
+
+  async function toggleFull(){
+    try{
+      if(document.fullscreenElement)await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen({navigationUI:'hide'});
+    }catch{}
+  }
+
+  function macroApi(){
+    const cellForSheet=(sh,a)=>{
+      const p=parseAddr(a);
+      if(!p)throw Error('Célula inválida');
+      return {
+        get value(){return String(sh.cells?.[key(p.row,p.col)]?.raw??'')},
+        set value(v){
+          sh.cells=sh.cells||{};
+          sh.cells[key(p.row,p.col)]={raw:String(v??'')};
+          if(sh===currentSheetModel()){
+            state.cells=sh.cells;
+            refreshLiveChange(p.row,p.col);
+            loadFx();
+          }else markOfflineDirty();
+        }
+      };
+    };
+    const sheetByName=name=>{
+      const sh=state.sheets.find(s=>String(s.name).toLocaleLowerCase('pt-BR')===String(name).trim().toLocaleLowerCase('pt-BR'));
+      if(!sh)throw Error('Planilha não encontrada: '+name);
+      return sh;
+    };
+
+    return {
+      get activeSheetName(){return currentSheetModel()?.name||''},
+      listSheets(){return state.sheets.map(s=>s.name)},
+      getCell(a){
+        return cellForSheet(currentSheetModel(),a);
+      },
+      getSheet(name){
+        const sh=sheetByName(name);
+        return {name:sh.name,getCell:a=>cellForSheet(sh,a)};
+      },
+      setActiveSheet(name){
+        const sh=sheetByName(name);
+        loadSheetModel(state.sheets.indexOf(sh));
+      },
+      setColumnWidth(a,w){
+        setColWidth(colIndex(a),w);
+      },
+      select(a){
+        const p=parseAddr(a);
+        if(p)selectCell(p.row,p.col);
+      }
+    };
+  }
+
+  function refreshMacroSelect(preferredName=''){
+    const sel=$('#macroSelect');
+    if(!sel)return;
+    const preferred=String(preferredName||sel.value||'').toLocaleLowerCase('pt-BR');
+    sel.innerHTML='';
+    const first=document.createElement('option');
+    first.value='';first.textContent=`Macros (${state.macroDefs.length})`;
+    sel.appendChild(first);
+    state.macroDefs.forEach((m,index)=>{
+      const op=document.createElement('option');
+      op.value=String(index);op.textContent=m.name;
+      sel.appendChild(op);
+    });
+    const found=state.macroDefs.findIndex(m=>m.name.toLocaleLowerCase('pt-BR')===preferred);
+    if(found>=0)sel.value=String(found);
+  }
+
+  function runMacro(){
+    const rawIndex=$('#macroSelect')?.value??'';
+    const index=rawIndex===''?-1:Number(rawIndex);
+    const macro=Number.isInteger(index)&&index>=0?state.macroDefs[index]:null;
+    if(!macro){status.textContent='Selecione uma macro';return}
+    try{
+      Function('sheet','"use strict";\n'+macro.code)(macroApi());
+      refreshAll();
+      loadFx();
+      status.textContent=`Macro executada: ${macro.name}`;
+    }catch(e){
+      alert('Erro na macro: '+e.message);
+    }
+  }
+
+  function macroEdit(mode='edit'){
+    const rawSelected=$('#macroSelect')?.value??'';
+    const selected=rawSelected===''?-1:Number(rawSelected);
+    const existing=mode==='edit'&&Number.isInteger(selected)&&selected>=0?state.macroDefs[selected]:null;
+    if(mode==='edit'&&!existing){status.textContent='Selecione uma macro';return}
+    state.editingMacro=existing?selected:null;
+    $('#macroEditorTitle').textContent=existing?'Editar macro':'Nova macro';
+    $('#macroEditorName').value=existing?.name||'';
+    $('#macroEditorCode').value=existing?.code||'';
+    $('#macroEditorModal').classList.add('show');
+  }
+
+  function macroEditorClose(){
+    $('#macroEditorModal')?.classList.remove('show');
+    state.editingMacro=null;
+  }
+
+  function macroSave(){
+    const name=$('#macroEditorName')?.value.trim()||'';
+    const code=$('#macroEditorCode')?.value||'';
+    if(!name){status.textContent='Digite o nome da macro';return}
+    if(!code.trim()){status.textContent='Digite o código da macro';return}
+    try{Function('sheet','"use strict";\n'+code)}catch(e){status.textContent='Erro no código: '+e.message;return}
+    const editing=state.editingMacro;
+    const duplicate=state.macroDefs.findIndex((m,i)=>m.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR')&&i!==editing);
+    if(duplicate>=0){status.textContent='Já existe uma macro com esse nome';return}
+    if(editing===null)state.macroDefs.push({name,code});
+    else state.macroDefs[editing]={name,code};
+    state.macroCode=code;
+    markOfflineDirty();
+    macroEditorClose();
+    refreshMacroSelect(name);
+    status.textContent=`Macro salva: ${name}`;
+  }
+
+  function macroDelete(){
+    const rawIndex=$('#macroSelect')?.value??'';
+    const index=rawIndex===''?-1:Number(rawIndex);
+    if(!Number.isInteger(index)||index<0||!state.macroDefs[index]){status.textContent='Selecione uma macro';return}
+    const name=state.macroDefs[index].name;
+    if(!confirm(`Excluir a macro ${name}?`))return;
+    state.macroDefs.splice(index,1);
+    markOfflineDirty();
+    refreshMacroSelect();
+    status.textContent=`Macro excluída: ${name}`;
+  }
+
+  function macroHelpOpen(){
+    $('#macroHelpModal')?.classList.add('show');
+  }
+
+  function macroHelpClose(){
+    $('#macroHelpModal')?.classList.remove('show');
+  }
+
+  async function copyAiHelpPrompt(){
+    const area=$('#aiHelpPrompt');
+    if(!area)return;
+    const value=area.value;
+
+    // First try the synchronous path while the tap is still an active user
+    // gesture. This is the path that works most often for offline file://
+    // pages and Android WebViews.
+    const legacyCopy=()=>{
+      const temp=document.createElement('textarea');
+      temp.value=value;
+      temp.setAttribute('readonly','');
+      temp.style.cssText='position:fixed;left:0;top:0;width:2px;height:2px;opacity:.01;z-index:20000';
+      document.body.appendChild(temp);
+      temp.focus();
+      temp.select();
+      temp.setSelectionRange?.(0,temp.value.length);
+      let copied=false;
+      try{copied=!!document.execCommand?.('copy')}catch{}
+      temp.remove();
+      return copied;
+    };
+
+    if(legacyCopy()){
+      status.textContent='✓ Modelo para IA copiado';
+      return;
+    }
+
+    try{
+      if(navigator.clipboard?.writeText){
+        await navigator.clipboard.writeText(value);
+        status.textContent='✓ Modelo para IA copiado';
+        return;
+      }
+    }catch{}
+
+    // Last resort for browsers that deliberately block clipboard access on
+    // local files: keep the complete prompt selected for a long-press copy.
+    area.focus();
+    area.select();
+    area.setSelectionRange?.(0,value.length);
+    area.scrollIntoView({block:'center'});
+    area.style.outline='2px solid #9ad09a';
+    status.textContent='Área de transferência bloqueada: texto selecionado para copiar';
+    alert('O Android bloqueou a cópia automática deste arquivo offline. O modelo ficou selecionado: toque e segure sobre o texto e escolha Copiar.');
+  }
+
+  $('#macroHelpModal')?.addEventListener('pointerdown',e=>{
+    if(e.target.id==='macroHelpModal')macroHelpClose();
+  });
+  $('#macroHelpClose')?.addEventListener('click',macroHelpClose);
+  $('#macroHelpCopy')?.addEventListener('click',copyAiHelpPrompt);
+
+  $('#macroEditorModal')?.addEventListener('pointerdown',e=>{
+    if(e.target.id==='macroEditorModal')macroEditorClose();
+  });
+  $('#macroEditorSave')?.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();macroSave();
+  });
+  $('#macroEditorCancel')?.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();macroEditorClose();
+  });
+
+$('#customFnModal')?.addEventListener('pointerdown',e=>{
+    if(e.target.id==='customFnModal') customFnClose();
+  });
+  const customFnSaveBtn=$('#customFnSave');
+  if(customFnSaveBtn){
+    customFnSaveBtn.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      customFnSave();
+    });
+  }
+
+  const customFnCancelBtn=$('#customFnCancel');
+  if(customFnCancelBtn){
+    customFnCancelBtn.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      customFnClose();
+    });
+  }
+
+  // Atualizar/reabrir o HTML sempre começa uma pasta limpa. Trabalhos antigos
+  // só são recuperados quando o usuário escolhe Arquivo > Abrir e seleciona o JSON.
+  try{window.localStorage?.removeItem(OFFLINE_STORAGE_KEY)}catch{}
+  state.sheets=[createSheetModel('Planilha1')];
+  state.activeSheetIndex=0;
+  state.nextSheetNumber=2;
+  state.cells=state.sheets[0].cells;
+  state.styles=state.sheets[0].styles;
+  state.colWidths=state.sheets[0].colWidths;
+  state.rowHeights=state.sheets[0].rowHeights;
+  state.selected={row:1,col:1};
+  state.customFunctionDefs=[];
+  state.macroDefs=[];
+  state.macroCode='';
+  compileCustomFunctions();
+
+  build();
+  renderSheetTabs();
+  renderRibbon();
+  applyViewState();
+  $('#decimalKey').textContent=decimalSep();
+  $('#decimalKey').dataset.key=decimalSep();
+})();
+</script>
+
+
+<div id="printHost" aria-hidden="true"></div>
+</body>
+</html>

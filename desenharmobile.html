@@ -1401,6 +1401,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         .slider-row { display: flex; align-items: center; }
         .slider-value { font-size: 10px; color: var(--active-blue); font-weight: bold; margin-bottom: -2px; }
         .brush-default-input { width: 34px; border: 1px solid #555; border-radius: 4px; background: #171717; color: var(--active-blue); font-size: 10px; font-weight: bold; text-align: center; padding: 2px; }
+        .brush-default-column { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+        .brush-reset-btn {
+            width: 22px; height: 18px; padding: 0; border: 0; border-radius: 4px;
+            background: none; color: #777; cursor: pointer; font-size: 14px; line-height: 1;
+        }
+        .brush-reset-btn:hover, .brush-reset-btn:active { color: #007aff; background: rgba(0,122,255,.12); }
         .brush-default-input::-webkit-outer-spin-button, .brush-default-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .brush-default-input { appearance: textfield; -moz-appearance: textfield; }
         .sidebar-left > * { pointer-events: auto; }
@@ -1737,9 +1743,131 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         .camera-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 41; border-radius: 999px; padding: 7px 12px; color: #fff; background: rgba(0,0,0,.68); font-size: 11px; pointer-events: none; display: none; }
         .camera-hint.show { display: block; }
         @media (max-width: 900px) { .three-opacity-label span { display: none; } #backgroundOpacity { width: 52px; } .three-toggle { padding: 6px 8px; } }
+
+        /* Modo celular manual: interface compacta e canvas vertical 9:16. */
+        #mobileEditBtn, #mobileEditPanel { display: none; }
+        body.mobile-mode .top-bar {
+            height: 44px; min-height: 44px; padding: 0 5px; gap: 3px;
+        }
+        body.mobile-mode .top-left { zoom: 1; gap: 3px; }
+        body.mobile-mode .top-right { zoom: .72; gap: 1px; }
+        body.mobile-mode #mobileEditBtn {
+            display: inline-flex; align-items: center; justify-content: center;
+            height: 34px; padding: 0 10px; border: 1px solid #505050; border-radius: 8px;
+            background: #303030; color: #f2f2f2; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        body.mobile-mode #mobileEditBtn.active { color: #fff; border-color: var(--active-blue); background: #174969; }
+        body.mobile-mode #mobileEditPanel {
+            display: none; position: fixed; top: 46px; left: 5px; right: 5px; z-index: 3200;
+            max-height: min(58dvh, 430px); overflow-y: auto; padding: 10px;
+            border: 1px solid #4b4b4b; border-radius: 12px; background: rgba(28,28,28,.98);
+            box-shadow: 0 12px 32px rgba(0,0,0,.65); overscroll-behavior: contain; touch-action: pan-y;
+        }
+        body.mobile-mode #mobileEditPanel.show { display: block; }
+        .mobile-top-actions { display: none; }
+        body.mobile-mode .mobile-top-actions {
+            display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+        }
+        body.mobile-mode .mobile-top-actions .icon-btn {
+            width: 21px; min-width: 21px; height: 20px; padding: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            border: 1px solid #46505b; border-radius: 4px; background: #293039;
+            color: #d7dde4; font-size: 11px; line-height: 1;
+        }
+        body.mobile-mode .mobile-top-actions #deleteCurrentFrameBtn { color: #ff6961 !important; }
+        .mobile-edit-title { margin-bottom: 8px; color: #aaa; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+        .mobile-edit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+        .mobile-edit-grid .icon-btn {
+            min-width: 0; min-height: 58px; padding: 6px 3px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 4px; border: 1px solid #484848;
+            border-radius: 9px; background: #303030; color: #ddd; font-size: 21px;
+        }
+        .mobile-edit-grid .icon-btn::after {
+            content: attr(data-mobile-label); max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+            color: #bbb; font-size: 9px; line-height: 1; white-space: nowrap;
+        }
+        .mobile-edit-grid .icon-btn.active { color: var(--active-blue); border-color: var(--active-blue); background: #19354a; }
+        .mobile-edit-settings { display: flex; flex-direction: column; gap: 7px; margin-top: 9px; }
+        body.mobile-mode .mobile-edit-settings .onion-control,
+        body.mobile-mode .mobile-edit-settings .bucket-control,
+        body.mobile-mode .mobile-edit-settings .three-controls,
+        body.mobile-mode .mobile-edit-settings .bg-control {
+            width: 100%; min-height: 48px; margin: 0; padding: 7px 9px; gap: 8px;
+            border: 1px solid #484848; border-radius: 9px; background: #303030;
+            color: #ddd; font-size: 12px;
+        }
+        body.mobile-mode .mobile-edit-settings .onion-control::before,
+        body.mobile-mode .mobile-edit-settings .bucket-control::before,
+        body.mobile-mode .mobile-edit-settings .three-controls::before,
+        body.mobile-mode .mobile-edit-settings .bg-control::before {
+            content: attr(data-mobile-label); min-width: 72px; color: #fff; font-size: 11px; font-weight: 700;
+        }
+        body.mobile-mode .mobile-edit-settings #onionOpacitySlider,
+        body.mobile-mode .mobile-edit-settings #bucketToleranceSlider { flex: 1; width: auto; min-width: 80px; }
+        body.mobile-mode .mobile-edit-settings .icon-btn { flex: 0 0 auto; padding: 4px 7px; }
+        body.mobile-mode .mobile-edit-settings #move3dBtn {
+            width: auto; min-width: 88px; max-width: none; flex: 0 0 auto; padding: 7px 8px;
+        }
+        body.mobile-mode .mobile-edit-settings #backgroundOpacity { flex: 1; width: auto; min-width: 70px; }
+        body.mobile-mode .mobile-edit-settings .bg-control { display: flex; align-items: center; }
+        body.mobile-mode .mobile-edit-settings .bg-action-btn {
+            width: 46px; min-width: 46px; height: 38px; padding: 5px; font-size: 20px;
+        }
+        body.mobile-mode .workspace { padding: 4px; }
+        body.mobile-mode .canvas-container {
+            width: auto; height: min(100%, calc(100vw * 16 / 9));
+            max-width: 100%; max-height: 100%; aspect-ratio: 9 / 16;
+        }
+        body.mobile-mode .sidebar-left {
+            left: 3px; gap: 8px; padding: 7px 4px; border-radius: 12px;
+            transform: translateY(-50%) scale(.72); transform-origin: left center;
+        }
+        body.mobile-mode .viewport-controls {
+            right: 3px; padding: 6px 4px; gap: 5px;
+            transform: translateY(-50%) scale(.68); transform-origin: right center;
+        }
+        body.mobile-mode .bottom-bar {
+            height: 148px; min-height: 148px; padding: 4px; gap: 4px;
+            flex-wrap: wrap; align-content: flex-start; align-items: center;
+        }
+        body.mobile-mode .bg-control { flex: 0 0 auto; }
+        body.mobile-mode .bottom-control-stack {
+            flex: 1 1 0; min-width: 0; height: 24px; flex-direction: row;
+            justify-content: flex-start; align-items: center; overflow-x: auto; overflow-y: hidden;
+            scrollbar-width: none; touch-action: pan-x;
+        }
+        body.mobile-mode .bottom-control-stack::-webkit-scrollbar { display: none; }
+        body.mobile-mode .frame-control-row { flex: 0 0 auto; height: 24px; gap: 2px; }
+        body.mobile-mode .frame-control-row button {
+            width: 21px !important; min-width: 21px !important; height: 20px !important;
+            padding: 0 !important; border: 1px solid #46505b; border-radius: 4px;
+            background: #293039; font-size: 11px !important; line-height: 1;
+        }
+        body.mobile-mode .frame-duration-global {
+            height: 24px; min-height: 24px; gap: 2px; padding: 1px 2px; border-radius: 5px;
+        }
+        body.mobile-mode .frame-duration-global .duration-label { display: none; }
+        body.mobile-mode #globalFrameDuration {
+            width: 30px; min-width: 30px; height: 20px; padding: 0 2px; font-size: 10px;
+        }
+        body.mobile-mode #frameCounterDisplay { min-width: 28px !important; font-size: 9px !important; }
+        body.mobile-mode .audio-track-tools { flex: 0 0 auto; align-self: center; }
+        body.mobile-mode .timelines { flex: 0 0 100%; width: 100%; height: 100px; }
+        body.mobile-mode .timeline-viewport { height: 100px; }
+        body.mobile-mode .dropdown-content { top: 44px; max-height: calc(100dvh - 50px); }
+        body.mobile-mode .layers-dropdown,
+        body.mobile-mode .brushes-dropdown { top: 40px; max-height: calc(100dvh - 52px); }
+        body.mobile-mode #move3dBtn { width: 78px; min-width: 78px; max-width: 78px; flex-basis: 78px; }
+        body.mobile-mode #backgroundOpacity { width: 48px; }
+
+        @media (max-width: 420px) {
+            body.mobile-mode .top-right { zoom: .64; }
+            body.mobile-mode .fps-control, body.mobile-mode .onion-control, body.mobile-mode .bucket-control { font-size: 10px; }
+            body.mobile-mode #fpsSlider, body.mobile-mode #onionOpacitySlider, body.mobile-mode #bucketToleranceSlider { width: 38px; }
+        }
     </style>
 </head>
-<body>
+<body class="mobile-mode">
 
     <div class="top-bar">
         <div class="top-left">
@@ -1765,6 +1893,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     <a href="#" id="enterFullscreenMenu">Maximizar tela</a>
                     <a href="#" id="exitFullscreenMenu">Voltar ao normal</a>
                 </div>
+            </div>
+            <button type="button" id="mobileEditBtn" aria-expanded="false" aria-controls="mobileEditPanel">Editar</button>
+            <div id="mobileEditPanel" aria-label="Ferramentas de edição para celular">
+                <div class="mobile-edit-title">FERRAMENTAS DE EDIÇÃO</div>
+                <div class="mobile-edit-grid" id="mobileEditGrid"></div>
+                <div class="mobile-edit-settings" id="mobileEditSettings"></div>
+            </div>
+            <div class="mobile-top-actions" aria-label="Ações rápidas">
+                <button class="icon-btn" id="clearBtn" title="Limpar camada" aria-label="Limpar camada">🗑️</button>
+                <button class="icon-btn" id="undoBtn" title="Desfazer" aria-label="Desfazer">↺</button>
+                <button class="icon-btn" id="redoBtn" title="Refazer" aria-label="Refazer">↻</button>
+                <button class="icon-btn" id="deleteCurrentFrameBtn" title="Apagar frame" aria-label="Apagar frame">✖</button>
             </div>
             <input type="file" id="importInput" accept="image/*" style="display: none;">
             <input type="file" id="projectInput" accept=".json" style="display: none;">
@@ -1795,23 +1935,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <button class="icon-btn" id="copyBtn" title="Copiar">📑</button>
             <button class="icon-btn" id="cutBtn" title="Recortar">✂️</button>
             <button class="icon-btn" id="pasteBtn" title="Colar">📋</button>
-            <button class="icon-btn" id="undoBtn" title="Desfazer">↺</button>
-            <button class="icon-btn" id="redoBtn" title="Refazer">↻</button>
-            <button class="icon-btn" id="clearBtn" title="Limpar Canvas">🗑️</button>
-            <button class="icon-btn" id="deleteCurrentFrameBtn" title="Deletar Frame Selecionado" style="color: #ff3b30;">✖</button>
         </div>
         <div class="top-right">
             <div class="three-controls">
                 <button class="three-toggle" id="move3dBtn" title="Alternar entre desenhar e mover o cenário 3D">Mover 3D: OFF</button>
                 <label class="three-opacity-label" title="Opacidade do cenário 3D"><span>Fundo </span><b id="backgroundOpacityValue">70%</b></label>
                 <input type="range" id="backgroundOpacity" min="0" max="100" value="70" aria-label="Opacidade do cenário 3D">
-            </div>
-            <div class="brushes-menu">
-                <button class="icon-btn" id="brushesBtn" title="Pincéis" aria-label="Pincéis">🖌️</button>
-                <div class="brushes-dropdown" id="brushesDropdown">
-                    <div class="brushes-title">PINCÉIS</div>
-                    <div class="brush-list" id="brushList"></div>
-                </div>
             </div>
             <div class="layers-menu">
                 <button class="icon-btn" id="layersBtn" title="Camadas">≡</button>
@@ -1874,9 +2003,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         </div>
         <div class="sidebar-left">
             <div class="slider-container" title="Tamanho do Pincel">
-                <div style="display: flex; align-items: center; gap: 5px; transform: translateX(6px);">
-                    <input class="brush-default-input" id="brushDefaultSize" type="number" min="1" value="7" title="Tamanho para o botão resetar">
-                    <button id="resetBrushSizeBtn" style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; transition: 0.2s;" onmouseover="this.style.color='#007aff'" onmouseout="this.style.color='#666'" title="Voltar ao tamanho padrão">↺</button>
+                <div class="brush-default-column">
+                    <input class="brush-default-input" id="brushDefaultSize" type="number" min="1" value="3" title="Tamanho para o botão resetar">
+                    <button class="brush-reset-btn" id="resetBrushSizeBtn" title="Voltar ao tamanho padrão">↺</button>
                 </div>
                 <div class="slider-row">
                     <div class="presets-container">
@@ -1885,7 +2014,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                         <div class="preset-dot" title="30px" onclick="setBrushSize(30)"></div>
                         <div class="preset-dot" title="60px" onclick="setBrushSize(60)"></div>
                     </div>
-                    <input type="range" id="brushSize" min="1" max="100" value="7">
+                    <input type="range" id="brushSize" min="1" max="100" value="3">
                 </div>
                 <span>Tam</span>
             </div>
@@ -1898,9 +2027,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 </svg>
             </button>
             <div class="slider-container" title="Opacidade do Pincel">
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div class="brush-default-column">
                     <input class="brush-default-input" id="brushDefaultOpacity" type="number" min="1" max="100" value="100" title="Opacidade para o botão resetar">
-                    <button id="resetBrushOpacityBtn" style="background: none; border: none; color: #666; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; transition: 0.2s;" onmouseover="this.style.color='#007aff'" onmouseout="this.style.color='#666'" title="Voltar à opacidade padrão">↺</button>
+                    <button class="brush-reset-btn" id="resetBrushOpacityBtn" title="Voltar à opacidade padrão">↺</button>
                 </div>
                 <div class="slider-row">
                     <input type="range" id="brushOpacity" min="1" max="100" value="100">
@@ -1912,18 +2041,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         <div class="canvas-container" id="canvasContainer">
             <div id="bg3dTouchLayer" aria-label="Área para mover a câmera 3D"></div>
             <div class="camera-hint" id="cameraHint">Arraste para girar • pinça para zoom</div>
-            <canvas id="bgCanvas" width="1920" height="1080"></canvas>
+            <canvas id="bgCanvas" width="1080" height="1920"></canvas>
             <div id="layerCanvasesHost"></div>
-            <canvas id="onionCanvas" width="1920" height="1080"></canvas>
-            <canvas id="uiCanvas" width="1920" height="1080"></canvas>
+            <canvas id="onionCanvas" width="1080" height="1920"></canvas>
+            <canvas id="uiCanvas" width="1080" height="1920"></canvas>
             
-            <canvas id="snapshotCanvas" class="offscreen-canvas" width="1920" height="1080"></canvas>
-            <canvas id="selectionCanvas" class="offscreen-canvas" width="1920" height="1080"></canvas>
-            <canvas id="clipboardCanvas" class="offscreen-canvas" width="1920" height="1080"></canvas>
+            <canvas id="snapshotCanvas" class="offscreen-canvas" width="1080" height="1920"></canvas>
+            <canvas id="selectionCanvas" class="offscreen-canvas" width="1080" height="1920"></canvas>
+            <canvas id="clipboardCanvas" class="offscreen-canvas" width="1080" height="1920"></canvas>
             
-            <canvas id="mainCanvas" width="1920" height="1080"></canvas>
-            <canvas id="playbackCanvas" width="1920" height="1080"></canvas>
-            <canvas id="drawingCanvas" width="1920" height="1080"></canvas>
+            <canvas id="mainCanvas" width="1080" height="1920"></canvas>
+            <canvas id="playbackCanvas" width="1080" height="1920"></canvas>
+            <canvas id="drawingCanvas" width="1080" height="1920"></canvas>
         </div>
     </div>
 
@@ -1950,10 +2079,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 <button class="play-btn add-frame-btn" id="stopBtn" title="Pausar" style="display:none; color: #ff3b30;">⏸️</button>
             </div>
             <div class="audio-track-tools" aria-label="Ferramentas de áudio">
-                <button type="button" class="audio-tool-btn" id="audioBtn" title="Importar ou substituir áudio">🎵</button>
+                <button type="button" class="audio-tool-btn delete" id="audioDeleteBtn" title="Excluir áudio">🗑</button>
                 <button type="button" class="audio-tool-btn" id="audioCutBtn" title="Cortar o início do áudio exatamente na linha vermelha">✂</button>
                 <button type="button" class="audio-tool-btn" id="audioFitBtn" title="Ajustar o áudio ao tamanho da animação">↔</button>
-                <button type="button" class="audio-tool-btn delete" id="audioDeleteBtn" title="Excluir áudio">🗑</button>
+                <button type="button" class="audio-tool-btn" id="audioBtn" title="Importar ou substituir áudio">🎵</button>
                 <input type="file" id="audioInput" accept="audio/*" multiple style="display:none;">
             </div>
         </div>
@@ -1993,13 +2122,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         
         // Utilitários Compartilhados de Desempenho
         const sharedUtilCanvas = document.createElement('canvas');
-        sharedUtilCanvas.width = 1920; sharedUtilCanvas.height = 1080;
+        sharedUtilCanvas.width = 1080; sharedUtilCanvas.height = 1920;
         const sharedUtilCtx = sharedUtilCanvas.getContext('2d', { willReadFrequently: true });
         
         // CANVASES DO NOVO SISTEMA "DUAL OPAQUE MASKING" (SOLUÇÃO DEFINITIVA DO WARP QUADRICULADO)
-        const warpColorCanvas = document.createElement('canvas'); warpColorCanvas.width = 1920; warpColorCanvas.height = 1080;
+        const warpColorCanvas = document.createElement('canvas'); warpColorCanvas.width = 1080; warpColorCanvas.height = 1920;
         const warpColorCtx = warpColorCanvas.getContext('2d', { willReadFrequently: true });
-        const warpAlphaCanvas = document.createElement('canvas'); warpAlphaCanvas.width = 1920; warpAlphaCanvas.height = 1080;
+        const warpAlphaCanvas = document.createElement('canvas'); warpAlphaCanvas.width = 1080; warpAlphaCanvas.height = 1920;
         const warpAlphaCtx = warpAlphaCanvas.getContext('2d', { willReadFrequently: true });
         const selectionColorCanvas = document.createElement('canvas');
         const selectionAlphaCanvas = document.createElement('canvas');
@@ -2018,6 +2147,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const bgImgBtn = document.getElementById('bgImgBtn');
         
         let warpMesh = [];
+        // Malha final detalhada, com prévias progressivas para manter o Warp fluido em celulares.
         const WARP_GRID = 64;
         const WARP_PREVIEW_STEP = 4;
         const WARP_SETTLED_STEP = 2;
@@ -2076,14 +2206,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const saveProjectMenu = document.getElementById('saveProjectMenu');
         const loadProjectMenu = document.getElementById('loadProjectMenu');
         const copy360PromptMenu = document.getElementById('copy360PromptMenu');
+        const mobileEditBtn = document.getElementById('mobileEditBtn');
+        const mobileEditPanel = document.getElementById('mobileEditPanel');
+        const mobileEditGrid = document.getElementById('mobileEditGrid');
+        const mobileEditSettings = document.getElementById('mobileEditSettings');
         const projectInput = document.getElementById('projectInput');
 
         const bucketToleranceSlider = document.getElementById('bucketToleranceSlider');
         const layersBtn = document.getElementById('layersBtn');
         const layersDropdown = document.getElementById('layersDropdown');
-        const brushesBtn = document.getElementById('brushesBtn');
-        const brushesDropdown = document.getElementById('brushesDropdown');
-        const brushList = document.getElementById('brushList');
         
         const timeline = document.getElementById('timeline');
         const timelineViewport = document.getElementById('timelineViewport');
@@ -2124,6 +2255,111 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let selectedAudioClipId = null;
         let audioClipSequence = 0;
         let timelineCursorTime = 0;
+        const mobileMode = true;
+        let projectWidth = mainCanvas.width;
+        let projectHeight = mainCanvas.height;
+
+        const mobileToolLabels = new Map([
+            ['selectionBtn', 'Seleção'], ['selectAllBtn', 'Selecionar tudo'],
+            ['perspectiveBtn', 'Perspectiva'], ['warpBtn', 'Warp'], ['headSphereBtn', '3D'],
+            ['flipHBtn', 'Inverter H'], ['flipVBtn', 'Inverter V'],
+            ['copyBtn', 'Copiar'], ['cutBtn', 'Recortar'], ['pasteBtn', 'Colar']
+        ]);
+        const mobileToolMarkers = new Map();
+        const mobileSettingItems = [
+            { selector: '.onion-control', label: 'Onion Skin' },
+            { selector: '.bucket-control', label: 'Balde' },
+            { selector: '.three-controls', label: 'Mover background' },
+            { selector: '.bg-control', label: 'Background 3D' }
+        ];
+        const mobileSettingMarkers = new Map();
+
+        function initializeMobileEditMenu() {
+            mobileToolLabels.forEach((label, id) => {
+                const button = document.getElementById(id);
+                if (!button || mobileToolMarkers.has(id)) return;
+                const marker = document.createComment(`mobile-tool-${id}`);
+                button.parentNode.insertBefore(marker, button);
+                button.dataset.mobileLabel = label;
+                mobileToolMarkers.set(id, marker);
+            });
+            mobileSettingItems.forEach(({ selector, label }) => {
+                const control = document.querySelector(selector);
+                if (!control || mobileSettingMarkers.has(selector)) return;
+                const marker = document.createComment(`mobile-setting-${selector.slice(1)}`);
+                control.parentNode.insertBefore(marker, control);
+                control.dataset.mobileLabel = label;
+                mobileSettingMarkers.set(selector, marker);
+            });
+        }
+
+        function moveToolsForMobile(enabled) {
+            initializeMobileEditMenu();
+            mobileToolLabels.forEach((label, id) => {
+                const button = document.getElementById(id);
+                const marker = mobileToolMarkers.get(id);
+                if (!button || !marker) return;
+                if (enabled) mobileEditGrid.appendChild(button);
+                else if (marker.parentNode) marker.parentNode.insertBefore(button, marker.nextSibling);
+            });
+            mobileSettingItems.forEach(({ selector }) => {
+                const control = document.querySelector(selector);
+                const marker = mobileSettingMarkers.get(selector);
+                if (!control || !marker) return;
+                if (enabled) mobileEditSettings.appendChild(control);
+                else if (marker.parentNode) marker.parentNode.insertBefore(control, marker.nextSibling);
+            });
+        }
+
+        function closeMobileEditPanel() {
+            mobileEditPanel.classList.remove('show');
+            mobileEditBtn.classList.remove('active');
+            mobileEditBtn.setAttribute('aria-expanded', 'false');
+        }
+
+        function updateMobileModeUI() {
+            document.body.classList.add('mobile-mode');
+            moveToolsForMobile(true);
+            canvasContainer.style.aspectRatio = `${projectWidth} / ${projectHeight}`;
+        }
+
+        function setProjectCanvasBackingSize(width, height) {
+            projectWidth = Math.max(1, Math.round(width));
+            projectHeight = Math.max(1, Math.round(height));
+            [bgCanvas, onionCanvas, uiCanvas, snapshotCanvas, mainCanvas, playbackCanvas, drawingCanvas,
+             sharedUtilCanvas, warpColorCanvas, warpAlphaCanvas].forEach(canvas => {
+                canvas.width = projectWidth;
+                canvas.height = projectHeight;
+            });
+            layerCanvasEls.forEach(canvas => {
+                canvas.width = projectWidth;
+                canvas.height = projectHeight;
+            });
+            canvasContainer.style.aspectRatio = `${projectWidth} / ${projectHeight}`;
+            if (window.resize3DBackgroundRenderer) window.resize3DBackgroundRenderer(projectWidth, projectHeight);
+        }
+
+        function drawImageFitted(targetCtx, image, width, height, mode = 'contain') {
+            if (!image || !image.width || !image.height) return;
+            const scale = mode === 'cover'
+                ? Math.max(width / image.width, height / image.height)
+                : Math.min(width / image.width, height / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            targetCtx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+        }
+
+        async function resizedBitmap(source, width, height) {
+            if (!source) return null;
+            const temp = document.createElement('canvas');
+            temp.width = width; temp.height = height;
+            const tempCtx = temp.getContext('2d');
+            tempCtx.clearRect(0, 0, width, height);
+            drawImageFitted(tempCtx, source, width, height, 'contain');
+            return createImageBitmap(temp);
+        }
+
+        initializeMobileEditMenu();
 
         let curH = 0, curS = 100, curV = 0;
         let cachedColor = "#000000";
@@ -2295,37 +2531,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         brushPresets.push({ id: 'builtin-watercolor', name: 'Aquarela', type: 'stamp', brushKind: 'watercolor' });
         brushPresets.push({ id: 'builtin-light', name: 'Luz', type: 'stamp', brushKind: 'light' });
 
-        function renderBrushList() {
-            brushList.replaceChildren();
-            for (const brush of brushPresets) {
-                const item = document.createElement('div');
-                item.className = 'brush-item'; item.tabIndex = 0; item.setAttribute('role', 'button');
-                if (brush.id === selectedBrushId) item.classList.add('active');
-                item.title = brush.name;
-                const name = document.createElement('span');
-                name.className = 'brush-item-name'; name.textContent = brush.name;
-                const check = document.createElement('span');
-                check.className = 'brush-check'; check.textContent = brush.id === selectedBrushId ? '✓' : '';
-                item.append(name, check);
-                const selectBrush = () => {
-                    selectedBrushId = brush.id;
-                    currentTool = 'brush'; updateToolUI(); renderBrushList();
-                };
-                item.onclick = selectBrush;
-                item.onkeydown = event => {
-                    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectBrush(); }
-                };
-                brushList.appendChild(item);
-            }
-        }
-
-        async function restoreProjectBrushes(_savedBrushes, savedSelectedBrushId) {
-            // Projetos antigos podem conter pincéis importados, mas esta versão
-            // aceita somente os três pincéis nativos do software.
-            selectedBrushId = brushPresets.some(brush => brush.id === savedSelectedBrushId)
-                ? savedSelectedBrushId
-                : 'default';
-            renderBrushList();
+        async function restoreProjectBrushes() {
+            selectedBrushId = 'default';
         }
 
         function hbNoise(value) {
@@ -2577,16 +2784,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (Number.isFinite(brush.pencilGrade)) drawHbSegment(targetCtx, fromX, fromY, toX, toY, size, pressure);
             else if (brush.brushKind) drawNativeArtSegment(targetCtx, fromX, fromY, toX, toY, size, pressure, _erasing);
         }
-
-        brushesBtn.addEventListener('click', event => {
-            event.stopPropagation(); layersDropdown.classList.remove('show');
-            renderBrushList(); brushesDropdown.classList.toggle('show');
-        });
-        brushesDropdown.addEventListener('click', event => event.stopPropagation());
-        window.addEventListener('click', event => {
-            if (!brushesBtn.contains(event.target) && !brushesDropdown.contains(event.target)) brushesDropdown.classList.remove('show');
-        });
-        renderBrushList();
 
         let clipboardBox = null;
         let clipboardCorners = null;
@@ -3048,7 +3245,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById('mergeAllLayersBtn').addEventListener('click', (e) => { e.stopPropagation(); mergeAllLayers(); });
         document.getElementById('mergeSelectedLayersBtn').addEventListener('click', (e) => { e.stopPropagation(); mergeSelectedLayers(); });
 
-        layersBtn.addEventListener('click', (e) => { e.stopPropagation(); brushesDropdown.classList.remove('show'); renderLayersDropdown(); layersDropdown.classList.toggle('show'); });
+        layersBtn.addEventListener('click', (e) => { e.stopPropagation(); renderLayersDropdown(); layersDropdown.classList.toggle('show'); });
 
         document.getElementById('soloModeBtn').onclick = (e) => {
             soloMode = !soloMode; e.target.classList.toggle('active', soloMode);
@@ -3629,22 +3826,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         function renderComplexTransform(targetCtx, tool, meshStep = 1) {
             if (tool === 'headSphere') {
-                if (renderLightweightHead3D(targetCtx)) return;
+                if (renderLightweightHead3D(targetCtx)) return true;
                 // Se WebGL falhar, mantém o recorte intacto em vez de esticar triângulos 2D.
                 targetCtx.drawImage(selectionCanvas, selectionBox.x, selectionBox.y);
-                return;
+                return true;
             }
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             const points = tool === 'warp' ? warpMesh : selectionCorners;
+            if (!Array.isArray(points) || !points.length) return false;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             points.forEach(p => {
                 if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
                 if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
             });
             
             minX = Math.max(0, Math.floor(minX - 10)); minY = Math.max(0, Math.floor(minY - 10));
-            maxX = Math.min(1920, Math.ceil(maxX + 10)); maxY = Math.min(1080, Math.ceil(maxY + 10));
+            // Usa a resolução real do projeto. O limite antigo 1920×1080 fazia
+            // o recorte desaparecer abaixo de Y=1080 no modo celular 1080×1920.
+            const canvasWidth = targetCtx.canvas.width;
+            const canvasHeight = targetCtx.canvas.height;
+            maxX = Math.min(canvasWidth, Math.ceil(maxX + 10));
+            maxY = Math.min(canvasHeight, Math.ceil(maxY + 10));
             const bw = maxX - minX; const bh = maxY - minY;
-            if (bw <= 0 || bh <= 0) return;
+            if (bw <= 0 || bh <= 0) return false;
 
             warpColorCtx.clearRect(minX, minY, bw, bh);
             warpAlphaCtx.clearRect(minX, minY, bw, bh);
@@ -3666,6 +3869,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             sharedUtilCtx.putImageData(cData, 0, 0);
             
             targetCtx.drawImage(sharedUtilCanvas, 0, 0, bw, bh, minX, minY, bw, bh);
+            return true;
+        }
+
+        function getSelectionHandleMetrics() {
+            const rect = mainCanvas.getBoundingClientRect();
+            const unitsPerCssPixel = rect.width > 0 && rect.height > 0
+                ? Math.max(mainCanvas.width / rect.width, mainCanvas.height / rect.height)
+                : 1;
+            return {
+                visualRadius: 5.5 * unitsPerCssPixel,
+                hitRadius: 14 * unitsPerCssPixel,
+                rotateOffset: 20 * unitsPerCssPixel,
+                connectorOffset: 14 * unitsPerCssPixel
+            };
         }
 
         function queueWarpTransformUI() {
@@ -3679,6 +3896,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         function drawTransformUI(warpStep = 1) {
             uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
             const b = selectionBox;
+            const handleMetrics = getSelectionHandleMetrics();
 
             if (currentTool === 'perspective') {
                 renderComplexTransform(uiCtx, 'perspective');
@@ -3686,7 +3904,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 uiCtx.moveTo(selectionCorners[0].x, selectionCorners[0].y);
                 selectionCorners.forEach(c => uiCtx.lineTo(c.x, c.y));
                 uiCtx.closePath(); uiCtx.stroke(); uiCtx.setLineDash([]); uiCtx.fillStyle = "#fff";
-                selectionCorners.forEach(c => { uiCtx.beginPath(); uiCtx.arc(c.x, c.y, 8, 0, Math.PI * 2); uiCtx.fill(); uiCtx.stroke(); });
+                selectionCorners.forEach(c => { uiCtx.beginPath(); uiCtx.arc(c.x, c.y, handleMetrics.visualRadius, 0, Math.PI * 2); uiCtx.fill(); uiCtx.stroke(); });
                 return;
             }
             
@@ -3730,9 +3948,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 { x: -b.w/2, y: -b.h/2 }, { x: b.w/2, y: -b.h/2 }, { x: -b.w/2, y: b.h/2 },  { x: b.w/2, y: b.h/2 },
                 { x: -b.w/2, y: 0 }, { x: b.w/2, y: 0 }, { x: 0, y: -b.h/2 }, { x: 0, y: b.h/2 }
             ];
-            scalePoints.forEach(p => { uiCtx.fillRect(p.x - 8, p.y - 8, 16, 16); uiCtx.strokeRect(p.x - 8, p.y - 8, 16, 16); });
+            const safeScale = Math.max(0.1, Math.abs(b.scale));
+            const resizeHalf = handleMetrics.visualRadius / safeScale;
+            scalePoints.forEach(p => { uiCtx.fillRect(p.x - resizeHalf, p.y - resizeHalf, resizeHalf * 2, resizeHalf * 2); uiCtx.strokeRect(p.x - resizeHalf, p.y - resizeHalf, resizeHalf * 2, resizeHalf * 2); });
 
-            const hOff = 30 * (1/b.scale), lOff = 22 * (1/b.scale);
+            const hOff = handleMetrics.rotateOffset / safeScale, lOff = handleMetrics.connectorOffset / safeScale;
+            const rotationRadius = handleMetrics.visualRadius / safeScale;
             const rotationHandles = [
                 { x: 0, y: -b.h/2, lx: 0, ly: -b.h/2 - lOff, hx: 0, hy: -b.h/2 - hOff },
                 { x: 0, y: b.h/2, lx: 0, ly: b.h/2 + lOff, hx: 0, hy: b.h/2 + hOff },
@@ -3740,17 +3961,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 { x: b.w/2, y: 0, lx: b.w/2 + lOff, ly: 0, hx: b.w/2 + hOff, hy: 0 }
             ];
             rotationHandles.forEach(h => {
-                uiCtx.beginPath(); uiCtx.arc(h.hx, h.hy, 8, 0, Math.PI * 2); uiCtx.fill(); uiCtx.stroke();
+                uiCtx.beginPath(); uiCtx.arc(h.hx, h.hy, rotationRadius, 0, Math.PI * 2); uiCtx.fill(); uiCtx.stroke();
                 uiCtx.beginPath(); uiCtx.moveTo(h.x, h.y); uiCtx.lineTo(h.lx, h.ly); uiCtx.stroke();
             });
             uiCtx.restore();
         }
 
-        const floodFillVisited = new Uint8Array(1920 * 1080);
+        let floodFillVisited = new Uint8Array(mainCanvas.width * mainCanvas.height);
         
         function floodFill(startX, startY, fillRGBA, tolerance) {
             if (isTransforming) finishSelection();
             const width = mainCanvas.width; const height = mainCanvas.height;
+            if (floodFillVisited.length !== width * height) floodFillVisited = new Uint8Array(width * height);
             const imgData = ctx.getImageData(0, 0, width, height, { colorSpace: 'srgb' });
             const data = imgData.data; const uint32Data = new Uint32Array(data.buffer);
 
@@ -4147,8 +4369,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const e = x0 - a * u0 - c * v0; const f = y0 - b * u0 - d * v0;
 
             targetCtx.transform(a, b, c, d, e, f);
-            // Cada face usa só o pequeno trecho de origem que realmente contém.
-            // Evita redesenhar o canvas inteiro milhares de vezes em malhas 64x64.
+            // Copia somente o trecho usado pela face, em vez da imagem inteira.
             const pad = 2;
             const sx = Math.max(0, Math.floor(Math.min(u0, u1, u2) - pad));
             const sy = Math.max(0, Math.floor(Math.min(v0, v1, v2) - pad));
@@ -4160,8 +4381,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         function getTransformHit(pos) {
+            const handleMetrics = getSelectionHandleMetrics();
             if (currentTool === 'perspective') {
-                for (let i = 0; i < selectionCorners.length; i++) if (Math.hypot(pos.x - selectionCorners[i].x, pos.y - selectionCorners[i].y) < 20) return 'corner' + i;
+                for (let i = 0; i < selectionCorners.length; i++) if (Math.hypot(pos.x - selectionCorners[i].x, pos.y - selectionCorners[i].y) < handleMetrics.hitRadius) return 'corner' + i;
                 if (isPointInPoly(pos, selectionCorners)) return 'move'; return null;
             }
 
@@ -4169,18 +4391,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const dx = pos.x - centerX; const dy = pos.y - centerY;
             const cos = Math.cos(-b.angle); const sin = Math.sin(-b.angle);
             const localX = dx * cos - dy * sin; const localY = dx * sin + dy * cos;
-            const s = b.scale; const hDist = 30 * s;
+            const s = b.scale; const hDist = handleMetrics.rotateOffset;
 
-            if (Math.hypot(localX, localY + (b.h/2 * s + hDist)) < 15) return 'rotate'; 
-            if (Math.hypot(localX, localY - (b.h/2 * s + hDist)) < 15) return 'rotate'; 
-            if (Math.hypot(localX + (b.w/2 * s + hDist), localY) < 15) return 'rotate'; 
-            if (Math.hypot(localX - (b.w/2 * s + hDist), localY) < 15) return 'rotate'; 
+            if (Math.hypot(localX, localY + (b.h/2 * s + hDist)) < handleMetrics.hitRadius) return 'rotate'; 
+            if (Math.hypot(localX, localY - (b.h/2 * s + hDist)) < handleMetrics.hitRadius) return 'rotate'; 
+            if (Math.hypot(localX + (b.w/2 * s + hDist), localY) < handleMetrics.hitRadius) return 'rotate'; 
+            if (Math.hypot(localX - (b.w/2 * s + hDist), localY) < handleMetrics.hitRadius) return 'rotate'; 
 
             const sPoints = [
                 { x: -b.w/2 * s, y: -b.h/2 * s }, { x: b.w/2 * s, y: -b.h/2 * s }, { x: -b.w/2 * s, y: b.h/2 * s },  { x: b.w/2 * s, y: b.h/2 * s },
                 { x: -b.w/2 * s, y: 0 }, { x: b.w/2 * s, y: 0 }, { x: 0, y: -b.h/2 * s }, { x: 0, y: b.h/2 * s }
             ];
-            for (let p of sPoints) if (Math.abs(localX - p.x) < 15 && Math.abs(localY - p.y) < 15) return 'scale';
+            for (let p of sPoints) if (Math.abs(localX - p.x) < handleMetrics.hitRadius && Math.abs(localY - p.y) < handleMetrics.hitRadius) return 'scale';
 
             if (Math.abs(localX) < (b.w/2 * s) && Math.abs(localY) < (b.h/2 * s)) return 'move';
             return null;
@@ -4233,13 +4455,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 }
                 ctx.save();
                 ctx.globalCompositeOperation = 'source-over'; 
-                
-                if (currentTool === 'perspective') renderComplexTransform(ctx, 'perspective');
-                else if (currentTool === 'warp') renderComplexTransform(ctx, 'warp');
-                else if (currentTool === 'headSphere') renderComplexTransform(ctx, 'headSphere');
+                let transformRendered = true;
+
+                if (currentTool === 'perspective') transformRendered = renderComplexTransform(ctx, 'perspective');
+                else if (currentTool === 'warp') transformRendered = renderComplexTransform(ctx, 'warp');
+                else if (currentTool === 'headSphere') transformRendered = renderComplexTransform(ctx, 'headSphere');
                 else {
                     const b = selectionBox; ctx.translate(b.x + b.w/2, b.y + b.h/2); ctx.rotate(b.angle); ctx.scale(b.scale, b.scale); ctx.drawImage(selectionCanvas, -b.w/2, -b.h/2);
                 }
+                // Nunca perde o recorte: se uma transformação produzir limites
+                // inválidos, restaura a imagem original na posição de origem.
+                if (transformRendered === false) ctx.drawImage(selectionCanvas, selectionBox.x, selectionBox.y);
                 ctx.restore();
                 
                 cleanupLightweightHead3D();
@@ -4543,7 +4769,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             reader.readAsDataURL(file);
         };
 
-        menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menuDropdown.classList.toggle('show'); }); window.addEventListener('click', (e) => { if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) menuDropdown.classList.remove('show'); });
+        menuBtn.addEventListener('click', (e) => { e.stopPropagation(); closeMobileEditPanel(); menuDropdown.classList.toggle('show'); });
+        mobileEditBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); menuDropdown.classList.remove('show');
+            const open = !mobileEditPanel.classList.contains('show');
+            mobileEditPanel.classList.toggle('show', open);
+            mobileEditBtn.classList.toggle('active', open);
+            mobileEditBtn.setAttribute('aria-expanded', String(open));
+        });
+        mobileEditPanel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (e.target.closest('button')) requestAnimationFrame(closeMobileEditPanel);
+        });
+        window.addEventListener('click', (e) => {
+            if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) menuDropdown.classList.remove('show');
+            if (!mobileEditBtn.contains(e.target) && !mobileEditPanel.contains(e.target)) closeMobileEditPanel();
+        });
         const spherical360Prompt = 'Spherical equirectangular 360-degree projection, seamless full panorama, ultra-wide wide-angle macro-spatial perspective, grand cavernous scale architectural volume, vast expansive boundaries eliminating all cramped feeling, [DESCREVA SUA IMAGEM AQUI], **charming traditional hand-drawn storybook illustration style, featuring expressive ink outlines and soft, translucent watercolor washes, visible paper texture, warm color palette, whimsical and nostalgic atmosphere**, masterpiece quality, high-end stylized 3D render --ar 2:1';
         copy360PromptMenu.onclick = async (e) => {
             e.preventDefault();
@@ -5097,7 +5338,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 }));
                 return { layers, duration: f.duration || 1 };
             }));
-            const projectData = { fps: fps, frames: serializedFrames, background: bgCanvas.toDataURL(), layersMeta: layersMeta };
+            const projectData = { fps: fps, frames: serializedFrames, background: bgCanvas.toDataURL(), layersMeta: layersMeta, canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode };
             const blob = new Blob([JSON.stringify(projectData)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = "meu_projeto_animacao.json"; a.click(); URL.revokeObjectURL(url); showNotification("Projeto salvo com sucesso!");
         };
 
@@ -5105,13 +5346,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         projectInput.onchange = async (e) => {
             const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = async (event) => {
-                const data = JSON.parse(event.target.result); fps = data.fps || 6; document.getElementById('fpsSlider').value = fps; document.getElementById('fpsValue').textContent = fps;
+                const data = JSON.parse(event.target.result);
+                if (Number(data.canvasWidth) !== 1080 || Number(data.canvasHeight) !== 1920 || data.mobileMode !== true) {
+                    showNotification('Este projeto não pertence à versão mobile 1080×1920');
+                    return;
+                }
+                setProjectCanvasBackingSize(1080, 1920);
+                updateMobileModeUI();
+                fps = data.fps || 6; document.getElementById('fpsSlider').value = fps; document.getElementById('fpsValue').textContent = fps;
                 if (data.layersMeta) { layersMeta = data.layersMeta; }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
                 const bgImg = new Image(); bgImg.onload = () => { bgCtx.globalCompositeOperation = 'source-over'; bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.drawImage(bgImg, 0, 0); }; bgImg.src = data.background;
                 frames = await Promise.all(data.frames.map(async f => {
                     const layers = await Promise.all(f.layers.map(async l => {
-                        if (!l) return null; const img = new Image(); img.src = l; await new Promise(res => img.onload = res); return await createImageBitmap(img);
+                        if (!l) return null; const img = new Image(); img.src = l; await new Promise(res => img.onload = res); return createImageBitmap(img);
                     }));
                     while (layers.length < layersMeta.length) layers.push(null); return { layers, duration: f.duration || 1 };
                 }));
@@ -5642,6 +5890,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById('playBtn').addEventListener('click', toggleAnimation); document.getElementById('stopBtn').addEventListener('click', toggleAnimation);
         
         syncLayerCanvases();
+        updateMobileModeUI();
         ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
         renderTimeline(true); refreshLayerDisplay(); hasUnsavedChanges = true; saveFrameState(0);
 
@@ -5649,7 +5898,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
     <script>
     (async function init3DBackground() {
-        document.querySelector('.top-left').appendChild(document.querySelector('.three-controls'));
         const DEFAULT_CAMERA = { yaw: 0, pitch: 0, fov: 75 };
         const bg3dTouchLayer = document.getElementById('bg3dTouchLayer');
         const move3dBtn = document.getElementById('move3dBtn');
@@ -5741,13 +5989,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             THREE = window.THREE;
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x252525);
-            camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 500);
+            camera = new THREE.PerspectiveCamera(75, mainCanvas.width / mainCanvas.height, 0.05, 500);
             camera.position.set(0, 0, 0);
             renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
-            renderer.setSize(1920, 1080, false);
+            renderer.setSize(mainCanvas.width, mainCanvas.height, false);
             renderer.setPixelRatio(1);
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             document.getElementById('threeRendererHost').appendChild(renderer.domElement);
+            window.resize3DBackgroundRenderer = function(width, height) {
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height, false);
+            };
 
             const sphere = new THREE.SphereGeometry(100, 64, 40);
             // Corrige direita/esquerda na vista interna do panorama. A geometria
@@ -6080,6 +6333,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const serializedAudioClips = audioClips.map(clip => ({ name: clip.name, dataURL: clip.dataURL, start: clip.start, end: clip.end, sourceOffset: clip.sourceOffset, fitsProject: clip.fitsProject }));
             const projectData = {
                 version: 13, fps, frames: serializedFrames,
+                canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode,
                 backgroundPanorama: panoramaDataURL,
                 backgroundOpacity: Number(backgroundOpacity.value),
                 audioClips: serializedAudioClips, layersMeta, selectedBrushId
@@ -6093,13 +6347,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const file = event.target.files[0]; if (!file) return;
             try {
                 const data = JSON.parse(await file.text());
+                if (Number(data.canvasWidth) !== 1080 || Number(data.canvasHeight) !== 1920 || data.mobileMode !== true) {
+                    showNotification('Este projeto não pertence à versão mobile 1080×1920');
+                    event.target.value = '';
+                    return;
+                }
+                setProjectCanvasBackingSize(1080, 1920);
+                updateMobileModeUI();
                 fps = data.fps || 6; fpsSlider.value = fps; fpsValue.textContent = fps; updateGlobalFrameDurationControl();
                 if (data.layersMeta) { layersMeta = data.layersMeta.map((m, i) => ({ opacity: m.opacity != null ? m.opacity : 1, visible: m.visible !== false, name: m.name || `Camada ${i + 1}` })); }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
                 else { layersMeta = [{ opacity: 1, visible: true, name: 'Camada 1' }]; }
                 frames = await Promise.all(data.frames.map(async frame => {
                     const layers = await Promise.all(frame.layers.map(async layer => {
-                        if (!layer) return null; const image = new Image(); image.src = layer; await new Promise(resolve => image.onload = resolve); return createImageBitmap(image);
+                        if (!layer) return null; const image = new Image(); image.src = layer; await new Promise(resolve => image.onload = resolve); return resizedBitmap(image, 1080, 1920);
                     }));
                     while (layers.length < layersMeta.length) layers.push(null);
                     while (layers.length > layersMeta.length) layers.pop();
