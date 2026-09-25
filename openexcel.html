@@ -2518,15 +2518,42 @@ sheet.select("A3");</textarea>
   function paste(mode){
     if(!state.clipboard)return;
 
-    const sr=state.selected.row;
-    const sc=state.selected.col;
+    const selectedRange=state.range ? {
+      r1:Math.min(state.range.r1,state.range.r2),
+      r2:Math.max(state.range.r1,state.range.r2),
+      c1:Math.min(state.range.c1,state.range.c2),
+      c2:Math.max(state.range.c1,state.range.c2)
+    } : null;
+    const sr=selectedRange?.r1 ?? state.selected.row;
+    const sc=selectedRange?.c1 ?? state.selected.col;
     const sourceStartRow=state.clipboardSource?.r1 || sr;
     const sourceStartCol=state.clipboardSource?.c1 || sc;
+    const clipboardRows=state.clipboard.length;
+    const clipboardCols=Math.max(0,...state.clipboard.map(row=>row.length));
+    if(!clipboardRows || !clipboardCols)return;
 
-    state.clipboard.forEach((row,ri)=>row.forEach((it,ci)=>{
-      const r=sr+ri;
-      const c=sc+ci;
-      if(r>ROWS||c>COLS)return;
+    // A multi-cell destination is filled completely, repeating the copied
+    // block as needed (for example: one copied cell over 20 selected cells).
+    // With only one destination cell, keep the usual behavior and paste the
+    // complete copied block starting there.
+    const destination=selectedRange &&
+      (selectedRange.r1!==selectedRange.r2 || selectedRange.c1!==selectedRange.c2)
+      ? selectedRange
+      : {
+          r1:sr,
+          r2:Math.min(ROWS,sr+clipboardRows-1),
+          c1:sc,
+          c2:Math.min(COLS,sc+clipboardCols-1)
+        };
+
+    for(let r=destination.r1;r<=destination.r2;r++){
+      for(let c=destination.c1;c<=destination.c2;c++){
+        const ri=(r-sr)%clipboardRows;
+        const row=state.clipboard[ri];
+        if(!row?.length)continue;
+        const ci=(c-sc)%row.length;
+        const it=row[ci];
+        if(!it)continue;
 
       const sourceRow=sourceStartRow+ri;
       const sourceCol=sourceStartCol+ci;
@@ -2556,7 +2583,8 @@ sheet.select("A3");</textarea>
       else if(mode==='format'){
         state.styles[key(r,c)]=clone(it.style||{});
       }
-    }));
+      }
+    }
 
     refreshAll();
     loadFx();
