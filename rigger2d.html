@@ -1476,6 +1476,74 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
 
+      // A profundidade da malha usa exatamente o mesmo skinning que move seus
+      // vértices em X/Y. Cada vértice herda o Z ponderado dos segmentos que o
+      // deformam; portanto a imagem acompanha o osso também em profundidade.
+      function getMeshVertexBoneZ(layer, lMesh, vertexIndex, binding = null) {
+        const lPins = layer?.pins || [];
+        if (!lPins.length || !lMesh?.[vertexIndex]) return 0;
+        const skin = binding || buildBoneWarpBinding(layer, lMesh, lPins);
+        const finiteZ = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+        const carrierId = skin.rigidCarrierIds?.[vertexIndex] ?? -1;
+        if (carrierId >= 0) return finiteZ(lPins[carrierId]?.z);
+
+        let z = 0;
+        const start = skin.offsets?.[vertexIndex] ?? 0;
+        const end = skin.offsets?.[vertexIndex + 1] ?? start;
+        for (let j = start; j < end; j++) {
+          const pinId = skin.ids[j];
+          const pin = lPins[pinId];
+          const parent = Number.isInteger(pin?.parentId)
+            ? lPins[pin.parentId]
+            : null;
+          if (!pin || !parent) continue;
+          const u = skin.projections[j] || 0;
+          const segmentZ = finiteZ(parent.z) +
+            (finiteZ(pin.z) - finiteZ(parent.z)) * u;
+          z += segmentZ * skin.weights[j];
+        }
+        return z;
+      }
+
+      function getMeshTriangleBoneZ(layer, lMesh, triangle, binding = null) {
+        if (!triangle?.length) return 0;
+        const skin = binding || buildBoneWarpBinding(layer, lMesh, layer?.pins || []);
+        const influenceByBone = new Map();
+        for (const vertexIndex of triangle) {
+          const carrierId = skin.rigidCarrierIds?.[vertexIndex] ?? -1;
+          if (carrierId >= 0) {
+            influenceByBone.set(
+              carrierId,
+              (influenceByBone.get(carrierId) || 0) + 1,
+            );
+            continue;
+          }
+          const start = skin.offsets?.[vertexIndex] ?? 0;
+          const end = skin.offsets?.[vertexIndex + 1] ?? start;
+          for (let j = start; j < end; j++) {
+            const boneId = skin.ids[j];
+            influenceByBone.set(
+              boneId,
+              (influenceByBone.get(boneId) || 0) + skin.weights[j],
+            );
+          }
+        }
+
+        // Um triângulo inteiro pertence ao osso de maior influência. Isso faz
+        // a malha acompanhar o Z do rig sem criar milhares de profundidades
+        // fracionárias (e milhares de draw calls) durante o movimento.
+        let dominantBone = -1;
+        let strongestInfluence = 0;
+        influenceByBone.forEach((weight, boneId) => {
+          if (weight > strongestInfluence) {
+            strongestInfluence = weight;
+            dominantBone = boneId;
+          }
+        });
+        const z = Number(layer?.pins?.[dominantBone]?.z);
+        return Number.isFinite(z) ? z : 0;
+      }
+
       // O contorno limita a deformação, sem apagar pixels da imagem.
       // ===== RENDERER GPU PARA A VISUALIZAÇÃO INTERATIVA =====
       // Mantém o Canvas 2D original para UI, foto/exportação e fallback. A malha das
@@ -1622,35 +1690,25 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return `${gm.signature || "base"}|${gm.mesh.length}|${gm.triangles.length}|${item.img.width}x${item.img.height}|${pinBind}`;
         };
 
-        // Metadados invariantes por triângulo. Nearest pin e candidatos de Frente
-        // dependem da pose de bind/regiões, não do movimento atual dos ossos.
+        // Metadados invariantes por triângulo. A profundidade é calculada mais
+        // abaixo com os pesos reais do skinning da malha.
         const buildTriangleMeta = (item, gm) => {
-          const l = item.l;
           const meta = new Array(gm.triangles.length);
-          const bodyPins = (l.pins || []).map((p, i) => ({ p, i }));
           for (let ti = 0; ti < gm.triangles.length; ti++) {
             const t = gm.triangles[ti];
-            const a = gm.mesh[t[0]], b = gm.mesh[t[1]], c = gm.mesh[t[2]];
-            const cx = (a.ox + b.ox + c.ox) / 3;
-            const cy = (a.oy + b.oy + c.oy) / 3;
-            let nearest = -1, best = Infinity;
-            for (let j = 0; j < bodyPins.length; j++) {
-              const o = bodyPins[j];
-              const dx = cx - (o.p.ox ?? o.p.x);
-              const dy = cy - (o.p.oy ?? o.p.y);
-              const d = dx * dx + dy * dy;
-              if (d < best) { best = d; nearest = o.i; }
-            }
-            meta[ti] = { nearest, frontCandidates: [], localOverlay: false };
+            meta[ti] = { triangle: t, localOverlay: false };
           }
           return meta;
         };
 
         const buildCommands = (item, gm, cacheEntry) => {
           const l = item.l;
+          // Preserve o valor Z completo no cache. Arredondar com toFixed(5)
+          // fazia mudanças menores parecerem limitadas, pois o renderizador
+          // podia reutilizar os comandos da profundidade anterior.
           const zSignature = (l.pins || [])
-            .map((p) => Number(p.z || 0).toFixed(5))
-            .join(",") + `|layer:${Number(l.z || 0).toFixed(5)}`;
+            .map((p) => String(Number(p.z || 0)))
+            .join(",") + `|layer:${String(Number(l.z || 0))}`;
           if (cacheEntry.commands && cacheEntry.zSignature === zSignature)
             return cacheEntry.commands;
           destroyCommands(cacheEntry.commands);
@@ -1667,20 +1725,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           };
           const pins = l.pins || [];
           const layerZ = Number(l.z || 0);
+          const skin = buildBoneWarpBinding(l, gm.mesh, pins);
           for (let ti = 0; ti < gm.triangles.length; ti++) {
             const m = cacheEntry.meta[ti];
-            let manualFrontZ = 0,
-              manualBackZ = 0;
-            const candidates = m.frontCandidates;
-            for (let j = 0; j < candidates.length; j++) {
-              const z = pins[candidates[j]]?.z || 0;
-              if (z > manualFrontZ) manualFrontZ = z;
-              if (z < manualBackZ) manualBackZ = z;
-            }
-            const manualDepthZ = manualFrontZ > 0 ? manualFrontZ : manualBackZ;
-            const bodyZ =
-              manualDepthZ ||
-              (m.nearest >= 0 ? Number(pins[m.nearest]?.z || 0) : 0);
+            const bodyZ = getMeshTriangleBoneZ(
+              l,
+              gm.mesh,
+              m.triangle,
+              skin,
+            );
             // Um único eixo Z numérico e ilimitado para ordenar a profundidade.
             const effectiveZ = layerZ + bodyZ;
             add(0, effectiveZ, ti, m.localOverlay);
@@ -4423,6 +4476,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (activeLayerIndex === "bg") { setBackgroundKeyframe(); return; }
         const frame = Math.round(currentFrame);
         syncActiveLayer();
+        // Todo keyframe de pose/ossos também fixa o Transformer da camada
+        // ativa no mesmo frame. Como Auto Key e o botão Keyframe passam por
+        // esta função, os dois fluxos permanecem sempre sincronizados.
+        const activeLayer = Number.isInteger(activeLayerIndex)
+          ? layers[activeLayerIndex]
+          : null;
+        if (activeLayer && !activeLayer.isFolder) {
+          writeLayerTransformKey(activeLayer, frame, readLayerTransform(activeLayer));
+          if (activeLayer.followPin)
+            writeFollowPinStateKey(activeLayer, frame, activeLayer.followPin);
+        }
         const states = layers.map((l) => ({
           pins: (l.pins || []).map((p) => ({ x:p.x, y:p.y, warpAngle:p.warpAngle, z:p.z||0, extraLinks:p.extraLinks?[...p.extraLinks]:[] })),
           shapeKeyValues: l.isFolder ? {} : captureShapeKeyValues(l),
@@ -4432,6 +4496,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         keyframes.push({ frame, layerStates: states });
         keyframes.sort((a,b)=>a.frame-b.frame);
         totalFrames = Math.max(getLastTimelineKeyframe(), keyframes.at(-1)?.frame || 1, 1);
+        renderTransformTimeline();
         if (advance) {
           currentFrame = frame + 1;
           if (!keyframes.some((k)=>k.frame>=currentFrame)) setKeyframe(false);
@@ -4499,9 +4564,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const index=keyframes.findIndex((k)=>k.frame===frame);
         if(index===-1)return;
         keyframes.splice(index,1);
+
+        // Pose/ossos e Transformer são gravados juntos por setKeyframe(); ao
+        // excluir a pose, remova também os keys da camada ativa neste frame.
+        const activeLayer=Number.isInteger(activeLayerIndex)
+          ? layers[activeLayerIndex]
+          : null;
+        if(activeLayer&&!activeLayer.isFolder){
+          activeLayer.transformKeyframes=(activeLayer.transformKeyframes||[])
+            .filter((key)=>Math.round(key.frame)!==frame);
+          activeLayer.followPinKeyframes=(activeLayer.followPinKeyframes||[])
+            .filter((key)=>Math.round(key.frame)!==frame);
+        }
         totalFrames=Math.max(getLastTimelineKeyframe(),1);
         currentFrame=Math.max(1,Math.min(totalFrames,frame-1));
         seek(currentFrame);
+        renderTransformTimeline();
       }
 
       function updateKfStatus() {
@@ -6541,13 +6619,46 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (activeLayerIndex === -1 || activeLayerIndex === "bg") return;
         if (isPlaying) togglePlay();
 
+        const activeLayer = layers[activeLayerIndex];
+        if (!activeLayer || activeLayer.isFolder) return;
+        const direction = Number(delta) >= 0 ? 1 : -1;
+        const finiteZ = (value) => {
+          const number = Number(value);
+          return Number.isFinite(number) ? number : 0;
+        };
+
+        // Calcula a profundidade efetiva de todas as camadas e ossos. Frente
+        // sempre ultrapassa o maior Z existente; Trás sempre ultrapassa o
+        // menor. Assim não existe faixa fixa nem colisão por valores iguais.
+        const allDepths = [];
+        layers.forEach((layer) => {
+          if (!layer || layer.isFolder) return;
+          const layerZ = finiteZ(layer.z);
+          allDepths.push(layerZ);
+          (layer.pins || []).forEach((pin) =>
+            allDepths.push(layerZ + finiteZ(pin.z)),
+          );
+        });
+        const globalExtreme = direction > 0
+          ? Math.max(0, ...allDepths)
+          : Math.min(0, ...allDepths);
+
         // Z faz parte da pose animada, exatamente como x/y dos ossos.
         // Nunca propague uma edição para todos os keys futuros: o valor atual
         // deve pertencer somente ao frame onde o usuário fez a alteração.
         if (selectedPins.length === 0) {
-          const activeLayer = layers[activeLayerIndex];
-          if (!activeLayer || activeLayer.isFolder) return;
-          const newZ = Number(activeLayer.z || 0) + delta;
+          const layerZ = finiteZ(activeLayer.z);
+          const layerDepths = [
+            layerZ,
+            ...(activeLayer.pins || []).map(
+              (pin) => layerZ + finiteZ(pin.z),
+            ),
+          ];
+          const layerExtreme = direction > 0
+            ? Math.max(...layerDepths)
+            : Math.min(...layerDepths);
+          const shift = globalExtreme + direction - layerExtreme;
+          const newZ = layerZ + shift;
           activeLayer.z = newZ;
           setKeyframe(false);
           showNotice(`Camada Z: ${newZ}`);
@@ -6556,9 +6667,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return;
         }
 
-        selectedPins.forEach((p) => {
-          if (!p) return;
-          p.z = Number(p.z || 0) + delta;
+        const layerZ = finiteZ(activeLayer.z);
+        const selectedDepths = selectedPins
+          .filter(Boolean)
+          .map((pin) => layerZ + finiteZ(pin.z));
+        if (!selectedDepths.length) return;
+        const selectedExtreme = direction > 0
+          ? Math.max(...selectedDepths)
+          : Math.min(...selectedDepths);
+        const shift = globalExtreme + direction - selectedExtreme;
+        selectedPins.forEach((pin) => {
+          if (pin) pin.z = finiteZ(pin.z) + shift;
         });
 
         // setKeyframe captura p.z de cada osso. Nos frames entre dois keys,
@@ -8569,19 +8688,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 triangles: TRIANGLE_INDICES,
               };
               const layerZ = Number(item.l.z || 0);
+              const skin = buildBoneWarpBinding(item.l, gm.mesh, item.l.pins || []);
               gm.triangles.forEach((t) => {
                 const tri = [gm.mesh[t[0]], gm.mesh[t[1]], gm.mesh[t[2]]];
-                const centerX = (tri[0].ox + tri[1].ox + tri[2].ox) / 3;
-                const centerY = (tri[0].oy + tri[1].oy + tri[2].oy) / 3;
-                let pinZ = 0,
-                  minDist = Infinity;
-                item.l.pins.forEach((p) => {
-                  const d = (centerX - p.ox) ** 2 + (centerY - p.oy) ** 2;
-                  if (d < minDist) {
-                    minDist = d;
-                    pinZ = p.z || 0;
-                  }
-                });
+                const pinZ = getMeshTriangleBoneZ(
+                  item.l,
+                  gm.mesh,
+                  t,
+                  skin,
+                );
                 const effectiveZ = layerZ + pinZ;
                 allTriangles.push({
                   tri,
@@ -9664,6 +9779,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   tipCtx.putImageData(imageData,0,0);return canvas;
  }
  const drawingHbTip=makeDrawingHbBrushTip();
+ function makeDrawingProceduralGrain(kind){
+  const size=128,tile=document.createElement('canvas');tile.width=tile.height=size;const tc=tile.getContext('2d'),pixels=tc.createImageData(size,size);let seed=kind==='hb'?0x48424752:kind==='6b'?0x36424752:kind==='crayon'?0x43524159:0x57415452;
+  const random=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let value=Math.imul(seed^seed>>>15,1|seed);value=value+Math.imul(value^value>>>7,61|value)^value;return((value^value>>>14)>>>0)/4294967296;};
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){const fine=random(),cloud=.5+Math.sin(x*.115+Math.sin(y*.071)*1.8)*.2+Math.sin(y*.163-x*.037)*.16,fiber=Math.abs(Math.sin(x*.42+y*.067+Math.sin(y*.19)*2.2));let alpha;if(kind==='hb'){alpha=fine<.12?.06:.34+fine*.42+cloud*.16;if(fiber<.09)alpha*=.28;}else if(kind==='6b'){alpha=fine<.045?.22:.66+fine*.24+cloud*.1;if(fiber<.055)alpha*=.62;}else if(kind==='crayon'){const wax=fine*.58+cloud*.42;alpha=wax<.38?.05:.26+wax*.72;if(fiber<.14)alpha*=.16;}else{alpha=.48+cloud*.34+fine*.14;if(fine<.065)alpha*=.2;}const o=(y*size+x)*4;pixels.data[o]=pixels.data[o+1]=pixels.data[o+2]=255;pixels.data[o+3]=Math.max(0,Math.min(255,Math.round(alpha*255)));}
+  tc.putImageData(pixels,0,0);return tile;
+ }
+ const drawingBrushGrains={hb:makeDrawingProceduralGrain('hb'),'6b':makeDrawingProceduralGrain('6b'),crayon:makeDrawingProceduralGrain('crayon'),watercolor:makeDrawingProceduralGrain('watercolor')},drawingGrainPatternCache=new WeakMap();
+ function applyDrawingStaticGrain(targetCtx,grain){let patterns=drawingGrainPatternCache.get(targetCtx);if(!patterns){patterns=new Map();drawingGrainPatternCache.set(targetCtx,patterns);}let pattern=patterns.get(grain);if(!pattern){pattern=targetCtx.createPattern(grain,'repeat');patterns.set(grain,pattern);}if(!pattern)return;targetCtx.save();targetCtx.globalCompositeOperation='destination-in';targetCtx.globalAlpha=1;targetCtx.fillStyle=pattern;targetCtx.fillRect(0,0,targetCtx.canvas.width,targetCtx.canvas.height);targetCtx.restore();}
  drawingBrushPresets.push({id:'builtin-hb',name:'HB',type:'stamp',tip:drawingHbTip,spacing:.09,pressureOpacity:true,pencilGrade:0,pencilKind:'hb'});
  drawingBrushPresets.push({id:'builtin-6b',name:'6B',type:'stamp',tip:drawingHbTip,spacing:.055,pressureOpacity:true,pencilGrade:6,pencilKind:'6b'});
  drawingBrushPresets.push({id:'builtin-crayon',name:'Giz de cera',type:'stamp',brushKind:'crayon'});
@@ -9702,6 +9825,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
  }
  function drawDrawingPresetDot(targetCtx,x,y,size,pressure){const b=selectedDrawingBrushPreset();if(Number.isFinite(b.pencilGrade))drawDrawingHbDot(targetCtx,x,y,size,pressure);else if(b.brushKind)drawDrawingNativeDot(targetCtx,x,y,size,pressure);}
  function drawDrawingPresetSegment(targetCtx,x1,y1,x2,y2,size,pressure){const b=selectedDrawingBrushPreset();if(Number.isFinite(b.pencilGrade))drawDrawingHbSegment(targetCtx,x1,y1,x2,y2,size,pressure);else if(b.brushKind)drawDrawingNativeSegment(targetCtx,x1,y1,x2,y2,size,pressure);}
+ function addDrawingArtPoint(g,x,y,pressure){const p=Math.max(.03,Math.min(1,pressure)),points=g.artPoints;if(!points.length){points.push({x,y,p});return true;}const last=points.at(-1),rawDistance=Math.hypot(x-last.x,y-last.y);if(rawDistance<.12)return false;const follow=Math.max(.48,Math.min(.86,.48+rawDistance/34)),endX=last.x+(x-last.x)*follow,endY=last.y+(y-last.y)*follow,endP=last.p+(p-last.p)*.58,distance=Math.hypot(endX-last.x,endY-last.y),spacing=Math.max(.8,Math.min(2.5,g.size*.04)),steps=Math.max(1,Math.ceil(distance/spacing));for(let i=1;i<=steps;i++){const t=i/steps;points.push({x:last.x+(endX-last.x)*t,y:last.y+(endY-last.y)*t,p:last.p+(endP-last.p)*t});}if(points.length>6000)points.splice(0,points.length-6000);return true;}
+ function traceDrawingSmooth(targetCtx,points,offsetScale=0,seed=0){if(!points.length)return;const shifted=points.map((point,index)=>{if(!offsetScale)return point;const prev=points[Math.max(0,index-1)],next=points[Math.min(points.length-1,index+1)],dx=next.x-prev.x,dy=next.y-prev.y,length=Math.hypot(dx,dy)||1,wobble=(drawingHbNoise(seed*101+index*.173)-.5)*offsetScale;return{x:point.x-dy/length*wobble,y:point.y+dx/length*wobble,p:point.p};});targetCtx.beginPath();targetCtx.moveTo(shifted[0].x,shifted[0].y);if(shifted.length===1)return;for(let i=1;i<shifted.length-1;i++){const point=shifted[i],next=shifted[i+1];targetCtx.quadraticCurveTo(point.x,point.y,(point.x+next.x)/2,(point.y+next.y)/2);}const last=shifted.at(-1);targetCtx.lineTo(last.x,last.y);}
+ function renderDrawingPencilStroke(targetCtx,points,baseSize){const profile=drawingPencilProfile(),is6B=selectedDrawingBrushPreset().pencilKind==='6b';if(points.length===1){drawDrawingHbDot(targetCtx,points[0].x,points[0].y,baseSize*(.2+.8*points[0].p),points[0].p);applyDrawingStaticGrain(targetCtx,drawingBrushGrains[is6B?'6b':'hb']);return;}const left=[],right=[];let pressureSum=0;for(let i=0;i<points.length;i++){const point=points[i];pressureSum+=point.p;const prev=points[Math.max(0,i-1)],next=points[Math.min(points.length-1,i+1)],dx=next.x-prev.x,dy=next.y-prev.y,length=Math.hypot(dx,dy)||1,width=Math.max(.45,baseSize*(profile.widthBase+profile.widthPressure*Math.pow(point.p,profile.widthCurve))),nx=-dy/length,ny=dx/length,radius=width/2;left.push({x:point.x+nx*radius,y:point.y+ny*radius});right.push({x:point.x-nx*radius,y:point.y-ny*radius});}const averagePressure=pressureSum/points.length;targetCtx.fillStyle=color;targetCtx.globalAlpha=is6B?.22+.62*Math.pow(averagePressure,.66):.12+.4*Math.pow(averagePressure,.82);targetCtx.beginPath();targetCtx.moveTo(left[0].x,left[0].y);for(let i=1;i<left.length;i++)targetCtx.lineTo(left[i].x,left[i].y);const end=points.length-1,endDx=points[end].x-points[end-1].x,endDy=points[end].y-points[end-1].y,endLength=Math.hypot(endDx,endDy)||1,endRadius=Math.hypot(left[end].x-right[end].x,left[end].y-right[end].y)/2,endAngle=Math.atan2(endDy/endLength,endDx/endLength);targetCtx.arc(points[end].x,points[end].y,endRadius,endAngle+Math.PI/2,endAngle-Math.PI/2,true);for(let i=right.length-1;i>=0;i--)targetCtx.lineTo(right[i].x,right[i].y);const startDx=points[1].x-points[0].x,startDy=points[1].y-points[0].y,startLength=Math.hypot(startDx,startDy)||1,startRadius=Math.hypot(left[0].x-right[0].x,left[0].y-right[0].y)/2,startAngle=Math.atan2(startDy/startLength,startDx/startLength);targetCtx.arc(points[0].x,points[0].y,startRadius,startAngle-Math.PI/2,startAngle+Math.PI/2,true);targetCtx.closePath();targetCtx.fill();targetCtx.globalCompositeOperation='source-over';targetCtx.strokeStyle=color;targetCtx.lineCap=targetCtx.lineJoin='round';const fibers=is6B?5:7;for(let fiber=0;fiber<fibers;fiber++){targetCtx.globalAlpha=(is6B?.075:.052)*(.65+drawingHbNoise(fiber*17.4)*.7);targetCtx.lineWidth=Math.max(.28,Math.min(1.15,baseSize*(is6B?.035:.026)));traceDrawingSmooth(targetCtx,points,baseSize*(is6B?.5:.42),fiber+(is6B?90:60));targetCtx.stroke();}targetCtx.fillStyle=color;targetCtx.globalAlpha=profile.grainBase+profile.grainPressure*averagePressure;targetCtx.beginPath();const grainEvery=Math.max(2,Math.round(3.8-Math.min(2,baseSize*.04)));for(let i=0;i<points.length;i+=grainEvery){const point=points[i],grain=drawingHbNoise(i*7.31+point.x*.17+point.y*.29);if(grain<profile.grainCutoff)continue;const prev=points[Math.max(0,i-1)],next=points[Math.min(points.length-1,i+1)],dx=next.x-prev.x,dy=next.y-prev.y,length=Math.hypot(dx,dy)||1,spread=(drawingHbNoise(i*13.7)*2-1)*baseSize*(profile.spreadBase+profile.spreadLight*(1-point.p)),radius=Math.max(.16,Math.min(.72,baseSize*profile.grainSize*(.45+grain))),gx=point.x-dy/length*spread,gy=point.y+dx/length*spread;targetCtx.moveTo(gx+radius,gy);targetCtx.arc(gx,gy,radius,0,Math.PI*2);}targetCtx.fill();applyDrawingStaticGrain(targetCtx,drawingBrushGrains[is6B?'6b':'hb']);targetCtx.globalAlpha=1;}
+ function renderDrawingNativeContinuous(targetCtx,points,kind,baseSize){const averagePressure=points.reduce((sum,point)=>sum+point.p,0)/points.length;targetCtx.strokeStyle=targetCtx.fillStyle=color;targetCtx.lineCap=targetCtx.lineJoin='round';if(points.length===1){drawDrawingNativeDot(targetCtx,points[0].x,points[0].y,baseSize*(.2+.8*points[0].p),points[0].p);if(kind==='crayon')applyDrawingStaticGrain(targetCtx,drawingBrushGrains.crayon);else if(kind==='watercolor')applyDrawingStaticGrain(targetCtx,drawingBrushGrains.watercolor);return;}if(kind==='crayon'){targetCtx.globalAlpha=.18+averagePressure*.34;targetCtx.lineWidth=Math.max(.8,baseSize*.82);traceDrawingSmooth(targetCtx,points);targetCtx.stroke();const fibers=Math.min(16,Math.max(7,Math.ceil(baseSize/3)));for(let i=0;i<fibers;i++){targetCtx.globalAlpha=(.08+averagePressure*.2)*(.55+drawingHbNoise(i*9.7)*.55);targetCtx.lineWidth=Math.max(.4,baseSize/fibers*(.4+drawingHbNoise(i*3.1)*.72));traceDrawingSmooth(targetCtx,points,baseSize*.72,i+1);targetCtx.stroke();}applyDrawingStaticGrain(targetCtx,drawingBrushGrains.crayon);}else if(kind==='watercolor'){for(let i=0;i<6;i++){targetCtx.globalAlpha=.016+averagePressure*.026;targetCtx.lineWidth=baseSize*(1.05-i*.055);traceDrawingSmooth(targetCtx,points,baseSize*.22,i+20);targetCtx.stroke();}targetCtx.globalAlpha=.035+averagePressure*.045;targetCtx.lineWidth=baseSize*1.08;traceDrawingSmooth(targetCtx,points,baseSize*.12,77);targetCtx.stroke();applyDrawingStaticGrain(targetCtx,drawingBrushGrains.watercolor);}else if(kind==='light'){targetCtx.globalCompositeOperation='lighter';const widths=[2.35,1.35,.68,.22],alphas=[.018,.052,.17,.72];for(let i=0;i<widths.length;i++){targetCtx.globalAlpha=alphas[i]*(.45+averagePressure*.55);targetCtx.lineWidth=Math.max(.55,Math.min(180,baseSize*widths[i]));traceDrawingSmooth(targetCtx,points);targetCtx.stroke();}}targetCtx.globalAlpha=1;targetCtx.globalCompositeOperation='source-over';}
+ function renderDrawingArtStroke(targetCtx,g){targetCtx.save();targetCtx.globalCompositeOperation='source-over';targetCtx.clearRect(0,0,W,H);const brush=selectedDrawingBrushPreset();if(Number.isFinite(brush.pencilGrade))renderDrawingPencilStroke(targetCtx,g.artPoints,g.size);else renderDrawingNativeContinuous(targetCtx,g.artPoints,brush.brushKind,g.size);targetCtx.restore();}
  function renderDrawingBrushList(){const host=el('brush-list');host.replaceChildren();for(const brush of drawingBrushPresets){const b=document.createElement('button');b.type='button';b.className='drawing-brush-item'+(brush.id===selectedDrawingBrushId?' active':'');b.setAttribute('role','menuitem');const n=document.createElement('span');n.textContent=brush.name;const c=document.createElement('span');c.className='drawing-brush-check';c.textContent=brush.id===selectedDrawingBrushId?'✓':'';b.append(n,c);b.onclick=e=>{e.stopPropagation();selectedDrawingBrushId=brush.id;choose('brush');el('brush-dropdown').classList.remove('open');el('brushes').setAttribute('aria-expanded','false');el('brush').title='Pincel selecionado: '+brush.name;el('brushes').title='Pincéis — '+brush.name;renderDrawingBrushList();};host.appendChild(b);}}
  function closeDrawingBrushMenu(){el('brush-dropdown').classList.remove('open');el('brushes').setAttribute('aria-expanded','false');}
  let drawingBackgroundVisible=true;
@@ -10162,8 +10290,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
  function flush(){if(frame)cancelAnimationFrame(frame);frame=0;if(!dirty||!gesture?.base)return;const r=dirty;dirty=null;if(gesture.direct){composite(r);return;}const {x,y,w,h}=r;ctx.clearRect(x,y,w,h);ctx.drawImage(gesture.base,x,y,w,h,x,y,w,h);ctx.save();ctx.globalCompositeOperation=gesture.tool==='eraser'?'destination-out':'source-over';ctx.globalAlpha=gesture.opacity;ctx.drawImage(stroke,x,y,w,h,x,y,w,h);ctx.restore();composite(r);}
  function segment(p,end=false,pressure=1){const g=gesture,dc=g.direct?ctx:sc,mid=end?p:{x:(g.last.x+p.x)/2,y:(g.last.y+p.y)/2},currentSize=g.size*(.2+.8*Math.max(.05,Math.min(1,pressure)));
   dc.save();
-  if(g.tool==='brush'&&selectedDrawingBrushPreset().type==='stamp'){
-   dc.globalCompositeOperation='source-over';drawDrawingPresetSegment(dc,g.last.x,g.last.y,p.x,p.y,currentSize,pressure);mark([g.last,p],currentSize*1.2+4);g.mid=mid;g.last=p;
+  if(g.artPoints){
+   const lastArt=g.artPoints.at(-1);if(!end||!lastArt||Math.hypot(p.x-lastArt.x,p.y-lastArt.y)>.35){if(addDrawingArtPoint(g,p.x,p.y,pressure)){renderDrawingArtStroke(sc,g);mark(g.artPoints,g.size*2.6+8);}}g.mid=mid;g.last=p;
   }else{
    // Borracha padrão independente do preset selecionado.
    dc.globalCompositeOperation=g.tool==='eraser'&&g.direct?'destination-out':'source-over';dc.lineWidth=currentSize;dc.strokeStyle=dc.fillStyle=color;dc.lineCap=dc.lineJoin='round';dc.beginPath();dc.moveTo(g.mid.x,g.mid.y);dc.quadraticCurveTo(g.last.x,g.last.y,mid.x,mid.y);dc.stroke();mark([g.mid,g.last,mid],currentSize/2+3);g.mid=mid;g.last=p;
@@ -10201,14 +10329,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
    if(selection){const hit=getSelectionHit(p);if(hit){gesture={kind:hit,start:p,rect:{x:selection.x,y:selection.y,w:selection.w,h:selection.h,angle:selection.angle,scale:selection.scale}};return;}commitSelection();}
    lasso=[p];gesture={kind:'lasso'};drawOverlay();return;
   }
-  commitSelection();remember();sc.clearRect(0,0,W,H);const size=+el('size').value,pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?Math.max(.05,e.pressure):1,currentSize=size*(.2+.8*pressure);gesture={kind:'stroke',base:undo.at(-1).image,tool,size,opacity:+el('opacity').value/100,direct:+el('opacity').value===100,last:p,mid:p};const dc=gesture.direct?ctx:sc;dc.strokeStyle=dc.fillStyle=color;dc.lineCap=dc.lineJoin='round';dc.lineWidth=currentSize;dc.save();
-  if(tool==='brush'&&selectedDrawingBrushPreset().type==='stamp'){dc.globalCompositeOperation='source-over';drawDrawingPresetDot(dc,p.x,p.y,currentSize,pressure);mark([p],currentSize*1.2+4);}
+  commitSelection();remember();sc.clearRect(0,0,W,H);const size=+el('size').value,isArt=tool==='brush'&&selectedDrawingBrushPreset().type==='stamp',pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?(e.pressure>0?e.pressure:(isArt ? .28 : .05)):1,currentSize=size*(.2+.8*pressure);gesture={kind:'stroke',base:undo.at(-1).image,tool,size,opacity:+el('opacity').value/100,direct:+el('opacity').value===100&&!isArt,last:p,mid:p,artPoints:isArt?[]:null};const dc=gesture.direct?ctx:sc;dc.strokeStyle=dc.fillStyle=color;dc.lineCap=dc.lineJoin='round';dc.lineWidth=currentSize;dc.save();
+  if(isArt){addDrawingArtPoint(gesture,p.x,p.y,pressure);renderDrawingArtStroke(sc,gesture);mark([p],size*2.6+8);}
   else{dc.globalCompositeOperation=gesture.direct&&tool==='eraser'?'destination-out':'source-over';dc.beginPath();dc.arc(p.x,p.y,currentSize/2,0,Math.PI*2);dc.fill();mark([p],currentSize/2+3);}
   dc.restore();
  };
  function move(p,pressure=1){if(gesture.kind==='warp'){const radius=+el('size').value*4,dx=p.x-gesture.start.x,dy=p.y-gesture.start.y;for(const point of warpMesh){const d=Math.hypot(point.x-gesture.start.x,point.y-gesture.start.y);if(d<radius){const weight=1-d/radius;point.x+=dx*weight;point.y+=dy*weight;}}gesture.start=p;queueTransform();return;}if(gesture.kind==='head3d'){headSphereYaw=gesture.yaw+(p.x-gesture.start.x)*.01;headSpherePitch=gesture.pitch-(p.y-gesture.start.y)*.01;updateHeadSphereMesh();queueTransform();return;}if(gesture.kind==='stroke'){segment(p,false,pressure);return;}if(gesture.kind==='lasso'){const last=lasso.at(-1);if(Math.hypot(last.x-p.x,last.y-p.y)>2)lasso.push(p);drawOverlay();return;}const {rect:r,start}=gesture,cx=r.x+r.w/2,cy=r.y+r.h/2;if(gesture.kind==='move'){selection.x=r.x+p.x-start.x;selection.y=r.y+p.y-start.y;}else if(gesture.kind==='rotate'){selection.angle=r.angle+Math.atan2(p.y-cy,p.x-cx)-Math.atan2(start.y-cy,start.x-cx);}else if(gesture.kind==='scale'){const initial=Math.hypot(start.x-cx,start.y-cy);if(initial>0)selection.scale=Math.max(.1,r.scale*Math.hypot(p.x-cx,p.y-cy)/initial);}renderSelection();}
- paper.onpointermove=e=>{if(pointer!==e.pointerId||!gesture)return;e.preventDefault();const pressureOf=ev=>(ev.pointerType==='pen'&&Number.isFinite(ev.pressure))?Math.max(.05,ev.pressure):1;if(gesture.kind==='warp'||gesture.kind==='head3d'){move(pos(e),pressureOf(e));return;}const samples=e.getCoalescedEvents?.();for(const sample of samples?.length?samples:[e])move(pos(sample),pressureOf(sample));};
- function finish(e){if(pointer!==e.pointerId)return;const kind=gesture?.kind;if(e.type==='pointerup'){const pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?Math.max(.05,e.pressure):1;if(kind==='stroke')segment(pos(e),true,pressure);else move(pos(e),pressure);}if(kind==='stroke')flush();flushTransform();const id=pointer;pointer=null;gesture=null;if(kind==='lasso'){const path=lasso;lasso=[];if(e.type==='pointerup')createSelection(path);drawOverlay();}if(paper.hasPointerCapture(id))paper.releasePointerCapture(id);}
+ paper.onpointermove=e=>{if(pointer!==e.pointerId||!gesture)return;e.preventDefault();const pressureOf=ev=>(ev.pointerType==='pen'&&Number.isFinite(ev.pressure))?(ev.pressure>0?ev.pressure:(gesture.artPoints?.at(-1)?.p??.05)):1;if(gesture.kind==='warp'||gesture.kind==='head3d'){move(pos(e),pressureOf(e));return;}const samples=e.getCoalescedEvents?.();for(const sample of samples?.length?samples:[e])move(pos(sample),pressureOf(sample));};
+ function finish(e){if(pointer!==e.pointerId)return;const kind=gesture?.kind;if(e.type==='pointerup'){const pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?(e.pressure>0?e.pressure:(gesture?.artPoints?.at(-1)?.p??.05)):1;if(kind==='stroke')segment(pos(e),true,pressure);else move(pos(e),pressure);}if(kind==='stroke')flush();flushTransform();const id=pointer;pointer=null;gesture=null;if(kind==='lasso'){const path=lasso;lasso=[];if(e.type==='pointerup')createSelection(path);drawOverlay();}if(paper.hasPointerCapture(id))paper.releasePointerCapture(id);}
  paper.onpointerup=paper.onpointercancel=paper.onlostpointercapture=finish;
  function history(from,to){if(pointer!==null||busy||!from.length)return;commitSelection();const entry=from.pop();
   if(entry.kind){
