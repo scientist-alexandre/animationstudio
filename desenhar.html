@@ -2248,6 +2248,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let cachedSize = 3;
         let cachedOpacity = 100;
         let currentStrokePoints = [];
+        let strokeMoved = false;
+        let artStrokePoints = [];
+        let artStrokeDirty = false;
 
         // ===== PINCÉIS NATIVOS DO SOFTWARE =====
         const brushPresets = [{ id: 'default', name: 'Pincel padrão', type: 'default', tip: null }];
@@ -2281,6 +2284,67 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         const hbBrushTip = makeHbBrushTip();
+
+        function makeProceduralGrain(kind) {
+            const size = 128, tile = document.createElement('canvas');
+            tile.width = tile.height = size;
+            const tileCtx = tile.getContext('2d');
+            const pixels = tileCtx.createImageData(size, size);
+            let seed = kind === 'hb' ? 0x48424752 : kind === '6b' ? 0x36424752 : kind === 'crayon' ? 0x43524159 : 0x57415452;
+            const random = () => {
+                seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+                let value = Math.imul(seed ^ seed >>> 15, 1 | seed);
+                value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
+                return ((value ^ value >>> 14) >>> 0) / 4294967296;
+            };
+            for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+                const fine = random();
+                const cloud = .5 + Math.sin(x * .115 + Math.sin(y * .071) * 1.8) * .2 + Math.sin(y * .163 - x * .037) * .16;
+                const fiber = Math.abs(Math.sin(x * .42 + y * .067 + Math.sin(y * .19) * 2.2));
+                let alpha;
+                if (kind === 'hb') {
+                    alpha = fine < .12 ? .06 : .34 + fine * .42 + cloud * .16;
+                    if (fiber < .09) alpha *= .28;
+                } else if (kind === '6b') {
+                    alpha = fine < .045 ? .22 : .66 + fine * .24 + cloud * .1;
+                    if (fiber < .055) alpha *= .62;
+                } else if (kind === 'crayon') {
+                    const wax = fine * .58 + cloud * .42;
+                    alpha = wax < .38 ? .05 : .26 + wax * .72;
+                    if (fiber < .14) alpha *= .16;
+                } else {
+                    alpha = .48 + cloud * .34 + fine * .14;
+                    if (fine < .065) alpha *= .2;
+                }
+                const index = (y * size + x) * 4;
+                pixels.data[index] = pixels.data[index + 1] = pixels.data[index + 2] = 255;
+                pixels.data[index + 3] = Math.max(0, Math.min(255, Math.round(alpha * 255)));
+            }
+            tileCtx.putImageData(pixels, 0, 0);
+            return tile;
+        }
+
+        const brushGrains = {
+            hb: makeProceduralGrain('hb'),
+            '6b': makeProceduralGrain('6b'),
+            crayon: makeProceduralGrain('crayon'),
+            watercolor: makeProceduralGrain('watercolor')
+        };
+
+        const grainPatternCache = new WeakMap();
+        function applyStaticGrain(targetCtx, grain) {
+            let contextPatterns = grainPatternCache.get(targetCtx);
+            if (!contextPatterns) { contextPatterns = new Map(); grainPatternCache.set(targetCtx, contextPatterns); }
+            let pattern = contextPatterns.get(grain);
+            if (!pattern) { pattern = targetCtx.createPattern(grain, 'repeat'); contextPatterns.set(grain, pattern); }
+            if (!pattern) return;
+            targetCtx.save();
+            targetCtx.globalCompositeOperation = 'destination-in';
+            targetCtx.globalAlpha = 1;
+            targetCtx.fillStyle = pattern;
+            targetCtx.fillRect(0, 0, targetCtx.canvas.width, targetCtx.canvas.height);
+            targetCtx.restore();
+        }
         brushPresets.push({
             id: 'builtin-hb', name: 'HB', type: 'stamp', tip: hbBrushTip,
             spacing: .09,
@@ -2388,7 +2452,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const nx = -dy / distance, ny = dx / distance;
             const previousAlpha = targetCtx.globalAlpha;
             const color = currentTool === 'eraser' ? '#000' : cachedColor;
-            targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round'; targetCtx.strokeStyle = color;
+            // Cada pointermove desenha um novo trecho. Com pontas redondas e
+            // transparência, as duas pontas se somavam em toda emenda e o
+            // lápis parecia uma fileira de bolinhas. "butt" encosta os trechos
+            // sem duplicar tinta; o toque isolado continua redondo em drawHbDot.
+            targetCtx.lineCap = 'butt'; targetCtx.lineJoin = 'round'; targetCtx.strokeStyle = color;
 
             // Mina contínua: fina nas pressões leves e escura sem ficar opaca demais.
             const strokeAlpha = profile.alphaBase + profile.alphaPressure * Math.pow(p, profile.alphaCurve);
@@ -2492,7 +2560,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const oldComposite = targetCtx.globalCompositeOperation;
             targetCtx.strokeStyle = erasing ? '#000' : cachedColor;
             targetCtx.fillStyle = erasing ? '#000' : cachedColor;
-            targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round';
+            // Evita círculos escuros nas emendas dos trechos translúcidos.
+            // Um simples toque ainda é tratado por drawNativeArtDot.
+            targetCtx.lineCap = 'butt'; targetCtx.lineJoin = 'round';
 
             if (kind === 'crayon') {
                 // Cobertura central muito leve une os segmentos sem criar uma
@@ -2564,6 +2634,192 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
             targetCtx.globalAlpha = oldAlpha;
             targetCtx.globalCompositeOperation = oldComposite;
+        }
+
+        // Motor contínuo dos pincéis artísticos. Os eventos do ponteiro chegam
+        // em distâncias irregulares; primeiro eles são suavizados e reamostrados
+        // em passos fixos. Depois a pincelada inteira é redesenhada como uma só
+        // curva, portanto nenhuma emenda recebe tinta duas vezes.
+        function addArtStrokePoint(x, y, pressure) {
+            const p = Math.max(.03, Math.min(1, pressure));
+            if (!artStrokePoints.length) {
+                artStrokePoints.push({ x, y, p });
+                artStrokeDirty = true;
+                return;
+            }
+            const last = artStrokePoints[artStrokePoints.length - 1];
+            const rawDistance = Math.hypot(x - last.x, y - last.y);
+            if (rawDistance < .12) return;
+            // Pouca latência em movimentos rápidos e mais estabilização nos lentos.
+            const follow = Math.max(.48, Math.min(.86, .48 + rawDistance / 34));
+            const endX = last.x + (x - last.x) * follow;
+            const endY = last.y + (y - last.y) * follow;
+            const endP = last.p + (p - last.p) * .58;
+            const distance = Math.hypot(endX - last.x, endY - last.y);
+            const spacing = Math.max(.8, Math.min(2.5, cachedSize * .04));
+            const steps = Math.max(1, Math.ceil(distance / spacing));
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                artStrokePoints.push({
+                    x: last.x + (endX - last.x) * t,
+                    y: last.y + (endY - last.y) * t,
+                    p: last.p + (endP - last.p) * t
+                });
+            }
+            // Limite de segurança para pinceladas extremamente longas em celular.
+            if (artStrokePoints.length > 6000) artStrokePoints.splice(0, artStrokePoints.length - 6000);
+            artStrokeDirty = true;
+        }
+
+        function traceSmoothStroke(targetCtx, points, offsetScale = 0, seed = 0) {
+            if (!points.length) return;
+            const shifted = points.map((point, index) => {
+                if (!offsetScale) return point;
+                const prev = points[Math.max(0, index - 1)], next = points[Math.min(points.length - 1, index + 1)];
+                const dx = next.x - prev.x, dy = next.y - prev.y, length = Math.hypot(dx, dy) || 1;
+                const wobble = (hbNoise(seed * 101 + index * .173) - .5) * offsetScale;
+                return { x: point.x - dy / length * wobble, y: point.y + dx / length * wobble, p: point.p };
+            });
+            targetCtx.beginPath();
+            targetCtx.moveTo(shifted[0].x, shifted[0].y);
+            if (shifted.length === 1) return;
+            for (let i = 1; i < shifted.length - 1; i++) {
+                const point = shifted[i], next = shifted[i + 1];
+                targetCtx.quadraticCurveTo(point.x, point.y, (point.x + next.x) / 2, (point.y + next.y) / 2);
+            }
+            const last = shifted[shifted.length - 1];
+            targetCtx.lineTo(last.x, last.y);
+        }
+
+        function renderPencilStroke(targetCtx, points) {
+            const profile = selectedPencilProfile();
+            if (points.length === 1) {
+                drawHbDot(targetCtx, points[0].x, points[0].y, cachedSize * (.2 + .8 * points[0].p), points[0].p);
+                applyStaticGrain(targetCtx, brushGrains[selectedBrushPreset().pencilKind === '6b' ? '6b' : 'hb']);
+                return;
+            }
+            const left = [], right = [];
+            let pressureSum = 0;
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i]; pressureSum += point.p;
+                const prev = points[Math.max(0, i - 1)], next = points[Math.min(points.length - 1, i + 1)];
+                const dx = next.x - prev.x, dy = next.y - prev.y, length = Math.hypot(dx, dy) || 1;
+                const width = Math.max(.45, cachedSize * (profile.widthBase + profile.widthPressure * Math.pow(point.p, profile.widthCurve)));
+                const nx = -dy / length, ny = dx / length, radius = width / 2;
+                left.push({ x: point.x + nx * radius, y: point.y + ny * radius });
+                right.push({ x: point.x - nx * radius, y: point.y - ny * radius });
+            }
+            const averagePressure = pressureSum / points.length;
+            const is6B = selectedBrushPreset().pencilKind === '6b';
+            targetCtx.fillStyle = cachedColor;
+            targetCtx.globalAlpha = is6B
+                ? .22 + .62 * Math.pow(averagePressure, .66)
+                : .12 + .4 * Math.pow(averagePressure, .82);
+            targetCtx.beginPath();
+            targetCtx.moveTo(left[0].x, left[0].y);
+            for (let i = 1; i < left.length; i++) targetCtx.lineTo(left[i].x, left[i].y);
+            // Semicírculo verdadeiro integrado ao mesmo contorno: não cria
+            // buracos, pontas angulares nem sobreposição de transparência.
+            const end = points.length - 1;
+            const endDx = points[end].x - points[end - 1].x, endDy = points[end].y - points[end - 1].y;
+            const endLength = Math.hypot(endDx, endDy) || 1;
+            const endRadius = Math.hypot(left[end].x - right[end].x, left[end].y - right[end].y) / 2;
+            const endAngle = Math.atan2(endDy / endLength, endDx / endLength);
+            targetCtx.arc(points[end].x, points[end].y, endRadius, endAngle + Math.PI / 2, endAngle - Math.PI / 2, true);
+            for (let i = right.length - 1; i >= 0; i--) targetCtx.lineTo(right[i].x, right[i].y);
+            const startDx = points[1].x - points[0].x, startDy = points[1].y - points[0].y;
+            const startLength = Math.hypot(startDx, startDy) || 1;
+            const startRadius = Math.hypot(left[0].x - right[0].x, left[0].y - right[0].y) / 2;
+            const startAngle = Math.atan2(startDy / startLength, startDx / startLength);
+            targetCtx.arc(points[0].x, points[0].y, startRadius, startAngle - Math.PI / 2, startAngle + Math.PI / 2, true);
+            targetCtx.closePath();
+            targetCtx.fill();
+
+            // Filamentos longitudinais: variação direcional típica de uma mina.
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.strokeStyle = cachedColor;
+            targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round';
+            const fibers = is6B ? 5 : 7;
+            for (let fiber = 0; fiber < fibers; fiber++) {
+                targetCtx.globalAlpha = (is6B ? .075 : .052) * (.65 + hbNoise(fiber * 17.4) * .7);
+                targetCtx.lineWidth = Math.max(.28, Math.min(1.15, cachedSize * (is6B ? .035 : .026)));
+                traceSmoothStroke(targetCtx, points, cachedSize * (is6B ? .5 : .42), fiber + (is6B ? 90 : 60));
+                targetCtx.stroke();
+            }
+
+            // Partículas nas bordas e nos sulcos do papel.
+            targetCtx.fillStyle = cachedColor;
+            targetCtx.globalAlpha = profile.grainBase + profile.grainPressure * averagePressure;
+            targetCtx.beginPath();
+            const grainEvery = Math.max(2, Math.round(3.8 - Math.min(2, cachedSize * .04)));
+            for (let i = 0; i < points.length; i += grainEvery) {
+                const point = points[i], grain = hbNoise(i * 7.31 + point.x * .17 + point.y * .29);
+                if (grain < profile.grainCutoff) continue;
+                const prev = points[Math.max(0, i - 1)], next = points[Math.min(points.length - 1, i + 1)];
+                const dx = next.x - prev.x, dy = next.y - prev.y, length = Math.hypot(dx, dy) || 1;
+                const spread = (hbNoise(i * 13.7) * 2 - 1) * cachedSize * (profile.spreadBase + profile.spreadLight * (1 - point.p));
+                const radius = Math.max(.16, Math.min(.72, cachedSize * profile.grainSize * (.45 + grain)));
+                targetCtx.moveTo(point.x - dy / length * spread + radius, point.y + dx / length * spread);
+                targetCtx.arc(point.x - dy / length * spread, point.y + dx / length * spread, radius, 0, Math.PI * 2);
+            }
+            targetCtx.fill();
+            applyStaticGrain(targetCtx, brushGrains[is6B ? '6b' : 'hb']);
+            targetCtx.globalAlpha = 1;
+        }
+
+        function renderNativeContinuousStroke(targetCtx, points, kind) {
+            const averagePressure = points.reduce((sum, point) => sum + point.p, 0) / points.length;
+            targetCtx.strokeStyle = cachedColor; targetCtx.fillStyle = cachedColor;
+            targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round';
+            if (points.length === 1) {
+                drawNativeArtDot(targetCtx, points[0].x, points[0].y, cachedSize * (.2 + .8 * points[0].p), points[0].p, false);
+                if (kind === 'crayon') applyStaticGrain(targetCtx, brushGrains.crayon);
+                else if (kind === 'watercolor') applyStaticGrain(targetCtx, brushGrains.watercolor);
+                return;
+            }
+            if (kind === 'crayon') {
+                targetCtx.globalAlpha = .18 + averagePressure * .34;
+                targetCtx.lineWidth = Math.max(.8, cachedSize * .82);
+                traceSmoothStroke(targetCtx, points); targetCtx.stroke();
+                const fibers = Math.min(16, Math.max(7, Math.ceil(cachedSize / 3)));
+                for (let i = 0; i < fibers; i++) {
+                    targetCtx.globalAlpha = (.08 + averagePressure * .2) * (.55 + hbNoise(i * 9.7) * .55);
+                    targetCtx.lineWidth = Math.max(.4, cachedSize / fibers * (.4 + hbNoise(i * 3.1) * .72));
+                    traceSmoothStroke(targetCtx, points, cachedSize * .72, i + 1); targetCtx.stroke();
+                }
+                applyStaticGrain(targetCtx, brushGrains.crayon);
+            } else if (kind === 'watercolor') {
+                // Pigmento leve no miolo e concentração mais escura na borda úmida.
+                for (let i = 0; i < 6; i++) {
+                    targetCtx.globalAlpha = .016 + averagePressure * .026;
+                    targetCtx.lineWidth = cachedSize * (1.05 - i * .055);
+                    traceSmoothStroke(targetCtx, points, cachedSize * .22, i + 20); targetCtx.stroke();
+                }
+                targetCtx.globalAlpha = .035 + averagePressure * .045;
+                targetCtx.lineWidth = cachedSize * 1.08;
+                traceSmoothStroke(targetCtx, points, cachedSize * .12, 77); targetCtx.stroke();
+                applyStaticGrain(targetCtx, brushGrains.watercolor);
+            } else if (kind === 'light') {
+                targetCtx.globalCompositeOperation = 'lighter';
+                const widths = [2.35, 1.35, .68, .22], alphas = [.018, .052, .17, .72];
+                for (let i = 0; i < widths.length; i++) {
+                    targetCtx.globalAlpha = alphas[i] * (.45 + averagePressure * .55);
+                    targetCtx.lineWidth = Math.max(.55, Math.min(180, cachedSize * widths[i]));
+                    traceSmoothStroke(targetCtx, points); targetCtx.stroke();
+                }
+            }
+            targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
+        }
+
+        function renderArtStroke(targetCtx) {
+            targetCtx.save();
+            targetCtx.globalCompositeOperation = 'source-over';
+            targetCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+            const brush = selectedBrushPreset();
+            if (Number.isFinite(brush.pencilGrade)) renderPencilStroke(targetCtx, artStrokePoints);
+            else renderNativeContinuousStroke(targetCtx, artStrokePoints, brush.brushKind);
+            targetCtx.restore();
+            artStrokeDirty = false;
         }
 
         function stampImportedBrush(targetCtx, x, y, size, _erasing, pressure = 1) {
@@ -3276,18 +3532,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
 
             lastX = pos.x; lastY = pos.y; lastMidX = pos.x; lastMidY = pos.y;
+            strokeMoved = false;
             cachedSize = Number(brushSizeInput.dataset.actualSize || brushSizeInput.value);
             cachedOpacity = parseFloat(document.getElementById('brushOpacity').value);
             cachedColor = nativeColorPicker.value;
 
             let pressure = (e.pointerType === 'pen' && e.pressure !== undefined) ? e.pressure : 1;
-            if (e.pointerType === 'pen' && pressure === 0) pressure = 0.05;
+            if (e.pointerType === 'pen' && pressure === 0) pressure = selectedBrushPreset().type === 'stamp' ? .28 : .05;
             let currentSize = cachedSize * (0.2 + 0.8 * pressure);
 
             const isDirectDraw = cachedOpacity == 100;
-            const targetCtx = isDirectDraw ? ctx : dCtx;
+            const isArtStroke = selectedBrushPreset().type === 'stamp';
+            const targetCtx = isArtStroke ? dCtx : (isDirectDraw ? ctx : dCtx);
 
-            if (!isDirectDraw) {
+            if (!isDirectDraw || isArtStroke) {
                 if (snapshotCanvas.width !== mainCanvas.width) snapshotCanvas.width = mainCanvas.width;
                 if (snapshotCanvas.height !== mainCanvas.height) snapshotCanvas.height = mainCanvas.height;
                 snapCtx.globalCompositeOperation = 'source-over';
@@ -3299,10 +3557,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 dCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
             }
 
+            if (isArtStroke) {
+                artStrokePoints = [];
+                addArtStrokePoint(pos.x, pos.y, pressure);
+                renderArtStroke(dCtx);
+                triggerRenderLiveStroke();
+                return;
+            }
+
             targetCtx.globalCompositeOperation = (isDirectDraw && currentTool === 'eraser') ? 'destination-out' : 'source-over';
-            if (selectedBrushPreset().type === 'stamp') {
-                stampImportedBrush(targetCtx, lastX, lastY, currentSize, currentTool === 'eraser', pressure);
-            } else {
+            if (selectedBrushPreset().type !== 'stamp') {
                 targetCtx.beginPath(); targetCtx.arc(lastX, lastY, currentSize / 2, 0, Math.PI * 2);
                 targetCtx.fillStyle = currentTool === 'eraser' ? '#000' : cachedColor;
                 targetCtx.fill();
@@ -3384,6 +3648,20 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 return;
             }
 
+            if (selectedBrushPreset().type === 'stamp') {
+                for (const event of events) {
+                    const pos = getMousePos(event);
+                    let pressure = (event.pointerType === 'pen' && event.pressure !== undefined) ? event.pressure : 1;
+                    if (event.pointerType === 'pen' && pressure === 0) pressure = artStrokePoints.length ? artStrokePoints[artStrokePoints.length - 1].p : .28;
+                    const before = artStrokePoints.length;
+                    addArtStrokePoint(pos.x, pos.y, pressure);
+                    if (artStrokePoints.length > before) strokeMoved = true;
+                    lastX = pos.x; lastY = pos.y;
+                }
+                if (artStrokeDirty) triggerRenderLiveStroke();
+                return;
+            }
+
             const isDirectDraw = cachedOpacity == 100;
             
             if (isDirectDraw) {
@@ -3403,6 +3681,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
                     if (selectedBrushPreset().type === 'stamp') {
                         stampImportedSegment(targetCtx, lastX, lastY, targetX, targetY, currentSize, currentTool === 'eraser', false, pressure);
+                        strokeMoved = true;
                     } else {
                         targetCtx.beginPath(); targetCtx.lineWidth = currentSize;
                         targetCtx.moveTo(lastMidX, lastMidY); targetCtx.quadraticCurveTo(lastX, lastY, midX, midY); targetCtx.stroke();
@@ -3422,6 +3701,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                         const currentSize = cachedSize * (.2 + .8 * pressure);
                         dCtx.globalCompositeOperation = 'source-over';
                         stampImportedSegment(dCtx, lastX, lastY, pos.x, pos.y, currentSize, currentTool === 'eraser', false, pressure);
+                        strokeMoved = true;
                     } else currentStrokePoints.push(pos);
                     lastX = pos.x; lastY = pos.y; moved = true;
                 }
@@ -3459,6 +3739,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         function forceRenderLiveStroke() {
             renderPending = false;
+            if (artStrokeDirty && selectedBrushPreset().type === 'stamp') renderArtStroke(dCtx);
             ctx.globalCompositeOperation = 'source-over'; 
             ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             ctx.drawImage(snapshotCanvas, 0, 0); 
@@ -3481,7 +3762,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 return;
             }
 
-            if (currentTool !== 'lasso' && currentTool !== 'perspective' && currentTool !== 'warp' && currentTool !== 'headSphere' && currentTool !== 'bucket' && e && e.type !== 'pointercancel') {
+            const handledArtStroke = selectedBrushPreset().type === 'stamp' &&
+                currentTool !== 'lasso' && currentTool !== 'perspective' && currentTool !== 'warp' &&
+                currentTool !== 'headSphere' && currentTool !== 'bucket';
+            if (handledArtStroke) {
+                if (renderPending) { cancelAnimationFrame(strokeRafId); renderPending = false; }
+                if (e && e.type === 'pointercancel') {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+                    ctx.drawImage(snapshotCanvas, 0, 0);
+                } else if (e) {
+                    const pos = getMousePos(e);
+                    let pressure = (e.pointerType === 'pen' && e.pressure !== undefined) ? e.pressure : 1;
+                    if (e.pointerType === 'pen' && pressure === 0) pressure = artStrokePoints.length ? artStrokePoints[artStrokePoints.length - 1].p : .28;
+                    const lastArtPoint = artStrokePoints[artStrokePoints.length - 1];
+                    if (!lastArtPoint || Math.hypot(pos.x - lastArtPoint.x, pos.y - lastArtPoint.y) > .35) addArtStrokePoint(pos.x, pos.y, pressure);
+                    renderArtStroke(dCtx);
+                    forceRenderLiveStroke();
+                }
+                dCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                artStrokePoints = []; artStrokeDirty = false;
+            }
+
+            if (!handledArtStroke && currentTool !== 'lasso' && currentTool !== 'perspective' && currentTool !== 'warp' && currentTool !== 'headSphere' && currentTool !== 'bucket' && e && e.type !== 'pointercancel') {
                 const isDirectDraw = cachedOpacity == 100;
                 
                 if (isDirectDraw) {
@@ -3495,19 +3798,33 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     ctx.strokeStyle = currentTool === 'eraser' ? '#000' : cachedColor;
                     
                     if (selectedBrushPreset().type === 'stamp') {
-                        stampImportedSegment(ctx, lastX, lastY, pos.x, pos.y, currentSize, currentTool === 'eraser', false, pressure);
+                        const finalDistance = Math.hypot(pos.x - lastX, pos.y - lastY);
+                        if (finalDistance > .05) {
+                            stampImportedSegment(ctx, lastX, lastY, pos.x, pos.y, currentSize, currentTool === 'eraser', false, pressure);
+                            strokeMoved = true;
+                        } else if (!strokeMoved) {
+                            stampImportedBrush(ctx, pos.x, pos.y, currentSize, currentTool === 'eraser', pressure);
+                        }
                     } else {
                         ctx.beginPath(); ctx.lineWidth = currentSize;
                         ctx.moveTo(lastMidX, lastMidY); ctx.quadraticCurveTo(lastX, lastY, pos.x, pos.y); ctx.stroke();
                     }
                     ctx.globalCompositeOperation = 'source-over'; hasUnsavedChanges = true;
                 } else {
+                    if (selectedBrushPreset().type === 'stamp' && !strokeMoved) {
+                        const pos = getMousePos(e);
+                        let pressure = (e.pointerType === 'pen' && e.pressure !== undefined) ? e.pressure : 1;
+                        if (e.pointerType === 'pen' && pressure === 0) pressure = .05;
+                        const currentSize = cachedSize * (.2 + .8 * pressure);
+                        dCtx.globalCompositeOperation = 'source-over';
+                        stampImportedBrush(dCtx, pos.x, pos.y, currentSize, currentTool === 'eraser', pressure);
+                    }
                     if (renderPending) { cancelAnimationFrame(strokeRafId); renderPending = false; }
                     forceRenderLiveStroke(); 
                     dCtx.globalCompositeOperation = 'source-over';
                     dCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
                 }
-            } else if (e && e.type === 'pointercancel') {
+            } else if (!handledArtStroke && e && e.type === 'pointercancel') {
                 if (cachedOpacity != 100) {
                     if (renderPending) { cancelAnimationFrame(strokeRafId); renderPending = false; }
                     ctx.globalCompositeOperation = 'source-over';
@@ -3522,7 +3839,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 cancelAnimationFrame(warpRenderRafId);
                 warpRenderRafId = null;
             }
-            isDrawing = false; activePointerId = null; draggedWarpPoint = null; isHeadSphereDragging = false; currentStrokePoints = []; 
+            isDrawing = false; activePointerId = null; draggedWarpPoint = null; isHeadSphereDragging = false; currentStrokePoints = []; strokeMoved = false;
             if (completedWarpDrag) drawTransformUI(WARP_SETTLED_STEP);
             
             if ((currentTool === 'lasso' || currentTool === 'perspective' || currentTool === 'warp' || currentTool === 'headSphere') && !isTransforming && selectionPath.length > 3) {
