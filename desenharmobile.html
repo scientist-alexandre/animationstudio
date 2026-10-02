@@ -1344,6 +1344,60 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         .layer-opacity-val { min-width: 30px; text-align: right; font-size: 10px; }
         #soloModeBtn.active { background: #ff9500; color: white; }
 
+        /* --- BIBLIOTECA DE ASSETS DO PROJETO --- */
+        .asset-library-menu { position: relative; display: flex; align-items: center; }
+        .asset-library-dropdown {
+            display: none; position: absolute; top: 45px; right: 0; width: min(370px, calc(100vw - 18px));
+            max-height: 78vh; overflow-y: auto; padding: 10px; flex-direction: column; gap: 8px;
+            background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 9px;
+            box-shadow: 0 10px 28px rgba(0,0,0,.55); z-index: 1003;
+        }
+        .asset-library-dropdown.show { display: flex; }
+        .asset-library-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .asset-library-title { color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+        .asset-library-subtitle { color: #888; font-size: 9px; }
+        .asset-folder-tabs { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
+        .asset-folder-tab { flex: 0 0 auto; padding: 6px 8px; border: 1px solid #454545; border-radius: 999px; color: #bbb; background: #303030; font-size: 10px; cursor: pointer; }
+        .asset-folder-tab.active { border-color: #5daeff; color: #fff; background: #0a67b7; }
+        .asset-current-folder { display: none; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
+        .asset-current-folder.show { display: grid; }
+        .asset-inline-name {
+            min-width: 0; width: 100%; box-sizing: border-box; padding: 8px 9px; border: 1px solid #4a4a4a;
+            border-radius: 6px; color: #fff; background: #292929; font-size: 11px; outline: none;
+        }
+        .asset-inline-name:focus { border-color: #55aaff; box-shadow: 0 0 0 2px rgba(10,132,255,.2); }
+        .asset-static-name { min-width: 0; padding: 8px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid #3f3f3f; border-radius: 6px; color: #fff; background: #292929; font-size: 11px; }
+        .asset-rename-btn { min-width: 38px; height: 34px; border: 1px solid #4a4a4a; border-radius: 6px; color: #ddd; background: rgba(255,255,255,.08); cursor: pointer; }
+        .asset-folder-delete { min-width: 38px; height: 34px; border: 1px solid #654147; border-radius: 6px; color: #ff8178; background: rgba(255,59,48,.1); cursor: pointer; }
+        .asset-library-toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .asset-library-toolbar button, .asset-detail-actions button {
+            min-height: 32px; padding: 6px; border: 1px solid #484848; border-radius: 6px;
+            color: #ddd; background: rgba(255,255,255,.08); font-size: 10px; cursor: pointer;
+        }
+        .asset-library-toolbar button:active, .asset-detail-actions button:active { background: rgba(255,255,255,.18); }
+        .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; min-height: 74px; }
+        .asset-empty { grid-column: 1 / -1; padding: 20px 8px; border: 1px dashed #484848; border-radius: 7px; color: #777; text-align: center; font-size: 10px; }
+        .asset-card { min-width: 0; padding: 5px; border: 1px solid #444; border-radius: 7px; color: #ddd; background: #303030; cursor: pointer; }
+        .asset-card.active { border-color: #70b8ff; background: rgba(10,132,255,.22); box-shadow: 0 0 0 1px rgba(10,132,255,.25); }
+        .asset-card-preview { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 5px; background: repeating-conic-gradient(#3b3b3b 0 25%,#2f2f2f 0 50%) 50%/12px 12px; }
+        .asset-card-preview img { width: 100%; height: 100%; object-fit: contain; }
+        .asset-card-placeholder { color: #777; font-size: 24px; }
+        .asset-card-name { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; text-align: center; }
+        .asset-detail { display: none; flex-direction: column; gap: 7px; padding: 8px; border: 1px solid #454545; border-radius: 8px; background: #292929; }
+        .asset-detail.show { display: flex; }
+        .asset-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+        .asset-detail-name { flex: 1; min-width: 0; }
+        .asset-detail-heading button { width: 28px; height: 28px; padding: 0; border: 1px solid #554146; border-radius: 5px; color: #ff8178; background: rgba(255,59,48,.1); cursor: pointer; }
+        .direction-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+        .direction-slot { min-width: 0; padding: 4px; border: 1px solid #454545; border-radius: 6px; color: #aaa; background: #343434; cursor: pointer; }
+        .direction-slot.active { border-color: #64b2ff; color: #fff; background: #0a67b7; }
+        .direction-slot-preview { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 4px; background: #252525; }
+        .direction-slot-preview img { width: 100%; height: 100%; object-fit: contain; }
+        .direction-slot-label { margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 8px; }
+        .asset-detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .asset-detail-actions .primary { grid-column: 1 / -1; border-color: #318fe5; color: #fff; background: #0a67b7; font-weight: 700; }
+        @media (max-width: 600px) { .asset-library-dropdown { position: fixed; top: 54px; left: 9px; right: 9px; width: auto; max-height: calc(100vh - 118px); } }
+
         /* --- ÁREA DE TRABALHO --- */
         .workspace {
             flex: 1; position: relative; display: flex; justify-content: center;
@@ -1665,8 +1719,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         .audio-timeline { min-height: 32px; height: 32px; position: relative; overflow: hidden; padding: 0; border-radius: 0; background: #171b20; border: 1px solid #343b44; }
         .audio-clips-host { position: relative; width: 100%; min-height: 100%; }
-        .audio-clip { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; overflow: hidden; border: 1px solid #23aee5; border-radius: 4px; color: #fff; background: linear-gradient(180deg, #157da5, #0a4563); box-shadow: 0 2px 5px #0008; }
-        .audio-clip.selected { border-color: #fff; box-shadow: 0 0 0 2px #ff9d00, 0 2px 5px #000; }
+        .audio-clip { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; overflow: hidden; border: 1px solid #23aee5; border-radius: 4px; color: #fff; background: linear-gradient(180deg, #157da5, #0a4563); box-shadow: 0 2px 5px #0008; touch-action: none; user-select: none; -webkit-user-select: none; }
+        .audio-clip.selected { z-index: 10000 !important; border-color: #fff; box-shadow: 0 0 0 2px #ff9d00, 0 2px 5px #000; }
         .audio-clip-label { position: absolute; left: 12px; right: 12px; top: 2px; z-index: 3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; font: bold 8px/1 monospace; pointer-events: none; }
         .audio-clip.can-drag { cursor: grab; }
         .audio-clip.dragging { cursor: grabbing; }
@@ -1676,6 +1730,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         .audio-trim-handle.left { left: 0; border-radius: 3px 0 0 3px; transform: translateX(-1px); }
         .audio-trim-handle.right { right: 0; border-radius: 0 3px 3px 0; transform: translateX(1px); }
         .audio-clip:not(.trim-mode) .audio-trim-handle { display: none; }
+        .audio-clip:not(.selected) .audio-trim-handle { display: none; }
         .bottom-control-stack { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 5px; }
         .frame-control-row { display: flex; align-items: center; gap: 5px; height: 36px; }
         .audio-track-tools { align-self: flex-end; width: max-content; height: 24px; display: flex; flex-direction: row-reverse; gap: 2px; align-items: center; padding: 2px; border-radius: 5px; background: rgba(20,23,27,.88); }
@@ -1928,7 +1983,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <button class="icon-btn" id="selectionBtn" title="Seleção Lasso">◌</button>
             <button class="icon-btn" id="selectAllBtn" title="Selecionar Tudo">⛶</button>
             <button class="icon-btn" id="perspectiveBtn" title="Perspectiva">📐</button>
-            <button class="icon-btn" id="warpBtn" title="Warp Puppet">🌀</button>
+            <button class="icon-btn" id="warpBtn" title="Push — empurrar pixels">🌀</button>
             <button class="icon-btn" id="headSphereBtn" title="3D: contorne o desenho e arraste para girar" style="font-size:12px;font-weight:800;min-width:34px;">3D</button>
             <button class="icon-btn" id="flipHBtn" title="Inverter Horizontal">↔️</button>
             <button class="icon-btn" id="flipVBtn" title="Inverter Vertical">↕️</button>
@@ -1955,6 +2010,27 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     </div>
                     <div id="layersList"></div>
                     <button class="icon-btn" id="soloModeBtn" title="Modo Solo (Melhora Performance)" style="font-size: 10px; width: 100%; margin-top: 5px; border: 1px solid #444;">MODO SOLO: OFF</button>
+                </div>
+            </div>
+            <div class="asset-library-menu">
+                <button class="icon-btn" id="assetLibraryBtn" title="Biblioteca do Projeto" aria-label="Biblioteca do Projeto">📚</button>
+                <div class="asset-library-dropdown" id="assetLibraryDropdown">
+                    <div class="asset-library-header">
+                        <div><div class="asset-library-title">BIBLIOTECA DO PROJETO</div><div class="asset-library-subtitle">Crie suas pastas e salve quantos itens quiser</div></div>
+                    </div>
+                    <div class="asset-folder-tabs" id="assetFolderTabs"></div>
+                    <div class="asset-current-folder" id="assetCurrentFolder">
+                        <div class="asset-static-name" id="assetFolderNameLabel"></div>
+                        <button class="asset-rename-btn" id="renameLibraryFolderBtn" title="Renomear pasta">✏️</button>
+                        <button class="asset-folder-delete" id="deleteLibraryFolderBtn" title="Excluir pasta">🗑</button>
+                    </div>
+                    <div class="asset-library-toolbar">
+                        <button id="newLibraryFolderBtn">+ Nova pasta</button>
+                        <button id="newLibraryAssetBtn">+ Novo item</button>
+                    </div>
+                    <div class="asset-grid" id="assetGrid"></div>
+                    <div class="asset-detail" id="assetDetail"></div>
+                    <input type="file" id="assetLibraryImageInput" accept="image/*" style="display:none;">
                 </div>
             </div>
             <button class="icon-btn" id="eyedropperBtn" title="Conta-gotas">💧</button>
@@ -2215,6 +2291,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const bucketToleranceSlider = document.getElementById('bucketToleranceSlider');
         const layersBtn = document.getElementById('layersBtn');
         const layersDropdown = document.getElementById('layersDropdown');
+        const assetLibraryBtn = document.getElementById('assetLibraryBtn');
+        const assetLibraryDropdown = document.getElementById('assetLibraryDropdown');
+        const assetFolderTabs = document.getElementById('assetFolderTabs');
+        const assetCurrentFolder = document.getElementById('assetCurrentFolder');
+        const assetGrid = document.getElementById('assetGrid');
+        const assetDetail = document.getElementById('assetDetail');
+        const assetLibraryImageInput = document.getElementById('assetLibraryImageInput');
         
         const timeline = document.getElementById('timeline');
         const timelineViewport = document.getElementById('timelineViewport');
@@ -2249,6 +2332,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let hasUnsavedChanges = false;
         let soloMode = false;
         let isExporting = false;
+        let isProjectSaving = false;
         let isSaving = false;
         let currentSavePromise = Promise.resolve();
         let audioClips = [];
@@ -2259,9 +2343,18 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let projectWidth = mainCanvas.width;
         let projectHeight = mainCanvas.height;
 
+        function makeAssetId(prefix = 'asset') { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
+        function makeDefaultAssetLibrary() {
+            return { version: 1, folders: [] };
+        }
+        let assetLibrary = makeDefaultAssetLibrary();
+        let selectedLibraryFolderId = null;
+        let selectedLibraryAssetId = null;
+        let pendingLibraryImport = null;
+
         const mobileToolLabels = new Map([
             ['selectionBtn', 'Seleção'], ['selectAllBtn', 'Selecionar tudo'],
-            ['perspectiveBtn', 'Perspectiva'], ['warpBtn', 'Warp'], ['headSphereBtn', '3D'],
+            ['perspectiveBtn', 'Perspectiva'], ['warpBtn', 'Push'], ['headSphereBtn', '3D'],
             ['flipHBtn', 'Inverter H'], ['flipVBtn', 'Inverter V'],
             ['copyBtn', 'Copiar'], ['cutBtn', 'Recortar'], ['pasteBtn', 'Colar']
         ]);
@@ -2816,7 +2909,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 finishSelection(); currentTool = 'brush';
             } else {
                 finishSelection(); currentTool = tool;
-                if (tool === 'warp') setBrushSize(50);
+                if (tool === 'push') { setBrushSize(50); showNotification('Push: arraste para empurrar • Tam = área • Força = intensidade'); }
             }
             updateToolUI();
         }
@@ -2828,7 +2921,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById('eyedropperBtn').onclick = () => setTool('eyedropper');
         selectionBtn.onclick = () => setTool('lasso');
         perspectiveBtn.onclick = () => setTool('perspective');
-        warpBtn.onclick = () => setTool('warp');
+        warpBtn.onclick = () => setTool(currentTool === 'push' ? 'brush' : 'push');
         headSphereBtn.onclick = () => setTool('headSphere');
         headSphereBtn.ondblclick = (event) => {
             event.preventDefault();
@@ -2852,6 +2945,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         function flipCanvas(canvas, horizontal = true) {
             sharedUtilCtx.globalCompositeOperation = 'source-over';
+            sharedUtilCtx.globalAlpha = 1;
             sharedUtilCtx.clearRect(0, 0, canvas.width, canvas.height);
             sharedUtilCtx.drawImage(canvas, 0, 0);
             const canvasCtx = canvas.getContext('2d');
@@ -2895,10 +2989,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             canvasContainer.classList.toggle('clone-tool-active', currentTool === 'clone');
             selectionBtn.classList.toggle('active', currentTool === 'lasso');
             perspectiveBtn.classList.toggle('active', currentTool === 'perspective');
-            warpBtn.classList.toggle('active', currentTool === 'warp');
+            warpBtn.classList.toggle('active', currentTool === 'push');
             headSphereBtn.classList.toggle('active', currentTool === 'headSphere');
             document.getElementById('bucketBtn').classList.toggle('active', currentTool === 'bucket');
             document.getElementById('eyedropperBtn').classList.toggle('active', currentTool === 'eyedropper');
+            document.getElementById('brushOpacity').closest('.slider-container').querySelector('span').textContent = currentTool === 'push' ? 'Força' : 'Opac';
             if (currentTool === 'clone') drawCloneSourceIndicator();
             else uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
         }
@@ -3245,7 +3340,233 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         document.getElementById('mergeAllLayersBtn').addEventListener('click', (e) => { e.stopPropagation(); mergeAllLayers(); });
         document.getElementById('mergeSelectedLayersBtn').addEventListener('click', (e) => { e.stopPropagation(); mergeSelectedLayers(); });
 
-        layersBtn.addEventListener('click', (e) => { e.stopPropagation(); renderLayersDropdown(); layersDropdown.classList.toggle('show'); });
+        layersBtn.addEventListener('click', (e) => { e.stopPropagation(); assetLibraryDropdown.classList.remove('show'); renderLayersDropdown(); layersDropdown.classList.toggle('show'); });
+
+        // --- BIBLIOTECA LIVRE DO PROJETO ---
+        function normalizeAssetLibrary(data) {
+            const normalized = data && Array.isArray(data.folders) ? data : makeDefaultAssetLibrary();
+            normalized.version = 1;
+            normalized.folders = normalized.folders.map((folder, folderIndex) => ({
+                id: folder.id || makeAssetId('folder'),
+                name: String(folder.name || `Pasta ${folderIndex + 1}`),
+                items: Array.isArray(folder.items) ? folder.items.map((item, itemIndex) => ({
+                    id: item.id || makeAssetId('item'),
+                    name: String(item.name || `Item ${itemIndex + 1}`),
+                    image: typeof item.image === 'string' ? item.image : null
+                })) : []
+            }));
+            return normalized;
+        }
+
+        function currentLibraryFolder() {
+            return assetLibrary.folders.find(folder => folder.id === selectedLibraryFolderId) || null;
+        }
+
+        function currentLibraryAsset() {
+            const folder = currentLibraryFolder();
+            return folder ? folder.items.find(item => item.id === selectedLibraryAssetId) || null : null;
+        }
+
+        function ensureLibrarySelection() {
+            assetLibrary = normalizeAssetLibrary(assetLibrary);
+            if (!assetLibrary.folders.some(folder => folder.id === selectedLibraryFolderId)) {
+                selectedLibraryFolderId = assetLibrary.folders[0] ? assetLibrary.folders[0].id : null;
+            }
+            const folder = currentLibraryFolder();
+            if (!folder || !folder.items.some(item => item.id === selectedLibraryAssetId)) {
+                selectedLibraryAssetId = folder && folder.items[0] ? folder.items[0].id : null;
+            }
+        }
+
+        function libraryImageElement(dataURL, alt) {
+            const image = document.createElement('img'); image.src = dataURL; image.alt = alt || '';
+            return image;
+        }
+
+        function startInlineLibraryRename(label, currentValue, onCommit) {
+            if (!label || label.tagName === 'INPUT') return;
+            const input = document.createElement('input'); input.type = 'text'; input.className = 'asset-inline-name'; input.value = currentValue; input.autocomplete = 'off';
+            const originalClass = label.className;
+            let finished = false;
+            const finish = (save) => {
+                if (finished) return; finished = true;
+                const value = save && input.value.trim() ? input.value.trim() : currentValue;
+                if (save) onCommit(value);
+                const restored = document.createElement('div'); restored.className = originalClass; restored.textContent = value; input.replaceWith(restored);
+            };
+            input.addEventListener('keydown', event => {
+                event.stopPropagation();
+                if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+                else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+            });
+            input.addEventListener('blur', () => finish(true));
+            label.replaceWith(input); input.focus(); input.select();
+        }
+
+        function renderAssetLibrary() {
+            ensureLibrarySelection();
+            assetFolderTabs.innerHTML = '';
+            assetLibrary.folders.forEach(folder => {
+                const tab = document.createElement('button'); tab.className = 'asset-folder-tab' + (folder.id === selectedLibraryFolderId ? ' active' : '');
+                tab.dataset.folderId = folder.id;
+                tab.textContent = `${folder.name} (${folder.items.length})`;
+                tab.onclick = event => { event.stopPropagation(); selectedLibraryFolderId = folder.id; selectedLibraryAssetId = folder.items[0] ? folder.items[0].id : null; renderAssetLibrary(); };
+                assetFolderTabs.appendChild(tab);
+            });
+
+            const folder = currentLibraryFolder();
+            const newItemBtn = document.getElementById('newLibraryAssetBtn');
+            const renameFolderBtn = document.getElementById('renameLibraryFolderBtn');
+            const deleteFolderBtn = document.getElementById('deleteLibraryFolderBtn');
+            newItemBtn.disabled = !folder; renameFolderBtn.disabled = !folder; deleteFolderBtn.disabled = !folder;
+            assetCurrentFolder.classList.toggle('show', !!folder);
+            if (folder) {
+                const currentLabel = assetCurrentFolder.querySelector('.asset-static-name');
+                if (currentLabel) currentLabel.textContent = folder.name;
+                renameFolderBtn.onclick = event => {
+                    event.stopPropagation();
+                    const label = assetCurrentFolder.querySelector('.asset-static-name');
+                    startInlineLibraryRename(label, folder.name, value => {
+                        folder.name = value;
+                        const tab = Array.from(assetFolderTabs.children).find(element => element.dataset.folderId === folder.id);
+                        if (tab) tab.textContent = `${folder.name} (${folder.items.length})`;
+                    });
+                };
+            } else {
+                const currentLabel = assetCurrentFolder.querySelector('.asset-static-name'); if (currentLabel) currentLabel.textContent = '';
+                renameFolderBtn.onclick = null;
+            }
+            assetGrid.innerHTML = '';
+            if (!folder) {
+                const empty = document.createElement('div'); empty.className = 'asset-empty'; empty.textContent = 'Crie uma pasta para começar sua biblioteca.'; assetGrid.appendChild(empty);
+                assetDetail.className = 'asset-detail'; assetDetail.innerHTML = ''; return;
+            }
+            if (!folder.items.length) {
+                const empty = document.createElement('div'); empty.className = 'asset-empty'; empty.textContent = 'Esta pasta está vazia. Toque em “Novo item”.'; assetGrid.appendChild(empty);
+            }
+            folder.items.forEach(item => {
+                const card = document.createElement('button'); card.className = 'asset-card' + (item.id === selectedLibraryAssetId ? ' active' : '');
+                card.dataset.assetId = item.id;
+                const preview = document.createElement('div'); preview.className = 'asset-card-preview';
+                if (item.image) preview.appendChild(libraryImageElement(item.image, item.name));
+                else { const placeholder = document.createElement('span'); placeholder.className = 'asset-card-placeholder'; placeholder.textContent = '＋'; preview.appendChild(placeholder); }
+                const name = document.createElement('div'); name.className = 'asset-card-name'; name.textContent = item.name;
+                card.append(preview, name); card.onclick = event => { event.stopPropagation(); selectedLibraryAssetId = item.id; renderAssetLibrary(); };
+                assetGrid.appendChild(card);
+            });
+            renderAssetDetail();
+        }
+
+        function renderAssetDetail() {
+            const asset = currentLibraryAsset();
+            assetDetail.innerHTML = '';
+            assetDetail.className = 'asset-detail' + (asset ? ' show' : '');
+            if (!asset) return;
+            const heading = document.createElement('div'); heading.className = 'asset-detail-heading';
+            const name = document.createElement('div'); name.className = 'asset-detail-name asset-static-name'; name.textContent = asset.name;
+            const rename = document.createElement('button'); rename.textContent = '✏️'; rename.title = 'Renomear item'; rename.onclick = event => {
+                event.stopPropagation();
+                const label = heading.querySelector('.asset-static-name');
+                startInlineLibraryRename(label, asset.name, value => {
+                    asset.name = value;
+                    const card = Array.from(assetGrid.children).find(element => element.dataset.assetId === asset.id);
+                    const cardName = card && card.querySelector('.asset-card-name'); if (cardName) cardName.textContent = asset.name;
+                });
+            };
+            const remove = document.createElement('button'); remove.textContent = '🗑'; remove.title = 'Excluir item'; remove.onclick = event => { event.stopPropagation(); deleteLibraryAsset(); };
+            heading.append(name, rename, remove);
+            const actions = document.createElement('div'); actions.className = 'asset-detail-actions';
+            const capture = document.createElement('button'); capture.textContent = 'Salvar camada atual'; capture.onclick = event => { event.stopPropagation(); captureCurrentLayerInLibrary(); };
+            const importBtn = document.createElement('button'); importBtn.textContent = 'Importar imagem'; importBtn.onclick = event => { event.stopPropagation(); pendingLibraryImport = asset.id; assetLibraryImageInput.click(); };
+            const insert = document.createElement('button'); insert.className = 'primary'; insert.textContent = 'Inserir como camada editável'; insert.disabled = !asset.image; insert.onclick = event => { event.stopPropagation(); insertLibraryAssetAsLayer(false); };
+            const background = document.createElement('button'); background.className = 'primary'; background.textContent = 'Usar como fundo da cena'; background.disabled = !asset.image; background.onclick = event => { event.stopPropagation(); insertLibraryAssetAsLayer(true); };
+            actions.append(capture, importBtn, insert, background);
+            assetDetail.append(heading, actions);
+        }
+
+        function createLibraryFolder() {
+            const folder = { id: makeAssetId('folder'), name: `Nova pasta ${assetLibrary.folders.length + 1}`, items: [] };
+            assetLibrary.folders.push(folder); selectedLibraryFolderId = folder.id; selectedLibraryAssetId = null; renderAssetLibrary();
+        }
+
+        function deleteLibraryFolder() {
+            const folder = currentLibraryFolder(); if (!folder) return;
+            if (!confirm(`Excluir a pasta “${folder.name}” e seus ${folder.items.length} item(ns)?`)) return;
+            assetLibrary.folders = assetLibrary.folders.filter(item => item.id !== folder.id);
+            selectedLibraryFolderId = assetLibrary.folders[0] ? assetLibrary.folders[0].id : null; selectedLibraryAssetId = null; renderAssetLibrary();
+        }
+
+        function createLibraryAsset() {
+            const folder = currentLibraryFolder(); if (!folder) { showNotification('Crie uma pasta primeiro'); return; }
+            const item = { id: makeAssetId('item'), name: `Novo item ${folder.items.length + 1}`, image: null };
+            folder.items.push(item); selectedLibraryAssetId = item.id; renderAssetLibrary();
+        }
+
+        function deleteLibraryAsset() {
+            const folder = currentLibraryFolder(); const asset = currentLibraryAsset(); if (!folder || !asset) return;
+            if (!confirm(`Excluir “${asset.name}” da biblioteca?`)) return;
+            folder.items = folder.items.filter(item => item.id !== asset.id); selectedLibraryAssetId = folder.items[0] ? folder.items[0].id : null; renderAssetLibrary();
+        }
+
+        function imageFromDataURL(dataURL) {
+            return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = dataURL; });
+        }
+
+        async function captureCurrentLayerInLibrary() {
+            const asset = currentLibraryAsset(); if (!asset || !frames[currentFrameIndex]) return;
+            await finishSelection(); if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+            const layer = frames[currentFrameIndex].layers[activeLayerIndex];
+            if (!layer) { showNotification('A camada atual está vazia'); return; }
+            sharedUtilCtx.globalCompositeOperation = 'source-over'; sharedUtilCtx.globalAlpha = 1; sharedUtilCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height); sharedUtilCtx.drawImage(layer, 0, 0);
+            asset.image = sharedUtilCanvas.toDataURL('image/png'); renderAssetLibrary(); showNotification(`“${asset.name}” salvo na biblioteca`);
+        }
+
+        async function importedFileToLibraryDataURL(file) {
+            const source = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
+            await imageFromDataURL(source); // valida o arquivo sem remover a transparência original
+            return source;
+        }
+
+        async function insertLibraryAssetAsLayer(asBackground = false) {
+            const asset = currentLibraryAsset(); if (!asset || !asset.image || isPlaying) return;
+            if (asBackground) {
+                if (typeof window.applyLibraryImageTo3DBackground !== 'function') { showNotification('O background 3D ainda não está disponível'); return; }
+                try {
+                    await window.applyLibraryImageTo3DBackground(asset.image, asset.name);
+                    assetLibraryDropdown.classList.remove('show');
+                } catch (error) { console.error(error); showNotification('Não foi possível aplicar esta imagem ao background 3D'); }
+                return;
+            }
+            await finishSelection(); if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+            const image = await imageFromDataURL(asset.image);
+            sharedUtilCtx.globalCompositeOperation = 'source-over'; sharedUtilCtx.globalAlpha = 1; sharedUtilCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height);
+            const scale = Math.min(sharedUtilCanvas.width / image.width, sharedUtilCanvas.height / image.height, 1);
+            const width = image.width * scale, height = image.height * scale;
+            sharedUtilCtx.drawImage(image, (sharedUtilCanvas.width - width) / 2, (sharedUtilCanvas.height - height) / 2, width, height);
+            const insertAt = Math.min(activeLayerIndex + 1, layerCount());
+            layersMeta.splice(insertAt, 0, { opacity: 1, visible: true, name: asset.name });
+            frames.forEach(frame => frame.layers.splice(insertAt, 0, null));
+            frames[currentFrameIndex].layers[insertAt] = await createImageBitmap(sharedUtilCanvas);
+            activeLayerIndex = insertAt; layerSelectionForMerge.clear(); syncLayerCanvases(); undoStack = []; redoStack = [];
+            isHistoryAction = true; await loadFrame(currentFrameIndex); isHistoryAction = false;
+            renderLayersDropdown(); updateSingleThumbnail(currentFrameIndex);
+            showNotification(`“${asset.name}” inserido como camada editável`);
+        }
+
+        document.getElementById('newLibraryFolderBtn').addEventListener('click', event => { event.stopPropagation(); createLibraryFolder(); });
+        document.getElementById('deleteLibraryFolderBtn').addEventListener('click', event => { event.stopPropagation(); deleteLibraryFolder(); });
+        document.getElementById('newLibraryAssetBtn').addEventListener('click', event => { event.stopPropagation(); createLibraryAsset(); });
+        assetLibraryBtn.addEventListener('click', event => {
+            event.stopPropagation(); layersDropdown.classList.remove('show'); renderAssetLibrary(); assetLibraryDropdown.classList.toggle('show');
+        });
+        assetLibraryDropdown.addEventListener('click', event => event.stopPropagation());
+        assetLibraryImageInput.addEventListener('change', async event => {
+            const file = event.target.files && event.target.files[0];
+            const folder = currentLibraryFolder(); const asset = folder && folder.items.find(item => item.id === pendingLibraryImport);
+            try { if (file && asset) { asset.image = await importedFileToLibraryDataURL(file); selectedLibraryAssetId = asset.id; renderAssetLibrary(); showNotification(`Imagem salva em “${asset.name}”`); } }
+            catch (error) { console.error(error); showNotification('Não foi possível importar esta imagem'); }
+            pendingLibraryImport = null; event.target.value = '';
+        });
 
         document.getElementById('soloModeBtn').onclick = (e) => {
             soloMode = !soloMode; e.target.classList.toggle('active', soloMode);
@@ -3410,7 +3731,53 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
         }
 
+        // Push liquify: inverse pixel sampling, smooth falloff, premultiplied alpha.
+        let pushPixels = null, pushOriginal = null, pushLast = null, pushChanged = false;
+        function pushRadius() { return Math.max(4, Number(brushSizeInput.dataset.actualSize || brushSizeInput.value) * 4); }
+        function drawPushCursor(pos) {
+            uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+            uiCtx.save(); uiCtx.setLineDash([]);
+            uiCtx.beginPath(); uiCtx.arc(pos.x, pos.y, pushRadius(), 0, Math.PI * 2);
+            uiCtx.strokeStyle = '#fff'; uiCtx.lineWidth = 3; uiCtx.stroke();
+            uiCtx.strokeStyle = '#168cce'; uiCtx.lineWidth = 1; uiCtx.stroke(); uiCtx.restore();
+        }
+        function pushDab(cx, cy, dx, dy, radius, strength) {
+            const w = pushPixels.width, h = pushPixels.height, data = pushPixels.data;
+            const x0 = Math.max(0, Math.floor(cx-radius)), y0 = Math.max(0, Math.floor(cy-radius));
+            const x1 = Math.min(w, Math.ceil(cx+radius)), y1 = Math.min(h, Math.ceil(cy+radius));
+            if (x1 <= x0 || y1 <= y0) return;
+            const out = ctx.createImageData(x1-x0, y1-y0), dst = out.data;
+            for (let y=y0; y<y1; y++) for (let x=x0; x<x1; x++) {
+                const i=(y*w+x)*4, o=((y-y0)*out.width+x-x0)*4;
+                const r2=((x-cx)**2+(y-cy)**2)/(radius*radius);
+                if (r2>=1) { for(let c=0;c<4;c++) dst[o+c]=data[i+c]; continue; }
+                const f=(1-r2)**2*strength;
+                const sx=x-dx*f, sy=y-dy*f, ix=Math.floor(sx), iy=Math.floor(sy);
+                const fx=sx-ix, fy=sy-iy;
+                let a=0, red=0, green=0, blue=0;
+                for(let v=0;v<2;v++) for(let u=0;u<2;u++) {
+                    const xx=ix+u, yy=iy+v;
+                    if(xx<0||yy<0||xx>=w||yy>=h) continue;
+                    const j=(yy*w+xx)*4, weight=(u?fx:1-fx)*(v?fy:1-fy), alpha=data[j+3]*weight;
+                    a+=alpha; red+=data[j]*alpha; green+=data[j+1]*alpha; blue+=data[j+2]*alpha;
+                }
+                dst[o]=a>0?red/a:0; dst[o+1]=a>0?green/a:0; dst[o+2]=a>0?blue/a:0; dst[o+3]=a;
+            }
+            // Read all source pixels before updating the affected rectangle.
+            for(let y=0;y<out.height;y++) data.set(dst.subarray(y*out.width*4,(y+1)*out.width*4),((y+y0)*w+x0)*4);
+            ctx.putImageData(out,x0,y0); pushChanged=true; hasUnsavedChanges=true;
+        }
+        function pushTo(pos) {
+            const dx=pos.x-pushLast.x, dy=pos.y-pushLast.y, distance=Math.hypot(dx,dy);
+            if(distance<0.1) { drawPushCursor(pos); return; }
+            const radius=pushRadius(), steps=Math.max(1,Math.ceil(distance/Math.max(2,radius*.18)));
+            const strength=Number(brushOpacityInput.value)/100*.75;
+            for(let n=1;n<=steps;n++) pushDab(pushLast.x+dx*n/steps,pushLast.y+dy*n/steps,dx/steps,dy/steps,radius,strength);
+            pushLast={x:pos.x,y:pos.y}; drawPushCursor(pos);
+        }
+
         function startDrawing(e) {
+            if (isExporting || isProjectSaving) return;
             if (isPlaying) return;
             if (isPalmTouch(e)) return; // ignora toques largos demais (palma da mão)
             if (isDrawing) return; 
@@ -3420,6 +3787,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             try { mainCanvas.setPointerCapture(e.pointerId); } catch(err) {}
 
             const pos = getMousePos(e); 
+            if (currentTool === 'push') {
+                if (isTransforming) finishSelection();
+                pushPixels=ctx.getImageData(0,0,mainCanvas.width,mainCanvas.height);
+                pushOriginal=new Uint8ClampedArray(pushPixels.data); pushLast=pos; pushChanged=false;
+                drawPushCursor(pos); return;
+            }
             if (currentTool === 'eyedropper') { sampleColorFn(pos.x, pos.y); isDrawing = false; activePointerId = null; return; }
 
             if (currentTool === 'clone') {
@@ -3535,6 +3908,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 return;
             }
             
+            if (currentTool === 'push') { pushTo(getMousePos(e)); return; }
+
             if (currentTool === 'lasso' || currentTool === 'perspective' || currentTool === 'warp' || currentTool === 'headSphere' || currentTool === 'bucket') {
                 const pos = getMousePos(e);
                 if (currentTool === 'headSphere' && isTransforming && isHeadSphereDragging) {
@@ -3670,6 +4045,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (e && activePointerId !== null && e.pointerId !== activePointerId) return; // não deixa a palma encerrar o traço da caneta/dedo
             if (e && e.pointerId) { try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err) {} }
 
+            if (currentTool === 'push') {
+                if(e && e.type !== 'pointercancel') pushTo(getMousePos(e));
+                if(e && e.type === 'pointercancel') { pushPixels.data.set(pushOriginal); ctx.putImageData(pushPixels,0,0); }
+                else if(pushChanged) saveFrameState(currentFrameIndex);
+                pushPixels=null; pushOriginal=null; pushLast=null;
+                isDrawing=false; activePointerId=null; uiCtx.clearRect(0,0,uiCanvas.width,uiCanvas.height); return;
+            }
             if (currentTool === 'clone') {
                 const movedSource = isDraggingCloneSource;
                 isDraggingCloneSource = false; isDrawing = false; activePointerId = null;
@@ -4582,6 +4964,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         async function loadFrame(index) {
+            if ((isExporting || isProjectSaving) && !isHistoryAction) return;
             if (index < 0 || index >= frames.length) return;
             await finishSelection(); 
             const prevIndex = currentFrameIndex;
@@ -4669,7 +5052,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const originalFrame = frames[index];
             if (!originalFrame) return null;
             const newLayers = await Promise.all(originalFrame.layers.map(layer => layer ? createImageBitmap(layer) : null));
-            return {
+            const duplicatedFrame = {
                 layers: newLayers,
                 duration: Math.max(1, Number(originalFrame.duration) || 1),
                 // Congela na cópia a aparência 3D exata exibida no frame original.
@@ -4678,6 +5061,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 camera3DKeyframe: true,
                 camera3DInterpolation: originalFrame.camera3DInterpolation !== false
             };
+            if (Object.prototype.hasOwnProperty.call(originalFrame, 'background3DSource')) duplicatedFrame.background3DSource = originalFrame.background3DSource;
+            return duplicatedFrame;
         }
 
         async function duplicateFrame() {
@@ -4769,7 +5154,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             reader.readAsDataURL(file);
         };
 
-        menuBtn.addEventListener('click', (e) => { e.stopPropagation(); closeMobileEditPanel(); menuDropdown.classList.toggle('show'); });
+        menuBtn.addEventListener('click', (e) => { e.stopPropagation(); closeMobileEditPanel(); assetLibraryDropdown.classList.remove('show'); menuDropdown.classList.toggle('show'); });
         mobileEditBtn.addEventListener('click', (e) => {
             e.stopPropagation(); menuDropdown.classList.remove('show');
             const open = !mobileEditPanel.classList.contains('show');
@@ -4784,6 +5169,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         window.addEventListener('click', (e) => {
             if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) menuDropdown.classList.remove('show');
             if (!mobileEditBtn.contains(e.target) && !mobileEditPanel.contains(e.target)) closeMobileEditPanel();
+            if (!assetLibraryBtn.contains(e.target) && !assetLibraryDropdown.contains(e.target)) assetLibraryDropdown.classList.remove('show');
         });
         const spherical360Prompt = 'Spherical equirectangular 360-degree projection, seamless full panorama, ultra-wide wide-angle macro-spatial perspective, grand cavernous scale architectural volume, vast expansive boundaries eliminating all cramped feeling, [DESCREVA SUA IMAGEM AQUI], **charming traditional hand-drawn storybook illustration style, featuring expressive ink outlines and soft, translucent watercolor washes, visible paper texture, warm color palette, whimsical and nostalgic atmosphere**, masterpiece quality, high-end stylized 3D render --ar 2:1';
         copy360PromptMenu.onclick = async (e) => {
@@ -4972,7 +5358,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         async function exportPngSequence(withTransparency = false) {
             if (!frames.length) { showNotification('Nenhum frame para exportar'); return; }
-            if (isExporting) { showNotification('Uma exportação já está em andamento'); return; }
+            if (isExporting || isProjectSaving) { showNotification('Aguarde a operação atual'); return; }
             if (!window.showDirectoryPicker) {
                 showNotification('Este navegador não permite escolher uma pasta para a sequência PNG');
                 return;
@@ -5096,16 +5482,60 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
         }
 
+        function createVideoBlobTarget() {
+            let parts = [];
+            const target = new WebMMuxer.StreamTarget((data, position) => {
+                const end = position + data.byteLength;
+                const next = [];
+                for (const part of parts) {
+                    const partEnd = part.start + part.blob.size;
+                    if (partEnd <= position || part.start >= end) next.push(part);
+                    else {
+                        if (part.start < position) next.push({ start: part.start, blob: part.blob.slice(0, position - part.start) });
+                        if (partEnd > end) next.push({ start: end, blob: part.blob.slice(end - part.start) });
+                    }
+                }
+                next.push({ start: position, blob: new Blob([data]) });
+                parts = next.sort((a, b) => a.start - b.start);
+            }, undefined, { chunked: true });
+            return {
+                target,
+                finish() {
+                    let offset = 0;
+                    for (const part of parts) {
+                        if (part.start !== offset) throw new Error('Vídeo incompleto: tente exportar novamente');
+                        offset += part.blob.size;
+                    }
+                    const blob = new Blob(parts.map(part => part.blob), { type: 'video/webm' });
+                    parts = [];
+                    return blob;
+                },
+                clear() { parts = []; }
+            };
+        }
+
         async function exportVideo(withTransparency = false) {
             if (!frames.length) { showNotification('Nenhum frame para exportar'); return; }
-            if (isExporting) { showNotification('Uma exportação já está em andamento'); return; }
+            if (isExporting || isProjectSaving) { showNotification('Aguarde o salvamento ou a exportação atual'); return; }
             if (!window.VideoEncoder || !window.VideoFrame || !window.WebMMuxer) {
                 showNotification('Navegador sem suporte à exportação offline');
                 return;
             }
 
-            finishSelection();
-            await saveFrameState(currentFrameIndex);
+            // Reserva a operação antes do primeiro await para impedir duas exportações.
+            isExporting = true;
+            const editingFrameIndex = currentFrameIndex;
+            try {
+                if (isPlaying) await toggleAnimation();
+                await finishSelection();
+                await saveFrameState(currentFrameIndex);
+                if (hasUnsavedChanges) throw new Error('Não foi possível salvar o frame atual');
+            } catch (error) {
+                isExporting = false;
+                showNotification('Erro ao preparar o vídeo: ' + error.message);
+                return;
+            }
+            menuDropdown.classList.remove('show');
 
             // A duração do arquivo vem EXCLUSIVAMENTE da timeline do projeto.
             // O FPS do desenho NÃO controla o FPS de amostragem do fundo/câmera.
@@ -5134,6 +5564,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             let encoder = null;
             let writable = null;
             let fileTarget = false;
+            let blobOutput = null;
+            const videoCanvas = document.createElement('canvas');
+            videoCanvas.width = width; videoCanvas.height = height;
 
             cancelButton.onclick = () => {
                 cancelled = true;
@@ -5168,48 +5601,42 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     // Fallback para navegadores sem File System Access API.
                     // A exportação continua offline, mas o navegador precisará
                     // montar o Blob final em memória antes do download.
-                    target = new WebMMuxer.ArrayBufferTarget();
+                    blobOutput = createVideoBlobTarget();
+                    target = blobOutput.target;
                 }
 
+                // Não força VP9 por software em 1080×1920 no celular.
+                const bitrate = Math.round(Math.max(3e6, Math.min(8e6, width * height * exportFps * 0.075)));
+                let encoderConfig = null;
+                const codecs = withTransparency ? ['vp8'] : ['vp09.00.10.08', 'vp8'];
+                for (const hardwareAcceleration of ['prefer-hardware', 'no-preference']) {
+                    for (const codec of codecs) {
+                        const candidate = { codec, width, height, framerate: exportFps, bitrate,
+                            latencyMode: 'realtime', hardwareAcceleration };
+                        try {
+                            const support = await VideoEncoder.isConfigSupported(candidate);
+                            if (support.supported) { encoderConfig = candidate; break; }
+                        } catch (_) {}
+                    }
+                    if (encoderConfig) break;
+                }
+                if (!encoderConfig) throw new Error('Este navegador não suporta vídeo nesta resolução');
                 const muxer = new WebMMuxer.Muxer({
                     target,
-                    video: {
-                        codec: withTransparency ? 'V_VP8' : 'V_VP9',
-                        width,
-                        height,
-                        frameRate: exportFps
-                    },
+                    video: { codec: encoderConfig.codec === 'vp8' ? 'V_VP8' : 'V_VP9', width, height, frameRate: exportFps },
                     firstTimestampBehavior: 'offset'
                 });
-
                 let encoderError = null;
                 encoder = new VideoEncoder({
-                    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-                    error: error => {
-                        encoderError = error;
-                        console.error(error);
-                    }
+                    output: (chunk, meta) => {
+                        try { muxer.addVideoChunk(chunk, meta); }
+                        catch (error) { encoderError = error; }
+                    },
+                    error: error => { encoderError = error; console.error(error); }
                 });
+                encoder.configure(encoderConfig);
 
-                // Bitrate moderado: boa qualidade sem exigir CPU/RAM excessivas.
-                // O encoder é explicitamente independente de hardware.
-                const pixelsPerSecond = width * height * exportFps;
-                const bitrate = Math.round(Math.max(
-                    5e6,
-                    Math.min(14e6, pixelsPerSecond * 0.075)
-                ));
-
-                encoder.configure({
-                    codec: withTransparency ? 'vp8' : 'vp09.00.10.08',
-                    width,
-                    height,
-                    framerate: exportFps,
-                    bitrate,
-                    latencyMode: 'quality',
-                    hardwareAcceleration: 'prefer-software'
-                });
-
-                const tCtx = sharedUtilCtx;
+                const tCtx = videoCanvas.getContext('2d');
                 let drawingFrameIndex = 0;
                 let lastYield = performance.now();
 
@@ -5232,6 +5659,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     }
 
                     tCtx.globalCompositeOperation = 'source-over';
+                    tCtx.globalAlpha = 1;
                     tCtx.clearRect(0, 0, width, height);
 
                     if (!withTransparency) {
@@ -5251,22 +5679,29 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     compositeFrameLayers(tCtx, drawingFrameIndex);
 
                     // Nunca deixe uma fila grande de frames crescer na RAM/VRAM.
-                    while (encoder.encodeQueueSize > 1 && !cancelled) {
+                    while (encoder.encodeQueueSize > 0 && !cancelled) {
+                        if (encoderError) throw encoderError;
                         await new Promise(resolve => setTimeout(resolve, 4));
                     }
                     if (cancelled) break;
                     if (encoderError) throw encoderError;
 
-                    const videoFrame = new VideoFrame(sharedUtilCanvas, {
+                    const videoFrame = new VideoFrame(videoCanvas, {
                         timestamp,
                         duration,
                         alpha: withTransparency ? 'keep' : 'discard'
                     });
 
-                    encoder.encode(videoFrame, {
-                        keyFrame: outputIndex === 0 || outputIndex % (exportFps * 4) === 0
-                    });
-                    videoFrame.close();
+                    try {
+                        encoder.encode(videoFrame, {
+                            keyFrame: outputIndex === 0 || outputIndex % (exportFps * 4) === 0
+                        });
+                    } finally { videoFrame.close(); }
+                    // A fila vazia não garante que o codec liberou os frames nativos.
+                    if ((outputIndex + 1) % 8 === 0) {
+                        await encoder.flush();
+                        if (encoderError) throw encoderError;
+                    }
 
                     const percent = Math.round(((outputIndex + 1) / totalOutputFrames) * 100);
                     progressBar.style.width = percent + '%';
@@ -5302,7 +5737,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     writable = null;
                     showNotification(`Vídeo exportado: ${exportFps} FPS, duração da timeline preservada.`);
                 } else {
-                    const blob = new Blob([target.buffer], { type: 'video/webm' });
+                    const blob = blobOutput.finish();
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
                     a.download = filename;
@@ -5320,6 +5755,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     try { await writable.abort(); } catch (_) {}
                 }
             } finally {
+                if (blobOutput) blobOutput.clear();
+                videoCanvas.width = 1; videoCanvas.height = 1;
+                currentFrameIndex = editingFrameIndex;
                 isExporting = false;
                 overlay.style.display = 'none';
                 cancelButton.onclick = null;
@@ -5338,7 +5776,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 }));
                 return { layers, duration: f.duration || 1 };
             }));
-            const projectData = { fps: fps, frames: serializedFrames, background: bgCanvas.toDataURL(), layersMeta: layersMeta, canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode };
+            const projectData = { fps: fps, frames: serializedFrames, background: bgCanvas.toDataURL(), layersMeta: layersMeta, assetLibrary, canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode };
             const blob = new Blob([JSON.stringify(projectData)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = "meu_projeto_animacao.json"; a.click(); URL.revokeObjectURL(url); showNotification("Projeto salvo com sucesso!");
         };
 
@@ -5356,6 +5794,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 fps = data.fps || 6; document.getElementById('fpsSlider').value = fps; document.getElementById('fpsValue').textContent = fps;
                 if (data.layersMeta) { layersMeta = data.layersMeta; }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
+                assetLibrary = normalizeAssetLibrary(data.assetLibrary); selectedLibraryFolderId = null; selectedLibraryAssetId = null;
                 const bgImg = new Image(); bgImg.onload = () => { bgCtx.globalCompositeOperation = 'source-over'; bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height); bgCtx.drawImage(bgImg, 0, 0); }; bgImg.src = data.background;
                 frames = await Promise.all(data.frames.map(async f => {
                     const layers = await Promise.all(f.layers.map(async l => {
@@ -5508,7 +5947,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                     const isSmooth = frameData.camera3DInterpolation !== false;
                     transition.className = `transition-mode ${isSmooth ? '' : 'cut'}`;
                     transition.textContent = isSmooth ? '~' : '↯';
-                    transition.title = isSmooth ? 'Chegada suave: clique para trocar por corte' : 'Corte direto: clique para trocar por chegada suave';
+                    transition.title = isSmooth ? 'Linear durante este frame: clique para trocar por switch' : 'Switch neste frame: clique para trocar por linear';
                     transition.onclick = (event) => { event.stopPropagation(); frameData.camera3DInterpolation = !isSmooth; renderTimeline(); };
                     key.appendChild(transition);
                 }
@@ -5571,8 +6010,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             audioClipsHost.innerHTML = '';
             audioClipsHost.style.height = '30px';
             audioClips.forEach((clip, index) => {
-                clip.start = Math.max(0, Math.min(clip.start, projectDuration));
-                clip.end = Math.max(clip.start + 0.001, Math.min(clip.end, projectDuration));
+                if (!Number.isFinite(clip.start)) clip.start = 0;
+                if (!Number.isFinite(clip.end) || clip.end <= clip.start) clip.end = clip.start + (1 / Math.max(1, Number(fps) || 1));
                 const element = document.createElement('div');
                 element.className = `audio-clip trim-mode can-drag ${clip.id === selectedAudioClipId ? 'selected' : ''}`;
                 element.dataset.audioId = clip.id;
@@ -5659,11 +6098,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
             const audio = new Audio(dataURL); audio.loop = true;
             const projectDuration = getProjectDurationSeconds();
-            const start = settings ? Number(settings.start) || 0 : Math.min(timelineCursorTime, Math.max(0, projectDuration - 0.001));
-            const naturalDuration = buffer ? buffer.duration : projectDuration;
+            const minimumDuration = 1 / Math.max(1, Number(fps) || 1);
+            const start = settings ? Number(settings.start) || 0 : Math.max(0, Math.min(timelineCursorTime, projectDuration - minimumDuration));
             const clip = {
                 id: `audio-${++audioClipSequence}`, name, dataURL, buffer, audio,
-                start, end: settings ? Number(settings.end) || projectDuration : Math.min(projectDuration, start + naturalDuration),
+                start, end: settings ? Number(settings.end) || projectDuration : projectDuration,
                 sourceOffset: settings ? Number(settings.sourceOffset) || 0 : 0,
                 fitsProject: settings ? settings.fitsProject === true : false
             };
@@ -5708,24 +6147,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         function beginAudioDrag(event, clip, element) {
             if (event.target.classList.contains('audio-trim-handle')) return;
-            event.preventDefault();
+            event.preventDefault(); event.stopPropagation();
+            try { element.setPointerCapture(event.pointerId); } catch (_) {}
             const selectionBeforeClick = selectedAudioClipId;
             const rect = timelineContent.getBoundingClientRect();
             const projectDuration = getProjectDurationSeconds();
             const clipDuration = clip.end - clip.start;
+            const minVisible = Math.min(clipDuration, 1 / Math.max(1, Number(fps) || 1));
             const pointerStartTime = ((event.clientX - rect.left) / rect.width) * projectDuration;
             const originalStart = clip.start;
             let moved = false;
             element.classList.add('dragging');
             const onMove = (moveEvent) => {
+                if (moveEvent.cancelable) moveEvent.preventDefault();
                 const pointerTime = ((moveEvent.clientX - rect.left) / rect.width) * projectDuration;
                 if (Math.abs(moveEvent.clientX - event.clientX) > 2 && !moved) { moved = true; selectAudioClip(clip.id, false); }
                 const rawStart = originalStart + pointerTime - pointerStartTime;
-                clip.start = Math.max(0, Math.min(projectDuration - clipDuration, rawStart));
+                clip.start = Math.max(minVisible - clipDuration, Math.min(projectDuration - minVisible, rawStart));
                 clip.end = clip.start + clipDuration; clip.fitsProject = false;
                 element.style.left = `${(clip.start / projectDuration) * 100}%`;
             };
             const onUp = (upEvent) => {
+                try { element.releasePointerCapture(event.pointerId); } catch (_) {}
                 element.classList.remove('dragging');
                 if (!moved && upEvent && Number.isFinite(upEvent.clientX)) {
                     setTimelineCursorFromClientX(upEvent.clientX);
@@ -5835,7 +6278,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         async function toggleAnimation() {
             if (frames.length === 0) return;
             if (!isPlaying) {
-                finishSelection(); if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+                if (isExporting || isProjectSaving) return;
+                await finishSelection(); if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+                if (isExporting || isProjectSaving) return;
                 isPlaying = true; playSessionId++; const currentSession = playSessionId;
                 if (window.set3DBackgroundPlaybackActive) window.set3DBackgroundPlaybackActive(true);
                 document.getElementById('playBtn').style.display = 'none'; document.getElementById('stopBtn').style.display = 'block'; playbackCanvas.style.display = 'block';
@@ -5905,6 +6350,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const backgroundOpacity = document.getElementById('backgroundOpacity');
         const backgroundOpacityValue = document.getElementById('backgroundOpacityValue');
         let panoramaDataURL = null;
+        let backgroundSources = {};
+        const backgroundTextureCache = new Map();
+        let activeBackgroundSourceId;
+        let requestedBackgroundSourceId;
         let panoramaIsGif = false;
         let panoramaAnimationGeneration = 0;
         let panoramaGifImage = null;
@@ -5920,23 +6369,40 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let renderQueued = false;
         let THREE, renderer, scene, camera, panoramaMesh, panoramaTexture;
 
+        function makeBackgroundSourceId() { return `background_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`; }
+        function getBackgroundSourceIdAtFrame(index) {
+            for (let frameIndex = Math.min(index, frames.length - 1); frameIndex >= 0; frameIndex--) {
+                if (Object.prototype.hasOwnProperty.call(frames[frameIndex], 'background3DSource')) return frames[frameIndex].background3DSource || null;
+            }
+            return null;
+        }
+
         function ensureCameraState(index) {
             if (!frames[index].camera3D) frames[index].camera3D = { ...DEFAULT_CAMERA };
             return frames[index].camera3D;
         }
 
-        function getFrameEndTick(index) {
-            if (index === 0) return 0;
+        function getFrameStartTick(index) {
             let tick = 0;
-            for (let i = 0; i <= index; i++) tick += Math.max(1, Number(frames[i].duration) || 1);
+            for (let i = 0; i < index; i++) tick += Math.max(1, Number(frames[i].duration) || 1);
             return tick;
+        }
+
+        function getFrameEndTick(index) {
+            if (index < 0 || !frames[index]) return 0;
+            return getFrameStartTick(index) + Math.max(1, Number(frames[index].duration) || 1);
+        }
+
+        function getCameraKeyframeTick(index) {
+            if (index <= 0 || frames[index].camera3DInterpolation === false) return getFrameStartTick(index);
+            return getFrameEndTick(index);
         }
 
         // A linha inferior define apenas os keyframes. A duração da animação
         // continua sendo a dos frames de desenho, para manter tudo sincronizado.
         function getInterpolatedCameraAtTick(logicalTick) {
             const keyframes = frames
-                .map((frame, index) => frame.camera3DKeyframe ? { index, tick: getFrameEndTick(index) } : null)
+                .map((frame, index) => frame.camera3DKeyframe ? { index, tick: getCameraKeyframeTick(index) } : null)
                 .filter(Boolean);
             if (!keyframes.length) return ensureCameraState(0);
             const previous = [...keyframes].reverse().find(keyframe => keyframe.tick <= logicalTick) || keyframes[0];
@@ -5944,7 +6410,11 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const from = ensureCameraState(previous.index), to = ensureCameraState(next.index);
             if (previous.index === next.index || previous.tick === next.tick) return { ...from };
             if (next.index !== 0 && frames[next.index].camera3DInterpolation === false) return { ...from };
-            const amount = Math.max(0, Math.min(1, (logicalTick - previous.tick) / (next.tick - previous.tick)));
+            const transitionStartTick = frames[previous.index].camera3DInterpolation === false
+                ? getFrameEndTick(previous.index)
+                : previous.tick;
+            if (logicalTick <= transitionStartTick) return { ...from };
+            const amount = Math.max(0, Math.min(1, (logicalTick - transitionStartTick) / Math.max(0.0001, next.tick - transitionStartTick)));
             const yawDifference = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw));
             return {
                 yaw: from.yaw + yawDifference * amount,
@@ -5972,6 +6442,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             frames[index].camera3DKeyframe = false;
             frames[index].camera3DInterpolation = false;
             delete frames[index].camera3D;
+            delete frames[index].background3DSource;
 
             // Mantém a posição anterior até o próximo keyframe. Esse próximo
             // keyframe pode ser trocado para suave novamente pelo usuário.
@@ -5980,8 +6451,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
         window.remove3DBackgroundKeyframe = removeBackgroundKeyframe;
         window.get3DBackgroundCameraAtFrameStart = function(index) {
-            const startTick = index <= 0 ? 0 : getFrameEndTick(index - 1);
-            return { ...getInterpolatedCameraAtTick(startTick) };
+            return { ...getInterpolatedCameraAtTick(getFrameStartTick(index)) };
         };
 
         try {
@@ -6043,19 +6513,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         window.render3DBackgroundForFrame = function(index) {
             if (!renderer || !frames[index]) return;
+            if (!ensureBackgroundSourceForFrame(index)) return;
             // Ao editar um keyframe, mostra seu ângulo real; nos demais frames,
             // mostra a posição interpolada naquele ponto da duração.
-            const tick = getFrameEndTick(index - 1);
+            const tick = getFrameStartTick(index);
             drawCamera(frames[index].camera3DKeyframe ? ensureCameraState(index) : getInterpolatedCameraAtTick(tick));
         };
         window.render3DBackgroundForPlayback = function(index, logicalTick) {
             if (!renderer || !frames[index]) return;
+            if (!ensureBackgroundSourceForFrame(index)) return;
             updatePanoramaGifForPlayback();
-            const tick = logicalTick == null ? getFrameEndTick(index - 1) : logicalTick;
+            const tick = logicalTick == null ? getFrameStartTick(index) : logicalTick;
             drawCamera(getInterpolatedCameraAtTick(tick));
         };
         window.render3DBackgroundForExport = function(index, logicalTick, elapsedSeconds) {
             if (!renderer || !frames[index]) return;
+            if (!ensureBackgroundSourceForFrame(index)) return;
             // A exportação é processada mais rápido que o tempo real. Escolhe o
             // quadro do GIF pelo timestamp do vídeo, igual ao preview em 24 FPS.
             if (panoramaIsGif && panoramaGifFrames.length) {
@@ -6066,7 +6539,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 }
                 if (panoramaTexture) panoramaTexture.needsUpdate = true;
             }
-            const tick = logicalTick == null ? getFrameEndTick(index - 1) : logicalTick;
+            const tick = logicalTick == null ? getFrameStartTick(index) : logicalTick;
             drawCamera(getInterpolatedCameraAtTick(tick));
         };
         window.get3DBackgroundCameraAtFrameEnd = function(index) {
@@ -6076,7 +6549,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         window.update3DBackgroundTimeline = function(index) {
             if (index === currentFrameIndex) window.render3DBackgroundForFrame(index);
         };
-        window.has3DBackground = () => Boolean(panoramaDataURL && panoramaTexture);
+        window.has3DBackground = () => Boolean(getBackgroundSourceIdAtFrame(currentFrameIndex) && panoramaTexture);
         window.render3DBackgroundForFrame(currentFrameIndex);
 
         function queueCurrentRender() {
@@ -6119,7 +6592,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             event.preventDefault();
             activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
             const points = [...activePointers.values()];
-            const state = frames[currentFrameIndex].camera3DKeyframe ? ensureCameraState(currentFrameIndex) : getInterpolatedCameraAtTick(getFrameEndTick(currentFrameIndex - 1));
+            const state = frames[currentFrameIndex].camera3DKeyframe ? ensureCameraState(currentFrameIndex) : getInterpolatedCameraAtTick(getFrameStartTick(currentFrameIndex));
             if (points.length === 1) {
                 const point = points[0];
                 if (lastCenter) {
@@ -6150,7 +6623,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         bg3dTouchLayer.addEventListener('pointercancel', releasePointer);
         bg3dTouchLayer.addEventListener('wheel', (event) => {
             event.preventDefault();
-            const state = frames[currentFrameIndex].camera3DKeyframe ? ensureCameraState(currentFrameIndex) : getInterpolatedCameraAtTick(getFrameEndTick(currentFrameIndex - 1));
+            const state = frames[currentFrameIndex].camera3DKeyframe ? ensureCameraState(currentFrameIndex) : getInterpolatedCameraAtTick(getFrameStartTick(currentFrameIndex));
             state.fov = Math.max(25, Math.min(100, state.fov + event.deltaY * 0.03));
             saveCurrentCameraState(state);
             queueCurrentRender();
@@ -6251,11 +6724,24 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             return true;
         }
 
-        async function loadPanorama(dataURL) {
+        function isCachedBackgroundTexture(texture) {
+            return Array.from(backgroundTextureCache.values()).includes(texture);
+        }
+
+        async function loadPanorama(dataURL, sourceId = null) {
             stopGifBackground();
             const generation = panoramaAnimationGeneration;
             panoramaDataURL = dataURL;
             panoramaIsGif = /^data:image\/gif(?:;|,)/i.test(dataURL);
+
+            if (!panoramaIsGif && sourceId && backgroundTextureCache.has(sourceId)) {
+                const cachedTexture = backgroundTextureCache.get(sourceId);
+                if (panoramaTexture && panoramaTexture !== cachedTexture && !isCachedBackgroundTexture(panoramaTexture)) panoramaTexture.dispose();
+                panoramaTexture = cachedTexture;
+                panoramaMesh.material.dispose();
+                panoramaMesh.material = new THREE.MeshBasicMaterial({ map: panoramaTexture, side: THREE.BackSide });
+                return;
+            }
 
             let texture;
             if (panoramaIsGif) {
@@ -6285,17 +6771,102 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 if (generation !== panoramaAnimationGeneration) { texture.dispose(); return; }
             }
             texture.colorSpace = THREE.SRGBColorSpace;
-            if (panoramaTexture) panoramaTexture.dispose();
+            if (!panoramaIsGif && sourceId) backgroundTextureCache.set(sourceId, texture);
+            if (panoramaTexture && panoramaTexture !== texture && !isCachedBackgroundTexture(panoramaTexture)) panoramaTexture.dispose();
             panoramaTexture = texture;
             panoramaMesh.material.dispose();
             panoramaMesh.material = new THREE.MeshBasicMaterial({ map: panoramaTexture, side: THREE.BackSide });
-            window.render3DBackgroundForFrame(currentFrameIndex);
 
             // O primeiro quadro permanece estático. O avanço acontece somente
             // dentro do requestAnimationFrame principal quando o usuário dá Play.
             if (panoramaIsGif && isPlaying) window.set3DBackgroundPlaybackActive(true);
         }
-        window.load3DPanorama = loadPanorama;
+
+        async function preloadBackgroundTextures() {
+            const entries = Object.entries(backgroundSources).filter(([sourceId, dataURL]) =>
+                sourceId && typeof dataURL === 'string' && !/^data:image\/gif(?:;|,)/i.test(dataURL) && !backgroundTextureCache.has(sourceId)
+            );
+            await Promise.all(entries.map(async ([sourceId, dataURL]) => {
+                try {
+                    const texture = await new THREE.TextureLoader().loadAsync(dataURL);
+                    texture.colorSpace = THREE.SRGBColorSpace;
+                    backgroundTextureCache.set(sourceId, texture);
+                } catch (error) { console.warn('Não foi possível pré-carregar um background 3D.', error); }
+            }));
+        }
+
+        function clearActivePanorama() {
+            stopGifBackground();
+            panoramaDataURL = null;
+            if (panoramaTexture && !isCachedBackgroundTexture(panoramaTexture)) panoramaTexture.dispose();
+            panoramaTexture = null;
+            panoramaMesh.material.dispose();
+            panoramaMesh.material = new THREE.MeshBasicMaterial({ color: 0x252525, side: THREE.BackSide });
+            bgCtx.globalCompositeOperation = 'source-over'; bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = '#ffffff'; bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+        }
+
+        async function activateBackgroundSource(sourceId, frameIndex = currentFrameIndex) {
+            requestedBackgroundSourceId = sourceId || null;
+            if (!sourceId || !backgroundSources[sourceId]) {
+                activeBackgroundSourceId = null;
+                clearActivePanorama();
+                if (frameIndex === currentFrameIndex) window.render3DBackgroundForFrame(frameIndex);
+                return;
+            }
+            activeBackgroundSourceId = sourceId;
+            try {
+                await loadPanorama(backgroundSources[sourceId], sourceId);
+                if (requestedBackgroundSourceId !== sourceId) return;
+                const tick = getFrameStartTick(frameIndex);
+                drawCamera(frames[frameIndex].camera3DKeyframe ? ensureCameraState(frameIndex) : getInterpolatedCameraAtTick(tick));
+            } catch (error) {
+                if (activeBackgroundSourceId === sourceId) activeBackgroundSourceId = undefined;
+                if (requestedBackgroundSourceId === sourceId) requestedBackgroundSourceId = undefined;
+                throw error;
+            }
+        }
+
+        function activateCachedBackgroundSource(sourceId) {
+            const texture = backgroundTextureCache.get(sourceId);
+            if (!texture) return false;
+            stopGifBackground();
+            panoramaDataURL = backgroundSources[sourceId]; panoramaIsGif = false;
+            if (panoramaTexture && panoramaTexture !== texture && !isCachedBackgroundTexture(panoramaTexture)) panoramaTexture.dispose();
+            panoramaTexture = texture;
+            panoramaMesh.material.dispose();
+            panoramaMesh.material = new THREE.MeshBasicMaterial({ map: panoramaTexture, side: THREE.BackSide });
+            activeBackgroundSourceId = sourceId; requestedBackgroundSourceId = sourceId;
+            return true;
+        }
+
+        function ensureBackgroundSourceForFrame(index) {
+            const desiredSourceId = getBackgroundSourceIdAtFrame(index);
+            if (desiredSourceId === activeBackgroundSourceId) return true;
+            if (desiredSourceId && activateCachedBackgroundSource(desiredSourceId)) return true;
+            if (!desiredSourceId) {
+                requestedBackgroundSourceId = null; activeBackgroundSourceId = null; clearActivePanorama(); return true;
+            }
+            if (desiredSourceId !== requestedBackgroundSourceId) {
+                activateBackgroundSource(desiredSourceId, index).catch(error => { console.error(error); showNotification('Não foi possível trocar o background 3D'); });
+            }
+            return false;
+        }
+
+        async function applyBackgroundToCurrentFrame(dataURL, name = 'Background') {
+            const sourceId = makeBackgroundSourceId();
+            backgroundSources[sourceId] = dataURL;
+            const inheritedCamera = frames[currentFrameIndex].camera3DKeyframe
+                ? { ...ensureCameraState(currentFrameIndex) }
+                : { ...getInterpolatedCameraAtTick(getFrameStartTick(currentFrameIndex)) };
+            frames[currentFrameIndex].background3DSource = sourceId;
+            saveCurrentCameraState(inheritedCamera);
+            await activateBackgroundSource(sourceId, currentFrameIndex);
+            if (window.renderTimeline) window.renderTimeline();
+            showNotification(`Background 3D “${name}” aplicado no frame ${currentFrameIndex + 1}`);
+        }
+        window.applyLibraryImageTo3DBackground = applyBackgroundToCurrentFrame;
+        window.load3DPanorama = dataURL => applyBackgroundToCurrentFrame(dataURL, 'Panorama');
 
         bgImgBtn.onclick = () => bgInput.click();
         bgInput.onchange = (event) => {
@@ -6303,44 +6874,85 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (!file) return;
             const reader = new FileReader();
             reader.onload = async () => {
-                try { await loadPanorama(reader.result); showNotification('Panorama 3D carregado'); }
+                try { await applyBackgroundToCurrentFrame(reader.result, file.name || 'Panorama'); }
                 catch (error) { console.error(error); showNotification('Não foi possível carregar esta imagem'); }
             };
             reader.readAsDataURL(file);
             event.target.value = '';
         };
         clearBgBtn.onclick = () => {
-            stopGifBackground();
-            panoramaDataURL = null;
-            if (panoramaTexture) panoramaTexture.dispose();
-            panoramaTexture = null;
-            panoramaMesh.material.dispose();
-            panoramaMesh.material = new THREE.MeshBasicMaterial({ color: 0x252525, side: THREE.BackSide });
+            frames[currentFrameIndex].background3DSource = null;
+            const inheritedCamera = frames[currentFrameIndex].camera3DKeyframe
+                ? { ...ensureCameraState(currentFrameIndex) }
+                : { ...getInterpolatedCameraAtTick(getFrameStartTick(currentFrameIndex)) };
+            saveCurrentCameraState(inheritedCamera);
+            requestedBackgroundSourceId = null; activeBackgroundSourceId = null;
+            clearActivePanorama();
             window.render3DBackgroundForFrame(currentFrameIndex);
-            showNotification('Cenário 3D removido');
+            if (window.renderTimeline) window.renderTimeline();
+            showNotification(`Background 3D removido a partir do frame ${currentFrameIndex + 1}`);
         };
 
         saveProjectMenu.onclick = async (event) => {
-            event.preventDefault(); finishSelection(); await saveFrameState(currentFrameIndex); const tCtx = sharedUtilCtx;
-            const serializedFrames = await Promise.all(frames.map(async frame => {
-                const layers = await Promise.all(frame.layers.map(async layer => {
-                    if (!layer) return null;
-                    tCtx.globalCompositeOperation = 'source-over'; tCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height); tCtx.drawImage(layer, 0, 0);
-                    return sharedUtilCanvas.toDataURL();
-                }));
-                return { layers, duration: frame.duration || 1, camera3D: { ...ensureCameraState(frames.indexOf(frame)) }, camera3DKeyframe: frame.camera3DKeyframe === true, camera3DInterpolation: frame.camera3DInterpolation !== false };
-            }));
-            const serializedAudioClips = audioClips.map(clip => ({ name: clip.name, dataURL: clip.dataURL, start: clip.start, end: clip.end, sourceOffset: clip.sourceOffset, fitsProject: clip.fitsProject }));
-            const projectData = {
-                version: 13, fps, frames: serializedFrames,
-                canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode,
-                backgroundPanorama: panoramaDataURL,
-                backgroundOpacity: Number(backgroundOpacity.value),
-                audioClips: serializedAudioClips, layersMeta, selectedBrushId
-            };
-            const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'meu_projeto_animacao_3d.json'; anchor.click(); URL.revokeObjectURL(url);
-            showNotification('Projeto 3D salvo com sucesso!');
+            event.preventDefault();
+            if (isExporting || isProjectSaving) { showNotification('Aguarde a operação atual'); return; }
+            isProjectSaving = true;
+            let serializedFrames = [];
+            const saveOverlay = document.getElementById('exportOverlay');
+            const saveCancel = document.getElementById('cancelExportBtn');
+            const saveProgress = document.getElementById('progressBar');
+            const saveText = document.getElementById('progressText');
+            saveOverlay.style.display = 'flex'; saveCancel.style.display = 'none';
+            saveProgress.style.width = '0%'; saveText.textContent = 'Salvando projeto...';
+            menuDropdown.classList.remove('show');
+            try {
+                if (isPlaying) await toggleAnimation();
+                await finishSelection(); await saveFrameState(currentFrameIndex);
+                if (hasUnsavedChanges) throw new Error('Não foi possível salvar o frame atual');
+                const tCtx = sharedUtilCtx;
+                for (let index = 0; index < frames.length; index++) {
+                    const frame = frames[index];
+                    const layers = [];
+                    for (const layer of frame.layers) {
+                        if (!layer) { layers.push(null); continue; }
+                        tCtx.globalCompositeOperation = 'source-over'; tCtx.globalAlpha = 1;
+                        tCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height); tCtx.drawImage(layer, 0, 0);
+                        const png = await new Promise((resolve, reject) => sharedUtilCanvas.toBlob(
+                            blob => blob ? resolve(blob) : reject(new Error('Falha ao salvar camada')), 'image/png'));
+                        layers.push(await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result);
+                            reader.onerror = () => reject(reader.error || new Error('Falha ao ler camada'));
+                            reader.readAsDataURL(png);
+                        }));
+                    }
+                    const serializedFrame = { layers, duration: frame.duration || 1, camera3D: { ...ensureCameraState(index) }, camera3DKeyframe: frame.camera3DKeyframe === true, camera3DInterpolation: frame.camera3DInterpolation !== false };
+                    if (Object.prototype.hasOwnProperty.call(frame, 'background3DSource')) serializedFrame.background3DSource = frame.background3DSource;
+                    serializedFrames.push(serializedFrame);
+                    saveProgress.style.width = Math.round((index + 1) / frames.length * 100) + '%';
+                    saveText.textContent = `Salvando frame ${index + 1} de ${frames.length}...`;
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+                const serializedAudioClips = audioClips.map(clip => ({ name: clip.name, dataURL: clip.dataURL, start: clip.start, end: clip.end, sourceOffset: clip.sourceOffset, fitsProject: clip.fitsProject }));
+                const projectData = {
+                    version: 15, fps, frames: serializedFrames,
+                    canvasWidth: projectWidth, canvasHeight: projectHeight, mobileMode,
+                    backgroundPanorama: backgroundSources[getBackgroundSourceIdAtFrame(0)] || null,
+                    backgroundSources,
+                    backgroundOpacity: Number(backgroundOpacity.value),
+                    audioClips: serializedAudioClips, layersMeta, assetLibrary, selectedBrushId
+                };
+                const blob = new Blob([JSON.stringify(projectData)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'meu_projeto_animacao_3d.json'; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+                showNotification('Projeto 3D salvo com sucesso!');
+            } catch (error) {
+                console.error(error); showNotification('Erro ao salvar projeto: ' + error.message);
+            } finally {
+                serializedFrames = [];
+                sharedUtilCtx.clearRect(0, 0, sharedUtilCanvas.width, sharedUtilCanvas.height);
+                isProjectSaving = false;
+                saveOverlay.style.display = 'none'; saveCancel.style.display = '';
+            }
         };
 
         projectInput.onchange = async (event) => {
@@ -6358,18 +6970,30 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 if (data.layersMeta) { layersMeta = data.layersMeta.map((m, i) => ({ opacity: m.opacity != null ? m.opacity : 1, visible: m.visible !== false, name: m.name || `Camada ${i + 1}` })); }
                 else if (data.layerVisibility) { layersMeta = data.layerVisibility.map((v, i) => ({ opacity: 1, visible: v, name: `Camada ${i + 1}` })); }
                 else { layersMeta = [{ opacity: 1, visible: true, name: 'Camada 1' }]; }
+                assetLibrary = normalizeAssetLibrary(data.assetLibrary); selectedLibraryFolderId = null; selectedLibraryAssetId = null;
                 frames = await Promise.all(data.frames.map(async frame => {
                     const layers = await Promise.all(frame.layers.map(async layer => {
                         if (!layer) return null; const image = new Image(); image.src = layer; await new Promise(resolve => image.onload = resolve); return resizedBitmap(image, 1080, 1920);
                     }));
                     while (layers.length < layersMeta.length) layers.push(null);
                     while (layers.length > layersMeta.length) layers.pop();
-                    return { layers, duration: frame.duration || 1, camera3D: frame.camera3D ? { ...frame.camera3D } : { ...DEFAULT_CAMERA }, camera3DKeyframe: frame.camera3DKeyframe != null ? frame.camera3DKeyframe : true, camera3DInterpolation: frame.camera3DInterpolation !== false };
+                    const loadedFrame = { layers, duration: frame.duration || 1, camera3D: frame.camera3D ? { ...frame.camera3D } : { ...DEFAULT_CAMERA }, camera3DKeyframe: frame.camera3DKeyframe != null ? frame.camera3DKeyframe : true, camera3DInterpolation: frame.camera3DInterpolation !== false };
+                    if (Object.prototype.hasOwnProperty.call(frame, 'background3DSource')) loadedFrame.background3DSource = frame.background3DSource;
+                    return loadedFrame;
                 }));
                 if (activeLayerIndex >= layersMeta.length) activeLayerIndex = layersMeta.length - 1;
                 syncLayerCanvases();
-                if (data.backgroundPanorama) await loadPanorama(data.backgroundPanorama);
-                else if (data.background) await loadPanorama(data.background);
+                backgroundTextureCache.forEach(texture => { try { texture.dispose(); } catch (_) {} });
+                backgroundTextureCache.clear();
+                backgroundSources = data.backgroundSources && typeof data.backgroundSources === 'object' ? { ...data.backgroundSources } : {};
+                const legacyBackground = data.backgroundPanorama || data.background || null;
+                if (legacyBackground && !Object.keys(backgroundSources).length) {
+                    backgroundSources.legacy_background = legacyBackground;
+                    if (frames[0] && !Object.prototype.hasOwnProperty.call(frames[0], 'background3DSource')) frames[0].background3DSource = 'legacy_background';
+                }
+                activeBackgroundSourceId = undefined; requestedBackgroundSourceId = undefined;
+                await preloadBackgroundTextures();
+                ensureBackgroundSourceForFrame(0);
                 audioClips.forEach(clip => clip.audio.pause()); audioClips = []; selectedAudioClipId = null;
                 if (Array.isArray(data.audioClips)) {
                     for (const savedClip of data.audioClips) await addTimelineAudio(savedClip.dataURL, savedClip.name || 'Áudio', savedClip);
