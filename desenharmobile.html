@@ -2096,6 +2096,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             </div>
 
             <button class="icon-btn active" id="brushBtn" title="Pincel">🖊️</button>
+            <div class="brushes-menu">
+                <button class="icon-btn" id="brushMenuBtn" title="Escolher pincel" aria-label="Escolher pincel" style="font-size:11px;min-width:22px;padding:0 4px;">▾</button>
+                <div class="brushes-dropdown" id="brushesDropdown">
+                    <div class="brushes-title">PINCÉIS</div>
+                    <div class="brush-list" id="brushList"></div>
+                </div>
+            </div>
             <button class="icon-btn" id="eraserBtn" title="Borracha">
                 <svg viewBox="0 0 24 24" width="22" height="22" style="vertical-align: middle; transform: rotate(-20deg);">
                     <path d="M2 16L5 6H13L10 16H2Z" fill="#ff4d6d" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" />
@@ -2623,6 +2630,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         brushPresets.push({ id: 'builtin-crayon', name: 'Giz de cera', type: 'stamp', brushKind: 'crayon' });
         brushPresets.push({ id: 'builtin-watercolor', name: 'Aquarela', type: 'stamp', brushKind: 'watercolor' });
         brushPresets.push({ id: 'builtin-light', name: 'Luz', type: 'stamp', brushKind: 'light' });
+        // Pincéis extras (spray, aerógrafo, aquarelas, giz pastel, luzes)
+        brushPresets.push({ id: 'builtin-spray', name: 'Spray', type: 'stamp', brushKind: 'spray' });
+        brushPresets.push({ id: 'builtin-airbrush', name: 'Aerógrafo suave', type: 'stamp', brushKind: 'airbrush' });
+        brushPresets.push({ id: 'builtin-wc-wet', name: 'Aquarela úmida', type: 'stamp', brushKind: 'wc-wet' });
+        brushPresets.push({ id: 'builtin-wc-dry', name: 'Aquarela seca', type: 'stamp', brushKind: 'wc-dry' });
+        brushPresets.push({ id: 'builtin-pastel', name: 'Giz pastel', type: 'stamp', brushKind: 'pastel' });
+        brushPresets.push({ id: 'builtin-neon', name: 'Neon', type: 'stamp', brushKind: 'neon' });
+        brushPresets.push({ id: 'builtin-glow', name: 'Brilho suave', type: 'stamp', brushKind: 'glow' });
 
         async function restoreProjectBrushes() {
             selectedBrushId = 'default';
@@ -2735,10 +2750,70 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             targetCtx.globalAlpha = previousAlpha;
         }
 
+        // ===== PINCÉIS EXTRAS: carimbos espaçados ao longo do traço =====
+        const extraBrushSpacing = { spray: .12, airbrush: .08, 'wc-wet': .2, 'wc-dry': .15, pastel: .12, neon: .15, glow: .2 };
+        let extraBrushRemain = 0;
+
+        function stampExtraBrush(c, kind, x, y, size, p) {
+            const r = Math.max(.5, size / 2), A = c.globalAlpha, R = Math.random, T = Math.PI * 2;
+            const oldComp = c.globalCompositeOperation;
+            c.fillStyle = cachedColor; c.strokeStyle = cachedColor;
+            const disc = (cx, cy, rad, a) => { c.globalAlpha = A * a; c.beginPath(); c.arc(cx, cy, rad, 0, T); c.fill(); };
+            if (kind === 'spray') {
+                const n = Math.min(70, Math.round(4 + r * r * .14));
+                for (let i = 0; i < n; i++) {
+                    const a = R() * T, d = r * Math.abs(R() + R() + R() - 1.5) / 1.5;
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, Math.max(.4, size * .022 * (.5 + R())), (.18 + .5 * p) * (.4 + .6 * R()));
+                }
+            } else if (kind === 'airbrush') {
+                for (let i = 0; i < 6; i++) disc(x, y, r * (1 - i * .15), .012 + .03 * p);
+            } else if (kind === 'wc-wet') {
+                for (let i = 0; i < 4; i++) disc(x + (R() - .5) * r * .12, y + (R() - .5) * r * .12, r * (1 - i * .04), .016 + .02 * p);
+                c.lineWidth = Math.max(.6, size * .035); c.globalAlpha = A * (.05 + .05 * p);
+                c.beginPath(); c.arc(x, y, r * .97, 0, T); c.stroke();
+            } else if (kind === 'wc-dry') {
+                disc(x, y, r, .01);
+                const n = Math.min(90, Math.round(6 + r * r * .45));
+                for (let i = 0; i < n; i++) {
+                    if (R() < .38) continue;
+                    const a = R() * T, d = r * Math.sqrt(R());
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, .5 + R() * 1.1, .07 + .16 * p * R());
+                }
+            } else if (kind === 'pastel') {
+                disc(x, y, r * .9, .035 + .07 * p);
+                const n = Math.min(120, Math.round(8 + r * r * .7));
+                for (let i = 0; i < n; i++) {
+                    if (R() < .25) continue;
+                    const a = R() * T, d = r * 1.05 * Math.sqrt(R());
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, .45 + R() * .9, .14 + .3 * p * R());
+                }
+            } else if (kind === 'neon') {
+                c.globalCompositeOperation = 'lighter';
+                disc(x, y, Math.min(90, r * 1.5), .05 * (.5 + p));
+                disc(x, y, r * .7, .18 * (.5 + p));
+                c.fillStyle = '#fff'; disc(x, y, Math.max(.5, r * .22), .85 * (.5 + .5 * p));
+            } else if (kind === 'glow') {
+                c.globalCompositeOperation = 'lighter';
+                const rs = [3, 2.1, 1.3, .6], as = [.012, .025, .05, .1];
+                for (let i = 0; i < 4; i++) disc(x, y, Math.min(140, r * rs[i]), as[i] * (.5 + p));
+            }
+            c.globalAlpha = A; c.globalCompositeOperation = oldComp;
+        }
+
+        function drawExtraBrush(c, kind, fx, fy, tx, ty, size, p) {
+            const spacing = Math.max(1, size * extraBrushSpacing[kind]);
+            const dx = tx - fx, dy = ty - fy, dist = Math.hypot(dx, dy);
+            if (dist < .01) { stampExtraBrush(c, kind, tx, ty, size, p); extraBrushRemain = spacing; return; }
+            let d = extraBrushRemain;
+            for (; d <= dist; d += spacing) stampExtraBrush(c, kind, fx + dx * d / dist, fy + dy * d / dist, size, p);
+            extraBrushRemain = d - dist;
+        }
+
         function drawNativeArtDot(targetCtx, x, y, size, pressure, erasing) {
             const brush = selectedBrushPreset();
             const kind = brush.brushKind;
             const p = Math.max(.05, Math.min(1, pressure));
+            if (extraBrushSpacing[kind]) { drawExtraBrush(targetCtx, kind, x, y, x, y, size, p); return; }
             const radius = Math.max(.5, size / 2);
             const oldAlpha = targetCtx.globalAlpha;
             const oldComposite = targetCtx.globalCompositeOperation;
@@ -2787,6 +2862,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const dx = toX - fromX, dy = toY - fromY, distance = Math.hypot(dx, dy);
             if (distance < .01) { drawNativeArtDot(targetCtx, toX, toY, size, pressure, erasing); return; }
             const p = Math.max(.05, Math.min(1, pressure));
+            if (extraBrushSpacing[kind]) { drawExtraBrush(targetCtx, kind, fromX, fromY, toX, toY, size, p); return; }
             const nx = -dy / distance, ny = dx / distance;
             const oldAlpha = targetCtx.globalAlpha;
             const oldComposite = targetCtx.globalCompositeOperation;
@@ -2915,6 +2991,48 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         brushBtn.onclick = () => setTool('brush');
+
+        // ===== Menu de seleção de pincéis =====
+        const brushMenuBtn = document.getElementById('brushMenuBtn');
+        const brushesDropdown = document.getElementById('brushesDropdown');
+        const brushListEl = document.getElementById('brushList');
+        document.body.appendChild(brushesDropdown); // fora da barra, para ficar acima de tudo
+        function renderBrushList() {
+            brushListEl.innerHTML = '';
+            brushPresets.forEach(brush => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                const active = brush.id === selectedBrushId;
+                item.className = 'brush-item' + (active ? ' active' : '');
+                item.innerHTML = '<span class="brush-check">' + (active ? '✓' : '') + '</span><span class="brush-item-name"></span>';
+                item.querySelector('.brush-item-name').textContent = brush.name;
+                item.onclick = () => {
+                    selectedBrushId = brush.id;
+                    setTool('brush');
+                    brushBtn.title = 'Pincel: ' + brush.name;
+                    brushesDropdown.classList.remove('show');
+                };
+                brushListEl.appendChild(item);
+            });
+        }
+        function positionBrushDropdown() {
+            const r = brushMenuBtn.getBoundingClientRect();
+            const w = Math.min(260, window.innerWidth - 16);
+            const top = Math.min(r.bottom + 6, window.innerHeight - 120);
+            const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+            Object.assign(brushesDropdown.style, {
+                position: 'fixed', top: top + 'px', left: left + 'px', right: 'auto',
+                width: w + 'px', maxHeight: (window.innerHeight - top - 8) + 'px',
+                zIndex: '2147483000'
+            });
+        }
+        brushMenuBtn.onclick = (e) => {
+            e.stopPropagation(); renderBrushList();
+            const show = brushesDropdown.classList.toggle('show');
+            if (show) positionBrushDropdown();
+        };
+        window.addEventListener('resize', () => brushesDropdown.classList.remove('show'));
+        document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.brushes-menu') && !e.target.closest('#brushesDropdown')) brushesDropdown.classList.remove('show'); });
         eraserBtn.onclick = () => setTool('eraser');
         cloneBtn.onclick = () => setTool(currentTool === 'clone' ? 'brush' : 'clone');
         document.getElementById('bucketBtn').onclick = () => setTool('bucket');
