@@ -1792,7 +1792,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         #threeRendererHost { position: absolute; width: 2px; height: 2px; left: -10000px; top: -10000px; overflow: hidden; }
         .camera-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 41; border-radius: 999px; padding: 7px 12px; color: #fff; background: rgba(0,0,0,.68); font-size: 11px; pointer-events: none; display: none; }
         .camera-hint.show { display: block; }
-        .brushes-menu { display: none; }
         @media (max-width: 900px) { .three-opacity-label span { display: none; } #backgroundOpacity { width: 52px; } .three-toggle { padding: 6px 8px; } }
         /* Tablet de 10 polegadas em paisagem: controles tocáveis e área de
            desenho livre das barras laterais, sem reduzir a interface com zoom. */
@@ -2416,6 +2415,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let currentStrokePoints = [];
         let strokeMoved = false;
         let artStrokePoints = [];
+        // false = pincéis novos desenham só o trecho novo (leve, sem atraso);
+        // true = motor antigo que redesenha o traço inteiro (pesado).
+        const ART_ENGINE = false;
         let artStrokeDirty = false;
 
         // ===== PINCÉIS NATIVOS DO SOFTWARE =====
@@ -2423,7 +2425,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         let selectedBrushId = 'default';
 
         function selectedBrushPreset() {
-            return brushPresets[0];
+            // A borracha sempre usa o pincel padrão; o pincel escolhido volta ao retornar ao pincel.
+            if (currentTool === 'eraser') return brushPresets[0];
+            return brushPresets.find(brush => brush.id === selectedBrushId) || brushPresets[0];
         }
 
         function makeHbBrushTip() {
@@ -2445,7 +2449,19 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             tipCtx.putImageData(imageData, 0, 0); return canvas;
         }
 
-        const hbBrushTip = null;
+        const hbBrushTip = makeHbBrushTip();
+        brushPresets.push({ id: 'builtin-hb', name: 'HB', type: 'stamp', tip: hbBrushTip, spacing: .09, pressureOpacity: true, pencilGrade: 0, pencilKind: 'hb' });
+        brushPresets.push({ id: 'builtin-6b', name: '6B', type: 'stamp', tip: hbBrushTip, spacing: .055, pressureOpacity: true, pencilGrade: 6, pencilKind: '6b' });
+        brushPresets.push({ id: 'builtin-crayon', name: 'Giz de cera', type: 'stamp', brushKind: 'crayon' });
+        brushPresets.push({ id: 'builtin-watercolor', name: 'Aquarela', type: 'stamp', brushKind: 'watercolor' });
+        brushPresets.push({ id: 'builtin-light', name: 'Luz', type: 'stamp', brushKind: 'light' });
+        brushPresets.push({ id: 'builtin-spray', name: 'Spray', type: 'stamp', brushKind: 'spray' });
+        brushPresets.push({ id: 'builtin-airbrush', name: 'Aerógrafo suave', type: 'stamp', brushKind: 'airbrush' });
+        brushPresets.push({ id: 'builtin-wc-wet', name: 'Aquarela úmida', type: 'stamp', brushKind: 'wc-wet' });
+        brushPresets.push({ id: 'builtin-wc-dry', name: 'Aquarela seca', type: 'stamp', brushKind: 'wc-dry' });
+        brushPresets.push({ id: 'builtin-pastel', name: 'Giz pastel', type: 'stamp', brushKind: 'pastel' });
+        brushPresets.push({ id: 'builtin-neon', name: 'Neon', type: 'stamp', brushKind: 'neon' });
+        brushPresets.push({ id: 'builtin-glow', name: 'Brilho suave', type: 'stamp', brushKind: 'glow' });
 
         function makeProceduralGrain(kind) {
             const size = 128, tile = document.createElement('canvas');
@@ -2529,7 +2545,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         async function restoreProjectBrushes(_savedBrushes, savedSelectedBrushId) {
             // Projetos antigos podem conter pincéis importados, mas esta versão
             // aceita somente os três pincéis nativos do software.
-            selectedBrushId = 'default';
+            selectedBrushId = brushPresets.some(b => b.id === savedSelectedBrushId) ? savedSelectedBrushId : 'default';
             renderBrushList();
         }
 
@@ -2644,10 +2660,92 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             targetCtx.globalAlpha = previousAlpha;
         }
 
+        // ===== PINCÉIS EXTRAS: carimbos espaçados ao longo do traço =====
+        const extraBrushSpacing = { spray: .12, airbrush: .08, 'wc-wet': .2, 'wc-dry': .15, pastel: .12, neon: .15, glow: .2 };
+        let extraBrushRemain = 0;
+
+        function stampExtraBrush(c, kind, x, y, size, p) {
+            const r = Math.max(.5, size / 2), A = c.globalAlpha, R = extraRand, T = Math.PI * 2;
+            const oldComp = c.globalCompositeOperation;
+            c.fillStyle = cachedColor; c.strokeStyle = cachedColor;
+            const disc = (cx, cy, rad, a) => { c.globalAlpha = A * a; c.beginPath(); c.arc(cx, cy, rad, 0, T); c.fill(); };
+            if (kind === 'spray') {
+                const n = Math.min(70, Math.round(4 + r * r * .14));
+                for (let i = 0; i < n; i++) {
+                    const a = R() * T, d = r * Math.abs(R() + R() + R() - 1.5) / 1.5;
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, Math.max(.4, size * .022 * (.5 + R())), (.18 + .5 * p) * (.4 + .6 * R()));
+                }
+            } else if (kind === 'airbrush') {
+                for (let i = 0; i < 6; i++) disc(x, y, r * (1 - i * .15), .012 + .03 * p);
+            } else if (kind === 'wc-wet') {
+                for (let i = 0; i < 4; i++) disc(x + (R() - .5) * r * .12, y + (R() - .5) * r * .12, r * (1 - i * .04), .016 + .02 * p);
+                c.lineWidth = Math.max(.6, size * .035); c.globalAlpha = A * (.05 + .05 * p);
+                c.beginPath(); c.arc(x, y, r * .97, 0, T); c.stroke();
+            } else if (kind === 'wc-dry') {
+                disc(x, y, r, .01);
+                const n = Math.min(90, Math.round(6 + r * r * .45));
+                for (let i = 0; i < n; i++) {
+                    if (R() < .38) continue;
+                    const a = R() * T, d = r * Math.sqrt(R());
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, .5 + R() * 1.1, .07 + .16 * p * R());
+                }
+            } else if (kind === 'pastel') {
+                disc(x, y, r * .9, .035 + .07 * p);
+                const n = Math.min(120, Math.round(8 + r * r * .7));
+                for (let i = 0; i < n; i++) {
+                    if (R() < .25) continue;
+                    const a = R() * T, d = r * 1.05 * Math.sqrt(R());
+                    disc(x + Math.cos(a) * d, y + Math.sin(a) * d, .45 + R() * .9, .14 + .3 * p * R());
+                }
+            } else if (kind === 'neon') {
+                c.globalCompositeOperation = 'lighter';
+                disc(x, y, Math.min(90, r * 1.5), .05 * (.5 + p));
+                disc(x, y, r * .7, .18 * (.5 + p));
+                c.fillStyle = '#fff'; disc(x, y, Math.max(.5, r * .22), .85 * (.5 + .5 * p));
+            } else if (kind === 'glow') {
+                c.globalCompositeOperation = 'lighter';
+                const rs = [3, 2.1, 1.3, .6], as = [.012, .025, .05, .1];
+                for (let i = 0; i < 4; i++) disc(x, y, Math.min(140, r * rs[i]), as[i] * (.5 + p));
+            }
+            c.globalAlpha = A; c.globalCompositeOperation = oldComp;
+        }
+
+        function drawExtraBrush(c, kind, fx, fy, tx, ty, size, p) {
+            const spacing = Math.max(1, size * extraBrushSpacing[kind]);
+            const dx = tx - fx, dy = ty - fy, dist = Math.hypot(dx, dy);
+            if (dist < .01) { stampExtraBrush(c, kind, tx, ty, size, p); extraBrushRemain = spacing; return; }
+            let d = extraBrushRemain;
+            for (; d <= dist; d += spacing) stampExtraBrush(c, kind, fx + dx * d / dist, fy + dy * d / dist, size, p);
+            extraBrushRemain = d - dist;
+        }
+
+
+        // Sorteio com semente fixa: o traço é redesenhado a cada frame e não pode tremer.
+        let extraSeed = 1;
+        function extraRand() { extraSeed = (Math.imul(extraSeed, 1664525) + 1013904223) >>> 0; return extraSeed / 4294967296; }
+        const extraStrokeCache = { canvas: null, ctx: null, n: 0, first: null };
+        function renderExtraStroke(targetCtx, points, kind) {
+            const c = extraStrokeCache, w = targetCtx.canvas.width, h = targetCtx.canvas.height;
+            if (!c.canvas) { c.canvas = document.createElement('canvas'); c.ctx = c.canvas.getContext('2d'); c.n = 0; }
+            if (c.canvas.width !== w || c.canvas.height !== h) { c.canvas.width = w; c.canvas.height = h; c.n = 0; }
+            if (c.n === 0 || c.n > points.length || c.first !== points[0]) {
+                c.ctx.clearRect(0, 0, w, h); c.n = 0; c.first = points[0]; extraSeed = 0x9e3779b9; extraBrushRemain = 0;
+            }
+            c.ctx.globalAlpha = 1; c.ctx.globalCompositeOperation = 'source-over';
+            for (let i = c.n; i < points.length; i++) {
+                const pt = points[i], prev = i > 0 ? points[i - 1] : pt;
+                const p = Math.max(.05, Math.min(1, pt.p));
+                drawExtraBrush(c.ctx, kind, prev.x, prev.y, pt.x, pt.y, cachedSize * (.2 + .8 * p), p);
+            }
+            c.n = points.length;
+            targetCtx.drawImage(c.canvas, 0, 0);
+        }
+
         function drawNativeArtDot(targetCtx, x, y, size, pressure, erasing) {
             const brush = selectedBrushPreset();
             const kind = brush.brushKind;
             const p = Math.max(.05, Math.min(1, pressure));
+            if (extraBrushSpacing[kind]) { drawExtraBrush(targetCtx, kind, x, y, x, y, size, p); return; }
             const radius = Math.max(.5, size / 2);
             const oldAlpha = targetCtx.globalAlpha;
             const oldComposite = targetCtx.globalCompositeOperation;
@@ -2696,6 +2794,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             const dx = toX - fromX, dy = toY - fromY, distance = Math.hypot(dx, dy);
             if (distance < .01) { drawNativeArtDot(targetCtx, toX, toY, size, pressure, erasing); return; }
             const p = Math.max(.05, Math.min(1, pressure));
+            if (extraBrushSpacing[kind]) { drawExtraBrush(targetCtx, kind, fromX, fromY, toX, toY, size, p); return; }
             const nx = -dy / distance, ny = dx / distance;
             const oldAlpha = targetCtx.globalAlpha;
             const oldComposite = targetCtx.globalCompositeOperation;
@@ -2909,6 +3008,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         function renderNativeContinuousStroke(targetCtx, points, kind) {
+            if (extraBrushSpacing[kind]) { renderExtraStroke(targetCtx, points, kind); return; }
             const averagePressure = points.reduce((sum, point) => sum + point.p, 0) / points.length;
             targetCtx.strokeStyle = cachedColor; targetCtx.fillStyle = cachedColor;
             targetCtx.lineCap = 'round'; targetCtx.lineJoin = 'round';
@@ -2977,8 +3077,17 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
         brushesBtn.addEventListener('click', event => {
             event.stopPropagation(); layersDropdown.classList.remove('show'); assetLibraryDropdown.classList.remove('show');
-            renderBrushList(); brushesDropdown.classList.toggle('show');
+            renderBrushList();
+            if (brushesDropdown.classList.toggle('show')) {
+                const r = brushesBtn.getBoundingClientRect(), w = Math.min(260, window.innerWidth - 16);
+                const top = Math.min(r.bottom + 6, window.innerHeight - 120);
+                Object.assign(brushesDropdown.style, { position: 'fixed', top: top + 'px', right: 'auto',
+                    left: Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + 'px', width: w + 'px',
+                    maxHeight: (window.innerHeight - top - 8) + 'px', zIndex: '2147483000' });
+            }
         });
+        document.body.appendChild(brushesDropdown); // fora da barra, para ficar acima de tudo
+        window.addEventListener('resize', () => brushesDropdown.classList.remove('show'));
         brushesDropdown.addEventListener('click', event => event.stopPropagation());
         window.addEventListener('click', event => {
             if (!brushesBtn.contains(event.target) && !brushesDropdown.contains(event.target)) brushesDropdown.classList.remove('show');
@@ -3932,7 +4041,14 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         function startDrawing(e) {
             if (isPlaying) return;
             if (isPalmTouch(e)) return; // ignora toques largos demais (palma da mão)
-            if (isDrawing) return; 
+            if (isDrawing) {
+                // Segundo dedo/palma enquanto já desenha: ignora.
+                if (e.pointerType === 'touch' && e.isPrimary === false) return;
+                // Caso contrário o traço anterior ficou "preso" (pointerup perdido): destrava.
+                isDrawing = false; activePointerId = null; strokeMoved = false;
+                currentStrokePoints = []; artStrokePoints = [];
+                if (renderPending) { cancelAnimationFrame(strokeRafId); renderPending = false; }
+            }
             
             drawingPointerRect = null;
             isDrawing = true;
@@ -4009,7 +4125,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             let currentSize = cachedSize * (0.2 + 0.8 * pressure);
 
             const isDirectDraw = cachedOpacity == 100;
-            const isArtStroke = selectedBrushPreset().type === 'stamp';
+            const isArtStroke = ART_ENGINE && selectedBrushPreset().type === 'stamp';
             const targetCtx = isArtStroke ? dCtx : (isDirectDraw ? ctx : dCtx);
 
             if (!isDirectDraw || isArtStroke) {
@@ -4118,7 +4234,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 return;
             }
 
-            if (selectedBrushPreset().type === 'stamp') {
+            if (ART_ENGINE && selectedBrushPreset().type === 'stamp') {
                 let previewChanged = false;
                 for (const event of events) {
                     const pos = getMousePos(event);
@@ -4144,7 +4260,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 targetCtx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
                 targetCtx.strokeStyle = currentTool === 'eraser' ? '#000' : cachedColor;
 
-                if (e.pointerType !== 'pen') {
+                if (e.pointerType !== 'pen' && selectedBrushPreset().type !== 'stamp') {
                     targetCtx.beginPath(); targetCtx.lineWidth = cachedSize;
                     targetCtx.moveTo(lastX, lastY);
                     let moved = false;
@@ -4240,6 +4356,13 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         }
 
         function stopDrawing(e) {
+            try { stopDrawingInner(e); }
+            catch (err) {
+                console.error(err);
+                isDrawing = false; activePointerId = null; strokeMoved = false;
+            }
+        }
+        function stopDrawingInner(e) {
             if (!isDrawing) return;
             if (e && activePointerId !== null && e.pointerId !== activePointerId) return; // não deixa a palma encerrar o traço da caneta/dedo
             if (e && e.pointerId) { try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err) {} }
@@ -4260,7 +4383,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 return;
             }
 
-            const handledArtStroke = selectedBrushPreset().type === 'stamp' &&
+            const handledArtStroke = ART_ENGINE && selectedBrushPreset().type === 'stamp' &&
                 currentTool !== 'lasso' && currentTool !== 'perspective' && currentTool !== 'warp' &&
                 currentTool !== 'headSphere' && currentTool !== 'bucket';
             if (handledArtStroke) {
@@ -5073,6 +5196,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         mainCanvas.addEventListener('pointerdown', (e) => { e.preventDefault(); startDrawing(e); });
         window.addEventListener('pointermove', draw); 
         window.addEventListener('pointerup', stopDrawing); window.addEventListener('pointercancel', stopDrawing);
+        mainCanvas.addEventListener('lostpointercapture', (e) => { if (isDrawing && e.pointerId === activePointerId) stopDrawing(e); });
         mainCanvas.addEventListener('touchstart', (e) => e.preventDefault(), {passive: false});
         workspace.addEventListener('mousedown', (e) => { if(e.target === workspace) finishSelection(); });
 
