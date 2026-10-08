@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Violin Scale & Arpeggio Master</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .fingerboard-bg {
+            background: linear-gradient(90deg, #1e1b18 0%, #3a332e 50%, #1e1b18 100%);
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+        }
+        .string-line {
+            background: linear-gradient(to right, #d1d5db, #f3f4f6, #9ca3af);
+            box-shadow: 0 0 3px rgba(255,255,255,0.4);
+        }
+
+        .music-score { background: #faf7ef; border: 1px solid rgba(245,158,11,.25); }
+        .music-score svg { width: 100%; height: auto; display: block; }
+        .score-note.active { filter: drop-shadow(0 0 5px rgba(245,158,11,.95)); }
+        .score-note.active .note-head { fill: #f59e0b !important; }
+        .score-note.active .note-stem { stroke: #f59e0b !important; }
+        .score-label { color: #94a3b8; }
+
+        @keyframes pulse-glow {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 6px #fbbf24; }
+            50% { transform: scale(1.6); box-shadow: 0 0 16px #f59e0b, 0 0 24px #fbbf24; background-color: #fff; }
+        }
+        .active-playing-note {
+            animation: pulse-glow 0.15s ease-in-out infinite;
+            background-color: #fef08a !important;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col overflow-x-hidden">
+
+    <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-600/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg">
+                <i class="fa-solid fa-music text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-base tracking-wide bg-gradient-to-r from-amber-200 to-amber-500 bg-clip-text text-transparent">Violin Scale Master</h1>
+                <p class="text-xs text-slate-400">Catálogo Completo & 2 Oitavas</p>
+            </div>
+        </div>
+        <button onclick="toggleInfoModal()" class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:text-amber-400 transition-colors">
+            <i class="fa-solid fa-circle-info"></i>
+        </button>
+    </header>
+
+    <main class="flex-1 flex flex-col p-3 max-w-md mx-auto w-full space-y-3 pb-24">
+        
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-3">
+            
+            <!-- Tone Selection Grid -->
+            <div>
+                <label class="text-xs font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 mb-2">
+                    <i class="fa-solid fa-compass"></i> Escolha o Tom
+                </label>
+                <div id="toneButtonsGrid" class="grid grid-cols-6 gap-1.5">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <div class="pt-1">
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group"></i> Escala ou Arpejo
+                    </label>
+                    <span id="scaleCategoryBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">Sistema</span>
+                </div>
+                <div class="relative">
+                    <select id="scaleSelect" onchange="onSelectionChange()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-200 appearance-none focus:outline-none focus:border-amber-500 transition-all font-medium shadow-inner">
+                        <!-- Populated via JS -->
+                    </select>
+                    <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <p id="scaleDescription" class="text-xs text-slate-400 leading-relaxed bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
+                Selecione o tom e a escala/arpejo para visualizar em 2 oitavas.
+            </p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-2.5">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-guitar"></i> Cordas Soltas (Zero Fret)
+                </span>
+                <span class="text-[10px] text-slate-400">Independentes do braço</span>
+            </div>
+            <div id="openStringsContainer" class="grid grid-cols-4 gap-2">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm flex flex-col items-center">
+            
+            <div class="w-full flex justify-between items-center mb-2.5">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders"></i> Braço do Violino (2 Oitavas - Apenas Bolinhas)
+                </span>
+                <span class="text-[11px] text-amber-400 font-mono font-medium" id="activeNotesCount">0 notas</span>
+            </div>
+
+            <!-- Fingerboard Container representing up to 2 octaves across the fingerboard -->
+            <div class="w-full overflow-hidden">
+                <div id="fingerboardContainer" class="relative fingerboard-bg rounded-xl w-full h-44 border-2 border-amber-900/40 shadow-2xl flex flex-col justify-between py-2 px-1">
+                    
+                    <!-- Nut (Pestana) indicator -->
+                    <div class="absolute left-7 top-0 bottom-0 w-1 bg-gradient-to-r from-amber-100 to-amber-300 shadow-md z-10 opacity-90 flex items-center justify-center">
+                        <span class="text-[6px] font-bold text-amber-950 -rotate-90 tracking-widest uppercase select-none">Pestana</span>
+                    </div>
+
+                    <!-- Fret position dots -->
+                    <div class="absolute left-[30%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
+                    <div class="absolute left-[50%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
+                    <div class="absolute left-[70%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
+                    <div class="absolute left-[90%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
+
+                    <!-- Frets lines (12 positions for 2 octaves coverage) -->
+                    <div class="absolute inset-0 pointer-events-none flex justify-between px-8">
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                        <div class="w-px h-full bg-amber-900/20"></div>
+                    </div>
+
+                    <!-- Strings: E, A, D, G -->
+                    <div class="relative h-1/4 flex items-center string-row" data-string="E">
+                        <div class="absolute left-0.5 text-[8px] font-bold text-amber-300/80 w-5 z-25">Mi</div>
+                        <div class="absolute left-7 right-1 h-0.5 string-line"></div>
+                        <div class="absolute inset-x-7 flex justify-between px-1 z-20 notes-track" data-string-idx="0"></div>
+                    </div>
+
+                    <div class="relative h-1/4 flex items-center string-row" data-string="A">
+                        <div class="absolute left-0.5 text-[8px] font-bold text-amber-300/80 w-5 z-25">Lá</div>
+                        <div class="absolute left-7 right-1 h-[1px] string-line"></div>
+                        <div class="absolute inset-x-7 flex justify-between px-1 z-20 notes-track" data-string-idx="1"></div>
+                    </div>
+
+                    <div class="relative h-1/4 flex items-center string-row" data-string="D">
+                        <div class="absolute left-0.5 text-[8px] font-bold text-amber-300/80 w-5 z-25">Ré</div>
+                        <div class="absolute left-7 right-1 h-[1.5px] string-line"></div>
+                        <div class="absolute inset-x-7 flex justify-between px-1 z-20 notes-track" data-string-idx="2"></div>
+                    </div>
+
+                    <div class="relative h-1/4 flex items-center string-row" data-string="G">
+                        <div class="absolute left-0.5 text-[8px] font-bold text-amber-300/80 w-5 z-25">Sol</div>
+                        <div class="absolute left-7 right-1 h-[2px] string-line"></div>
+                        <div class="absolute inset-x-7 flex justify-between px-1 z-20 notes-track" data-string-idx="3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between w-full mt-2 text-[10px] text-slate-400 px-1">
+                <span>Casas 1 a 12 (2 Oitavas)</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50"></span> Bolinha (Nota Ativa)</span>
+            </div>
+        </div>
+
+
+        <!-- Partitura -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-2.5">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5"><i class="fa-solid fa-music"></i> Partitura — Sequência tocada</span>
+                <span class="text-[10px] score-label">Clave de Sol</span>
+            </div>
+            <div id="musicScore" class="music-score rounded-xl overflow-x-auto shadow-inner"></div>
+            <p class="text-[10px] text-slate-400">A partitura acompanha a mesma sequência de 2 oitavas e a volta usada no exemplo. A nota atual fica destacada durante a reprodução.</p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-3">
+            <div class="flex justify-between items-center">
+                <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-list-ol"></i> Sequência (2 Oitavas Ida e Volta)
+                </label>
+                <button onclick="playScaleAudio()" id="playButton" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-600/20 active:scale-95 transition-all">
+                    <i class="fa-solid fa-volume-high" id="playIcon"></i> Ouvir Exemplo
+                </button>
+            </div>
+            
+            <div id="notesSequenceContainer" class="flex flex-wrap gap-1.5 pt-1 max-h-32 overflow-y-auto">
+                <!-- Populated via JS -->
+            </div>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-graduation-cap"></i> Dica de Execução
+            </h3>
+            <p id="executionTip" class="text-xs text-slate-300 leading-relaxed">
+                Pratique com arco longo e estabilidade rítmica cobrindo as duas oitavas.
+            </p>
+        </div>
+
+    </main>
+
+    <div id="infoModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative">
+            <div class="flex justify-between items-center">
+                <h3 class="font-bold text-base text-amber-400 flex items-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> Sobre o Repertório
+                </h3>
+                <button onclick="toggleInfoModal()" class="text-slate-400 hover:text-slate-100 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                Catálogo acadêmico completo com todas as escalas e arpejos clássicos. O braço exibe simultaneamente as notas nas duas oitavas com marcações em bolinhas minimalistas e iluminação em tempo real durante a reprodução de áudio.
+            </p>
+            <button onclick="toggleInfoModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl text-xs transition-colors">
+                Entendido
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const violinStrings = [
+            { name: 'E', midi: 76, label: 'Mi' },
+            { name: 'A', midi: 69, label: 'Lá' },
+            { name: 'D', midi: 62, label: 'Ré' },
+            { name: 'G', midi: 55, label: 'Sol' }
+        ];
+
+        const tones = [
+            { name: 'C', label: 'Dó' },
+            { name: 'G', label: 'Sol' },
+            { name: 'D', label: 'Ré' },
+            { name: 'A', label: 'Lá' },
+            { name: 'E', label: 'Mi' },
+            { name: 'F', label: 'Fá' },
+            { name: 'Bb', label: 'Sib' },
+            { name: 'Eb', label: 'Mib' },
+            { name: 'Ab', label: 'Láb' },
+            { name: 'C#', label: 'Dó#' },
+            { name: 'F#', label: 'Fá#' },
+            { name: 'B', label: 'Si' }
+        ];
+
+        let selectedTone = 'G';
+
+        const baseScaleTypes = [
+            // Escalas Diatônicas & Modais
+            {
+                id: 'major',
+                name: 'Escala Maior (Diatônica)',
+                category: 'Escalas Diatônicas',
+                description: 'A escala fundamental para equalização e afinação de intervalos em todo o instrumento.',
+                tip: 'Atente-se aos semitons entre os graus 3-4 e 7-8.',
+                intervals: [0, 2, 4, 5, 7, 9, 11, 12]
+            },
+            {
+                id: 'minor_nat',
+                name: 'Escala Menor Natural',
+                category: 'Escalas Diatônicas',
+                description: 'Modo menor natural base para o repertório clássico.',
+                tip: 'Mantenha a flexibilidade nos dedos 2 e 3.',
+                intervals: [0, 2, 3, 5, 7, 8, 10, 12]
+            },
+            {
+                id: 'minor_harm',
+                name: 'Escala Menor Harmônica',
+                category: 'Escalas Diatônicas',
+                description: 'Contém a sensível elevada, gerando o intervalo de 2ª aumentada.',
+                tip: 'Controle o arco com firmeza ao passar pelo intervalo estendido.',
+                intervals: [0, 2, 3, 5, 7, 8, 11, 12]
+            },
+            {
+                id: 'minor_mel',
+                name: 'Escala Menor Melódica',
+                category: 'Escalas Diatônicas',
+                description: 'Eleva o 6º e 7º graus na subida para suavizar a condução melódica.',
+                tip: 'Mantenha a fluidez na transição de posições.',
+                intervals: [0, 2, 3, 5, 7, 9, 11, 12]
+            },
+            {
+                id: 'mode_dorian',
+                name: 'Modo Dórico',
+                category: 'Modos Modais',
+                description: 'Modo menor com 6ª maior, essencial na música barroca e modal.',
+                tip: 'Explore a sonoridade modal pura.',
+                intervals: [0, 2, 3, 5, 7, 9, 10, 12]
+            },
+            {
+                id: 'mode_phrygian',
+                name: 'Modo Frígio',
+                category: 'Modos Modais',
+                description: 'Modo menor com 2ª menor, gerando forte tensão expressiva.',
+                tip: 'Acentue o segundo grau rebaixado.',
+                intervals: [0, 1, 3, 5, 7, 8, 10, 12]
+            },
+            {
+                id: 'mode_lydian',
+                name: 'Modo Lídio',
+                category: 'Modos Modais',
+                description: 'Modo maior com 4ª aumentada, sonoridade brilhante e etérea.',
+                tip: 'Equilibre a afinação da quarta aumentada.',
+                intervals: [0, 2, 4, 6, 7, 9, 11, 12]
+            },
+            {
+                id: 'mode_mixolydian',
+                name: 'Modo Mixolídio',
+                category: 'Modos Modais',
+                description: 'Modo maior com 7ª menor, sonoridade nobre.',
+                tip: 'Ênfase na nota característica.',
+                intervals: [0, 2, 4, 5, 7, 9, 10, 12]
+            },
+            {
+                id: 'mode_locrian',
+                name: 'Modo Locriano',
+                category: 'Modos Modais',
+                description: 'Modo menor com 2ª menor e 5ª diminuta.',
+                tip: 'Controle absoluto de entonação nos semitons.',
+                intervals: [0, 1, 3, 5, 6, 8, 10, 12]
+            },
+            {
+                id: 'mode_aeolian',
+                name: 'Modo Eólio',
+                category: 'Modos Modais',
+                description: 'Equivalente à escala menor natural.',
+                tip: 'Fluidez na emissão das notas graves.',
+                intervals: [0, 2, 3, 5, 7, 8, 10, 12]
+            },
+            {
+                id: 'mode_ionian',
+                name: 'Modo Jônico',
+                category: 'Modos Modais',
+                description: 'Equivalente à escala diatônica maior.',
+                tip: 'Sonoridade aberta e estável.',
+                intervals: [0, 2, 4, 5, 7, 9, 11, 12]
+            },
+            {
+                id: 'chromatic',
+                name: 'Escala Cromática',
+                category: 'Escalas Especiais',
+                description: 'Sequência em semitons contíguos para agilidade e independência digital.',
+                tip: 'Mantenha os dedos abaixados no espelho o máximo possível.',
+                intervals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+            },
+            {
+                id: 'diminished_hw',
+                name: 'Escala Diminuta (Tom-Semitom)',
+                category: 'Escalas Especiais',
+                description: 'Escala simétrica intercalando tons e semitons.',
+                tip: 'Foque na precisão rítmica exata em cada mudança de casa.',
+                intervals: [0, 1, 3, 4, 6, 7, 9, 10, 12]
+            },
+            {
+                id: 'diminished_wh',
+                name: 'Escala Diminuta (Semitom-Tom)',
+                category: 'Escalas Especiais',
+                description: 'Variante simétrica com início em semitom.',
+                tip: 'Mantenha a suavidade nos saltos curtos.',
+                intervals: [0, 2, 3, 5, 6, 8, 9, 11, 12]
+            },
+            {
+                id: 'whole_tone',
+                name: 'Escala de Tons Inteiros',
+                category: 'Escalas Especiais',
+                description: 'Composta exclusivamente por intervalos de tons inteiros.',
+                tip: 'Arco leve e legato contínuo.',
+                intervals: [0, 2, 4, 6, 8, 10, 12]
+            },
+            {
+                id: 'augmented_scale',
+                name: 'Escala Aumentada',
+                category: 'Escalas Especiais',
+                description: 'Alternância simétrica de terças menores e semitons.',
+                tip: 'Extrema atenção à distância entre os dedos.',
+                intervals: [0, 3, 4, 7, 8, 11, 12]
+            },
+            // Escalas adicionais
+            {
+                id: 'pent_major',
+                name: 'Escala Pentatônica Maior',
+                category: 'Escalas Pentatônicas',
+                description: 'Cinco notas por oitava, muito usada em estudos melódicos e improvisação.',
+                tip: 'Mantenha a sonoridade cantabile e destaque as mudanças de posição.',
+                intervals: [0, 2, 4, 7, 9, 12]
+            },
+            {
+                id: 'pent_minor',
+                name: 'Escala Pentatônica Menor',
+                category: 'Escalas Pentatônicas',
+                description: 'Pentatônica menor clássica para frases melódicas e improvisação.',
+                tip: 'Pratique com igualdade entre os dedos e atenção às mudanças de corda.',
+                intervals: [0, 3, 5, 7, 10, 12]
+            },
+            {
+                id: 'blues',
+                name: 'Escala Blues',
+                category: 'Escalas Especiais',
+                description: 'Pentatônica menor com a quinta diminuta, formando a blue note.',
+                tip: 'Dê atenção especial à quinta diminuta sem perder a afinação.',
+                intervals: [0, 3, 5, 6, 7, 10, 12]
+            },
+            {
+                id: 'harmonic_major',
+                name: 'Escala Maior Harmônica',
+                category: 'Escalas Especiais',
+                description: 'Escala maior com o sexto grau rebaixado e sétima maior.',
+                tip: 'Ouça claramente a distância entre o sexto grau e a sétima maior.',
+                intervals: [0, 2, 4, 5, 7, 8, 11, 12]
+            },
+            {
+                id: 'double_harmonic',
+                name: 'Escala Maior Dupla Harmônica',
+                category: 'Escalas Especiais',
+                description: 'Escala de caráter oriental com duas segundas aumentadas.',
+                tip: 'Estude lentamente as segundas aumentadas para fixar a afinação.',
+                intervals: [0, 1, 4, 5, 7, 8, 11, 12]
+            },
+            {
+                id: 'hungarian_minor',
+                name: 'Escala Menor Húngara',
+                category: 'Escalas Especiais',
+                description: 'Escala menor com quarta aumentada e sétima maior.',
+                tip: 'Controle cuidadosamente os saltos entre a terça e a quarta aumentada.',
+                intervals: [0, 2, 3, 6, 7, 8, 11, 12]
+            },
+            {
+                id: 'lydian_dom',
+                name: 'Lídio Dominante',
+                category: 'Modos Modais',
+                description: 'Quarto modo da escala acústica, com quarta aumentada e sétima menor.',
+                tip: 'Compare a quarta aumentada com a quarta justa das escalas tradicionais.',
+                intervals: [0, 2, 4, 6, 7, 9, 10, 12]
+            },
+            {
+                id: 'phrygian_dom',
+                name: 'Frígio Dominante',
+                category: 'Modos Modais',
+                description: 'Quinto modo da menor harmônica, com terça maior e segunda menor.',
+                tip: 'A terça maior deve permanecer firme apesar da segunda menor.',
+                intervals: [0, 1, 4, 5, 7, 8, 10, 12]
+            },
+            {
+                id: 'altered',
+                name: 'Escala Alterada',
+                category: 'Escalas de Jazz',
+                description: 'Superlócria, usada sobre acordes dominantes alterados.',
+                tip: 'Pratique devagar para ouvir cada tensão antes de acelerar.',
+                intervals: [0, 1, 3, 4, 6, 8, 10, 12]
+            },
+            {
+                id: 'bebop_dom',
+                name: 'Escala Bebop Dominante',
+                category: 'Escalas de Jazz',
+                description: 'Escala dominante com uma nota cromática adicional para facilitar a passagem rítmica.',
+                tip: 'Faça a nota cromática soar como passagem, mantendo o pulso regular.',
+                intervals: [0, 2, 4, 5, 7, 9, 10, 11, 12]
+            },
+
+
+            // Escalas avançadas para repertório virtuoso
+            {
+                id: 'pent_major', name: 'Pentatônica Maior', category: 'Escalas Especiais',
+                description: 'Cinco graus, útil para coordenação, mudanças de corda e padrões melódicos.',
+                tip: 'Pratique em várias posições e com diferentes articulações.', intervals: [0,2,4,7,9,12]
+            },
+            {
+                id: 'pent_minor', name: 'Pentatônica Menor', category: 'Escalas Especiais',
+                description: 'Pentatônica menor para agilidade e controle de mudanças de corda.',
+                tip: 'Alterne détaché, legato e acentos rítmicos.', intervals: [0,3,5,7,10,12]
+            },
+            {
+                id: 'blues', name: 'Escala Blues', category: 'Escalas Especiais',
+                description: 'Pentatônica menor com quinta diminuta.',
+                tip: 'Use para independência dos dedos e afinação cromática.', intervals: [0,3,5,6,7,10,12]
+            },
+            {
+                id: 'major_bebop', name: 'Bebop Maior', category: 'Escalas Especiais',
+                description: 'Escala maior com sétima menor de passagem.',
+                tip: 'Treine a nota cromática sem perder o centro tonal.', intervals: [0,2,4,5,7,9,10,11,12]
+            },
+            {
+                id: 'dominant_bebop', name: 'Bebop Dominante', category: 'Escalas Especiais',
+                description: 'Dominante com oitava nota cromática de passagem.',
+                tip: 'Mantenha a pulsação regular nas passagens rápidas.', intervals: [0,2,4,5,7,9,10,11,12]
+            },
+            {
+                id: 'altered', name: 'Escala Alterada', category: 'Escalas Avançadas',
+                description: 'Material cromático sobre dominante, útil para afinação e extensões alteradas.',
+                tip: 'Estude devagar antes de aplicar velocidade.', intervals: [0,1,3,4,6,8,10,12]
+            },
+            {
+                id: 'whole_half', name: 'Diminuta Tom-Semitom (8 notas)', category: 'Escalas Avançadas',
+                description: 'Padrão simétrico de oito notas para sequências virtuosas.',
+                tip: 'Use metrônomo e acentue grupos de quatro.', intervals: [0,2,3,5,6,8,9,11,12]
+            },
+            {
+                id: 'half_whole', name: 'Diminuta Semitom-Tom (8 notas)', category: 'Escalas Avançadas',
+                description: 'Forma complementar da escala diminuta.',
+                tip: 'Compare a afinação dos semitons em todas as cordas.', intervals: [0,1,3,4,6,7,9,10,12]
+            },
+            {
+                id: 'augmented', name: 'Escala Aumentada', category: 'Escalas Avançadas',
+                description: 'Estrutura simétrica de semitons e terças maiores.',
+                tip: 'Treine a mudança de posição sem tensão.', intervals: [0,3,4,7,8,11,12]
+            },
+            {
+                id: 'hungarian_minor', name: 'Menor Húngara', category: 'Escalas Avançadas',
+                description: 'Escala menor com quarta aumentada e sétima maior.',
+                tip: 'Atenção especial à segunda aumentada.', intervals: [0,2,3,6,7,8,11,12]
+            },
+            {
+                id: 'double_harmonic', name: 'Dupla Harmônica Maior', category: 'Escalas Avançadas',
+                description: 'Escala de forte caráter modal, com duas segundas aumentadas.',
+                tip: 'Pratique lentamente as distâncias aumentadas.', intervals: [0,1,4,5,7,8,11,12]
+            },
+            {
+                id: 'phrygian_dominant', name: 'Frígio Dominante', category: 'Escalas Avançadas',
+                description: 'Quinto modo da menor harmônica, frequente em passagens virtuosísticas.',
+                tip: 'Controle a segunda menor e a terça maior.', intervals: [0,1,4,5,7,8,10,12]
+            },
+            {
+                id: 'lydian_dominant', name: 'Lídio Dominante', category: 'Modos Modais',
+                description: 'Modo com quarta aumentada e sétima menor.',
+                tip: 'Afine a quarta aumentada com estabilidade.', intervals: [0,2,4,6,7,9,10,12]
+            },
+            {
+                id: 'mixolydian_b6', name: 'Mixolídio b6', category: 'Modos Modais',
+                description: 'Modo de caráter dominante derivado da menor melódica.',
+                tip: 'Destaque a relação entre terça maior e sexta menor.', intervals: [0,2,4,5,7,8,10,12]
+            },
+            {
+                id: 'locrian_nat6', name: 'Lócrio com 6ª Maior', category: 'Modos Modais',
+                description: 'Modo simétrico em tensão, útil para controle de intervalos.',
+                tip: 'Não acelere antes de estabilizar a quinta diminuta.', intervals: [0,1,3,5,6,9,10,12]
+            },
+            {
+                id: 'chromatic_two_oct', name: 'Cromática em 2 Oitavas', category: 'Escalas Virtuosísticas',
+                description: 'Sequência cromática completa para coordenação da mão esquerda.',
+                tip: 'Use ritmos variados e diferentes acentos.', intervals: [0,1,2,3,4,5,6,7,8,9,10,11,12]
+            },
+            {
+                id: 'major_thirds', name: 'Escala Maior em Terças', category: 'Padrões Virtuosísticos',
+                description: 'Padrão melódico em terças para independência e afinação.',
+                tip: 'Não trate como uma escala simples: mantenha cada salto afinado.', intervals: [0,4,2,5,4,7,5,9,7,11,9,12]
+            },
+            {
+                id: 'major_fourths', name: 'Escala Maior em Quartas', category: 'Padrões Virtuosísticos',
+                description: 'Padrão de quartas para coordenação e extensão.',
+                tip: 'Pratique primeiro em ritmo lento e separado.', intervals: [0,5,2,7,4,9,5,11,7,12]
+            },
+            {
+                id: 'major_sixths', name: 'Escala Maior em Sextas', category: 'Padrões Virtuosísticos',
+                description: 'Padrão de sextas para afinação avançada.',
+                tip: 'Mantenha a mão relaxada nos saltos.', intervals: [0,9,2,11,4,12]
+            },
+            {
+                id: 'octave_pattern', name: 'Escala Maior em Oitavas', category: 'Padrões Virtuosísticos',
+                description: 'Treino de oitavas para segurança de afinação e deslocamentos.',
+                tip: 'Priorize a afinação antes da velocidade.', intervals: [0,12,2,14,4,16,5,17,7,19,9,21,11,23,12,24]
+            },
+            // Arpejos Completos
+            {
+                id: 'arp_maj',
+                name: 'Arpejo Maior (Tríade)',
+                category: 'Arpejos',
+                description: 'Estudo fundamental de arpejos maiores para abertura de mão.',
+                tip: 'Prepare o próximo dedo antes de soltar o anterior.',
+                intervals: [0, 4, 7, 12]
+            },
+            {
+                id: 'arp_min',
+                name: 'Arpejo Menor (Tríade)',
+                category: 'Arpejos',
+                description: 'Essencial para a tessitura expressiva e melancólica.',
+                tip: 'Aterrise com precisão absoluta no 3º grau menor.',
+                intervals: [0, 3, 7, 12]
+            },
+            {
+                id: 'arp_dom7',
+                name: 'Arpejo de Sétima da Dominante (V7)',
+                category: 'Arpejos',
+                description: 'Gera tensão harmônica resolutiva nas cadências.',
+                tip: 'Atenção especial à afinação da sétima menor.',
+                intervals: [0, 4, 7, 10, 12]
+            },
+            {
+                id: 'arp_maj7',
+                name: 'Arpejo de Sétima Maior (Maj7)',
+                category: 'Arpejos',
+                description: 'Sonoridade rica e expandida com sétima maior.',
+                tip: 'Extrema delicadeza na nota superior.',
+                intervals: [0, 4, 7, 11, 12]
+            },
+            {
+                id: 'arp_min7',
+                name: 'Arpejo de Sétima Menor (m7)',
+                category: 'Arpejos',
+                description: 'Arpejo menor com sétima menor.',
+                tip: 'Fluidez impecável nas passagens de corda.',
+                intervals: [0, 3, 7, 10, 12]
+            },
+            {
+                id: 'arp_dim7',
+                name: 'Arpejo de Sétima Diminuída (dim7)',
+                category: 'Arpejos',
+                description: 'Simetria perfeita de terças menores para passagens velozes.',
+                tip: 'Mantenha a mesma distância exata entre todos os dedos.',
+                intervals: [0, 3, 6, 9, 12]
+            },
+            {
+                id: 'arp_m7b5',
+                name: 'Arpejo Meio-Diminuto (m7b5)',
+                category: 'Arpejos',
+                description: 'Tríade diminuta com sétima menor.',
+                tip: 'Controle de afinação rigoroso na quinta diminuta.',
+                intervals: [0, 3, 6, 10, 12]
+            },
+            {
+                id: 'arp_aug',
+                name: 'Arpejo Aumentado (+)',
+                category: 'Arpejos',
+                description: 'Tríade construída sobre terças maiores empilhadas.',
+                tip: 'Afine com precisão a quinta aumentada.',
+                intervals: [0, 4, 8, 12]
+            },
+            {
+                id: 'arp_sus4',
+                name: 'Arpejo Suspenso (sus4)',
+                category: 'Arpejos',
+                description: 'Arpejo com substituição da terça pela quarta justa.',
+                tip: 'Sonoridade aberta e suspensa.',
+                intervals: [0, 5, 7, 12]
+            },
+            {
+                id: 'arp_sus2',
+                name: 'Arpejo Suspenso 2 (sus2)',
+                category: 'Arpejos',
+                description: 'Arpejo com segundo grau suspenso.',
+                tip: 'Leveza na articulação digital.',
+                intervals: [0, 2, 7, 12]
+            },
+            {
+                id: 'arp_maj9',
+                name: 'Arpejo com Nona Maior (Maj9)',
+                category: 'Arpejos',
+                description: 'Extensão harmônica avançada.',
+                tip: 'Aproveite toda a extensão das posições no braço.',
+                intervals: [0, 4, 7, 11, 14]
+            },
+            {
+                id: 'arp_min9',
+                name: 'Arpejo com Nona Menor (m9)',
+                category: 'Arpejos',
+                description: 'Tríade menor com sétima menor e nona.',
+                tip: 'Suavidade nos saltos de registro.',
+                intervals: [0, 3, 7, 10, 14]
+            },
+            {
+                id: 'arp_6',
+                name: 'Arpejo de Sexta (6)',
+                category: 'Arpejos',
+                description: 'Tríade maior com adição da sexta maior.',
+                tip: 'Sonoridade aconchegante e cantante.',
+                intervals: [0, 4, 7, 9, 12]
+            },
+            {
+                id: 'arp_m6',
+                name: 'Arpejo de Sexta Menor (m6)',
+                category: 'Arpejos',
+                description: 'Tríade menor com sexta maior.',
+                tip: 'Excelente para passagens expressivas.',
+                intervals: [0, 3, 7, 9, 12]
+            },
+            {
+                id: 'arp_dim',
+                name: 'Arpejo Diminuto (Tríade)',
+                category: 'Arpejos',
+                description: 'Tríade formada por fundamental, terça menor e quinta diminuta.',
+                tip: 'Mantenha a distância entre os dedos extremamente precisa.',
+                intervals: [0, 3, 6, 12]
+            },
+            {
+                id: 'arp_min_maj7',
+                name: 'Arpejo Menor com Sétima Maior (mMaj7)',
+                category: 'Arpejos',
+                description: 'Tríade menor combinada com sétima maior.',
+                tip: 'Ouça com cuidado o contraste entre a terça menor e a sétima maior.',
+                intervals: [0, 3, 7, 11, 12]
+            },
+            {
+                id: 'arp_7b5',
+                name: 'Arpejo Dominante com Quinta Diminuta (7b5)',
+                category: 'Arpejos',
+                description: 'Acorde dominante com quinta diminuta, de forte tensão.',
+                tip: 'Afine a quinta diminuta antes de aumentar a velocidade.',
+                intervals: [0, 4, 6, 10, 12]
+            },
+            {
+                id: 'arp_7sharp5',
+                name: 'Arpejo Dominante com Quinta Aumentada (7#5)',
+                category: 'Arpejos',
+                description: 'Acorde dominante com quinta aumentada.',
+                tip: 'Controle a afinação da quinta aumentada e resolva a sétima com suavidade.',
+                intervals: [0, 4, 8, 10, 12]
+            },
+            {
+                id: 'arp_maj7sharp5',
+                name: 'Arpejo Maior com Sétima Maior e Quinta Aumentada',
+                category: 'Arpejos',
+                description: 'Sonoridade maior expandida com quinta aumentada.',
+                tip: 'Estude lentamente a distância entre a quinta aumentada e a sétima maior.',
+                intervals: [0, 4, 8, 11, 12]
+            },
+            {
+                id: 'arp_7sus4',
+                name: 'Arpejo Dominante Suspenso (7sus4)',
+                category: 'Arpejos',
+                description: 'Dominante com quarta suspensa no lugar da terça.',
+                tip: 'Mantenha a quarta justa estável antes da resolução.',
+                intervals: [0, 5, 7, 10, 12]
+            },
+            {
+                id: 'arp_maj7b5',
+                name: 'Arpejo Maior com Sétima Maior e Quinta Diminuta',
+                category: 'Arpejos',
+                description: 'Sonoridade maior tensa combinando terça maior, quinta diminuta e sétima maior.',
+                tip: 'Afine com cuidado a quinta diminuta antes de acelerar.',
+                intervals: [0, 4, 6, 11, 12]
+            },
+            {
+                id: 'arp_min_maj7b5',
+                name: 'Arpejo Menor com Sétima Maior e Quinta Diminuta',
+                category: 'Arpejos',
+                description: 'Estrutura menor sofisticada com quinta diminuta e sétima maior.',
+                tip: 'Separe claramente a terça menor da quinta diminuta.',
+                intervals: [0, 3, 6, 11, 12]
+            }
+            ,{
+                id: 'arp_maj6', name: 'Arpejo Maior com Sexta', category: 'Arpejos Virtuosísticos',
+                description: 'Tríade maior com sexta maior, excelente para padrões rápidos.', tip: 'Use diferentes inversões e acentos.', intervals: [0,4,7,9,12]
+            },
+            {
+                id: 'arp_m7b5_2', name: 'Meio-Diminuto com Oitava', category: 'Arpejos Virtuosísticos',
+                description: 'Arpejo m7b5 para controle de intervalos e mudanças de corda.', tip: 'Ouça cada terça menor e quinta diminuta.', intervals: [0,3,6,10,12]
+            },
+            {
+                id: 'arp_dom9', name: 'Dominante com Nona', category: 'Arpejos Virtuosísticos',
+                description: 'Dominante estendido com nona maior.', tip: 'Pratique os deslocamentos de posição entre os registros.', intervals: [0,4,7,10,14,12]
+            },
+            {
+                id: 'arp_dom7b9', name: 'Dominante 7ª com b9', category: 'Arpejos Virtuosísticos',
+                description: 'Arpejo dominante com nona menor.', tip: 'A segunda menor exige afinação muito precisa.', intervals: [0,4,7,10,13,12]
+            },
+            {
+                id: 'arp_dom7sharp9', name: 'Dominante 7ª com #9', category: 'Arpejos Virtuosísticos',
+                description: 'Dominante com nona aumentada.', tip: 'Diferencie claramente a terça da nona aumentada.', intervals: [0,4,7,10,15,12]
+            },
+            {
+                id: 'arp_aug7', name: 'Arpejo Aumentado com 7ª', category: 'Arpejos Virtuosísticos',
+                description: 'Estrutura aumentada com sétima menor.', tip: 'Estude lentamente a quinta aumentada.', intervals: [0,4,8,10,12]
+            },
+            {
+                id: 'arp_maj9', name: 'Maj9 Expandido', category: 'Arpejos Virtuosísticos',
+                description: 'Arpejo maior com sétima maior e nona.', tip: 'Trabalhe as mudanças de posição sem interromper o arco.', intervals: [0,4,7,11,14,12]
+            },
+            {
+                id: 'arp_min9', name: 'm9 Expandido', category: 'Arpejos Virtuosísticos',
+                description: 'Arpejo menor com sétima e nona.', tip: 'Mantenha o centro da mão durante a extensão.', intervals: [0,3,7,10,14,12]
+            },
+            {
+                id: 'arp_dim7_3oct', name: 'Diminuto 7ª em Extensão', category: 'Arpejos Virtuosísticos',
+                description: 'Arpejo simétrico para deslocamentos rápidos.', tip: 'Use como exercício de mudança de posição.', intervals: [0,3,6,9,12,15,18,21,24]
+            },
+            {
+                id: 'arp_major_triads_cycle', name: 'Tríade Maior com Oitava', category: 'Arpejos',
+                description: 'Fundamental, terça, quinta e oitava.', tip: 'Pratique em todas as tonalidades e cordas.', intervals: [0,4,7,12]
+            },
+            {
+                id: 'arp_minor_triads_cycle', name: 'Tríade Menor com Oitava', category: 'Arpejos',
+                description: 'Fundamental, terça menor, quinta e oitava.', tip: 'Controle a terça menor com precisão.', intervals: [0,3,7,12]
+            },
+            {
+                id: 'arp_major_thirds', name: 'Arpejo em Terças', category: 'Padrões de Arpejo',
+                description: 'Padrão intervalar para agilidade e independência.', tip: 'Comece em semínimas e aumente gradualmente.', intervals: [0,4,7,11,12]
+            },
+            {
+                id: 'arp_four_note_cycle', name: 'Arpejo de Quatro Notas', category: 'Padrões de Arpejo',
+                description: 'Célula de quatro notas para sequências virtuosísticas.', tip: 'Repita em diferentes regiões do braço.', intervals: [0,4,7,10,12]
+            }
+
+        ];
+
+        const noteNameToSemitone = {
+            'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5,
+            'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
+        };
+
+        const semitoneToNoteName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderToneGrid();
+            populateScaleSelector();
+            renderScale();
+        });
+
+        function renderToneGrid() {
+            const grid = document.getElementById('toneButtonsGrid');
+            grid.innerHTML = '';
+            tones.forEach(t => {
+                const btn = document.createElement('button');
+                const isSelected = t.name === selectedTone;
+                btn.className = `py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                    isSelected 
+                        ? 'bg-amber-600 border-amber-500 text-slate-950 shadow-md shadow-amber-600/30 font-bold scale-105' 
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                }`;
+                btn.innerHTML = `${t.name}<span class="block text-[8px] opacity-75">${t.label}</span>`;
+                btn.onclick = () => {
+                    selectedTone = t.name;
+                    renderToneGrid();
+                    renderScale();
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        function populateScaleSelector() {
+            const select = document.getElementById('scaleSelect');
+            select.innerHTML = '';
+            baseScaleTypes.forEach((st, index) => {
+                const opt = document.createElement('option');
+                opt.value = index;
+                opt.textContent = `${st.name} (${st.category})`;
+                select.appendChild(opt);
+            });
+        }
+
+        function onSelectionChange() {
+            renderScale();
+        }
+
+        function getMidiNotesForCurrentSelection() {
+            const select = document.getElementById('scaleSelect');
+            const st = baseScaleTypes[parseInt(select.value, 0) || 0];
+            
+            const baseSemi = noteNameToSemitone[selectedTone] || 0;
+            let baseOctave = (['C', 'C#', 'D', 'D#', 'E', 'F', 'F#'].includes(selectedTone)) ? 4 : 3;
+            if (['G', 'Ab', 'A', 'A#', 'Bb', 'B'].includes(selectedTone)) {
+                baseOctave = 3;
+            }
+
+            const rootMidi = 12 * (baseOctave + 1) + baseSemi;
+            
+            return st.intervals.map(interval => rootMidi + interval);
+        }
+
+
+        function getCompletePlaySequence(midiNotes) {
+            let fullSequence = [];
+            for (let octaveOffset = 0; octaveOffset < 2; octaveOffset++) {
+                midiNotes.forEach((m, i) => {
+                    if (i < midiNotes.length - 1 || octaveOffset === 0) fullSequence.push(m + (octaveOffset * 12));
+                });
+            }
+            fullSequence.push(midiNotes[midiNotes.length - 1] + 12);
+            return [...fullSequence, ...[...fullSequence].reverse().slice(1)];
+        }
+
+        // Posição vertical robusta: mantém notas agudas dentro da área visível
+        // e deixa espaço para linhas suplementares acima e abaixo da pauta.
+        function midiToStaffY(midi) {
+            const diatonicSteps = { C:0, D:1, E:2, F:3, G:4, A:5, B:6 };
+            const name = semitoneToNoteName[midi % 12];
+            const octave = Math.floor(midi / 12) - 1;
+            const step = (octave - 4) * 7 + (diatonicSteps[name[0]] - diatonicSteps.E);
+            return 110 - step * 7;
+        }
+
+        function renderMusicScore(sequence) {
+            const container = document.getElementById('musicScore');
+            if (!container) return;
+            const perMeasure = 8, measureW = 190;
+            const measures = Math.max(1, Math.ceil(sequence.length / perMeasure));
+            const width = 58 + measures * measureW, height = 220;
+            const lineYs = [96,103,110,117,124];
+            let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" aria-label="Partitura da sequência atual">`;
+            svg += `<rect width="100%" height="100%" fill="#faf7ef"/>`;
+            svg += `<text x="28" y="101" font-family="serif" font-size="54" fill="#1e293b">𝄞</text>`;
+            lineYs.forEach(y => svg += `<line x1="55" y1="${y}" x2="${width-12}" y2="${y}" stroke="#334155" stroke-width="1"/>`);
+            for (let m=0; m<measures; m++) {
+                const x0=58+m*measureW;
+                svg += `<line x1="${x0}" y1="93" x2="${x0}" y2="127" stroke="#64748b"/>`;
+                const start=m*perMeasure, end=Math.min(sequence.length,start+perMeasure);
+                for(let i=start;i<end;i++){
+                    const midi=sequence[i], x=x0+22+(i-start)*20, y=midiToStaffY(midi);
+                    const noteName=semitoneToNoteName[midi%12], accidental=noteName.includes('#')?'♯':'';
+                    if(y<96||y>124){ const first=y<96?89:131, step=y<96?-7:7; for(let ly=first;(y<96?ly>=y:ly<=y);ly+=step) svg+=`<line x1="${x-8}" y1="${ly}" x2="${x+8}" y2="${ly}" stroke="#475569"/>`; }
+                    svg+=`<g id="score-note-${i}" class="score-note">`;
+                    if(accidental) svg+=`<text x="${x-12}" y="${y+4}" font-family="serif" font-size="13" fill="#334155">${accidental}</text>`;
+                    svg+=`<ellipse class="note-head" cx="${x}" cy="${y}" rx="6" ry="4.2" transform="rotate(-18 ${x} ${y})" fill="#1e293b"/>`;
+                    svg+=`<line class="note-stem" x1="${x+5}" y1="${y}" x2="${x+5}" y2="${y-27}" stroke="#1e293b" stroke-width="1.5"/>`;
+                    svg+=`<text x="${x-5}" y="${y+20}" font-family="sans-serif" font-size="6" fill="#64748b">${noteName}</text></g>`;
+                }
+                svg+=`<line x1="${x0+measureW}" y1="93" x2="${x0+measureW}" y2="127" stroke="#334155" stroke-width="2"/>`;
+            }
+            container.innerHTML=svg+'</svg>';
+        }
+
+        function renderScale() {
+            const select = document.getElementById('scaleSelect');
+            const st = baseScaleTypes[parseInt(select.value, 0) || 0];
+
+            document.getElementById('scaleCategoryBadge').textContent = st.category;
+            document.getElementById('scaleDescription').textContent = st.description;
+            document.getElementById('executionTip').textContent = st.tip;
+
+            const midiNotes = getMidiNotesForCurrentSelection();
+
+            let twoOctaveSequence = [];
+            for(let oct=0; oct<2; oct++) {
+                midiNotes.forEach((m, i) => {
+                    if (i < midiNotes.length - 1 || oct === 0) {
+                        twoOctaveSequence.push(m + (oct * 12));
+                    }
+                });
+            }
+            twoOctaveSequence.push(midiNotes[midiNotes.length - 1] + 12);
+
+            let twoOctaveMidiSet = new Set(twoOctaveSequence);
+
+            // Escolhe UMA posição física para cada nota realmente presente
+            // na sequência. Isso evita mostrar a mesma nota em várias cordas.
+            const playedPositions = new Map();
+
+            twoOctaveSequence.forEach((midi) => {
+                if (playedPositions.has(midi)) return;
+
+                // Preferir corda solta quando a nota puder ser tocada assim.
+                const openIndex = violinStrings.findIndex(str => str.midi === midi);
+                if (openIndex >= 0) {
+                    playedPositions.set(midi, { stringIdx: openIndex, fret: 0, midi });
+                    return;
+                }
+
+                // Caso contrário, usar a menor casa disponível (1-12).
+                const candidates = [];
+                violinStrings.forEach((str, stringIdx) => {
+                    const fret = midi - str.midi;
+                    if (fret >= 1 && fret <= 12) {
+                        candidates.push({ stringIdx, fret, midi });
+                    }
+                });
+
+                candidates.sort((a, b) => a.fret - b.fret || a.stringIdx - b.stringIdx);
+                if (candidates.length) playedPositions.set(midi, candidates[0]);
+            });
+
+            // Render Open Strings Section
+            const openContainer = document.getElementById('openStringsContainer');
+            openContainer.innerHTML = '';
+            violinStrings.forEach((str, sIdx) => {
+                const isMatch = playedPositions.has(str.midi) && playedPositions.get(str.midi).fret === 0;
+                const stringBtn = document.createElement('div');
+                stringBtn.id = `open-string-${str.midi}`;
+                stringBtn.className = `p-2 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                    isMatch 
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm shadow-amber-500/20' 
+                        : 'bg-slate-950/40 border-slate-800/80 text-slate-400 opacity-30'
+                }`;
+                stringBtn.innerHTML = `
+                    <span class="text-[9px] font-bold uppercase tracking-wider">${str.label} (${str.name})</span>
+                    <div class="w-2.5 h-2.5 rounded-full mt-1 ${isMatch ? 'bg-amber-400 shadow-sm shadow-amber-400' : 'bg-slate-800'}"></div>
+                `;
+                openContainer.appendChild(stringBtn);
+            });
+
+            // Clear tracks for frets 1 to 12
+            const tracks = document.querySelectorAll('.notes-track');
+            tracks.forEach(track => track.innerHTML = '');
+
+            const stringNotesData = violinStrings.map((str, sIdx) => {
+                let slots = [];
+                for (let f = 1; f <= 12; f++) {
+                    slots.push({
+                        stringIdx: sIdx,
+                        fret: f,
+                        midi: str.midi + f
+                    });
+                }
+                return slots;
+            });
+
+            stringNotesData.forEach((stringSlots, sIdx) => {
+                const track = document.querySelector(`.notes-track[data-string-idx="${sIdx}"]`);
+                
+                stringSlots.forEach((slot) => {
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = 'w-2.5 h-2.5 rounded-full flex items-center justify-center transition-all relative z-20';
+                    
+                    const selectedPosition = playedPositions.get(slot.midi);
+                    const match = selectedPosition &&
+                                  selectedPosition.stringIdx === sIdx &&
+                                  selectedPosition.fret === slot.fret;
+                    
+                    if (match) {
+                        slotDiv.id = `finger-note-${slot.midi}`;
+                        slotDiv.classList.add('bg-amber-400', 'shadow-sm', 'shadow-amber-400/80', 'scale-110');
+                    } else {
+                        slotDiv.classList.add('bg-slate-800/10', 'opacity-10');
+                    }
+                    
+                    track.appendChild(slotDiv);
+                });
+            });
+
+
+            // Sequence pills for 2 octaves ida e volta
+            const seqContainer = document.getElementById('notesSequenceContainer');
+            seqContainer.innerHTML = '';
+
+            twoOctaveSequence.forEach((m, idx) => {
+                const semitone = m % 12;
+                const octave = Math.floor(m / 12) - 1;
+                const noteName = semitoneToNoteName[semitone] + octave;
+
+                const pill = document.createElement('div');
+                pill.id = `seq-pill-${idx}`;
+                pill.className = 'px-2 py-0.5 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-semibold flex items-center gap-1 shadow-sm transition-all';
+                pill.innerHTML = `<span class="text-[8px] text-amber-500/70 font-sans">${idx + 1}</span> ${noteName}`;
+                seqContainer.appendChild(pill);
+            });
+
+            renderMusicScore(getCompletePlaySequence(midiNotes));
+            document.getElementById('activeNotesCount').textContent = `${twoOctaveSequence.length} notas (2 oitavas)`;
+        }
+
+        function toggleInfoModal() {
+            const modal = document.getElementById('infoModal');
+            modal.classList.toggle('hidden');
+        }
+
+        let audioCtx = null;
+        let isPlayingAudio = false;
+
+        function playScaleAudio() {
+            if (isPlayingAudio) return;
+            
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const midiNotes = getMidiNotesForCurrentSelection();
+            if (!midiNotes || midiNotes.length === 0) return;
+
+            let completePlaySequence = getCompletePlaySequence(midiNotes);
+
+            isPlayingAudio = true;
+            const playBtn = document.getElementById('playButton');
+            const playIcon = document.getElementById('playIcon');
+            playBtn.classList.add('opacity-75', 'cursor-wait');
+            playIcon.className = "fa-solid fa-spinner fa-spin";
+
+            let now = audioCtx.currentTime;
+            const noteDuration = 0.16;
+
+            completePlaySequence.forEach((midi, index) => {
+                const freq = 440 * Math.pow(2, (midi - 69) / 12);
+                const startTime = now + index * noteDuration;
+
+                // Visual lighting triggers (ONLY the specific active note lights up)
+                setTimeout(() => {
+                    let noteEl = document.getElementById(`finger-note-${midi}`);
+                    let openEl = document.getElementById(`open-string-${midi}`);
+                    let seqEl = document.getElementById(`seq-pill-${index}`);
+                    let scoreEl = document.getElementById(`score-note-${index}`);
+
+                    if (noteEl) noteEl.classList.add('active-playing-note');
+                    if (openEl) openEl.classList.add('scale-105', 'bg-amber-400', 'text-slate-950');
+                    if (seqEl) seqEl.classList.add('bg-amber-500', 'text-slate-950', 'scale-105', 'shadow-md', 'shadow-amber-500/50');
+                    if (scoreEl) scoreEl.classList.add('active');
+
+                    setTimeout(() => {
+                        if (noteEl) noteEl.classList.remove('active-playing-note');
+                        if (openEl) openEl.classList.remove('scale-105', 'bg-amber-400', 'text-slate-950');
+                        if (seqEl) seqEl.classList.remove('bg-amber-500', 'text-slate-950', 'scale-105', 'shadow-md', 'shadow-amber-500/50');
+                        if (scoreEl) scoreEl.classList.remove('active');
+                    }, noteDuration * 1000);
+                }, index * noteDuration * 1000);
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                const filter = audioCtx.createBiquadFilter();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, startTime);
+
+                const vibrato = audioCtx.createOscillator();
+                const vibratoGain = audioCtx.createGain();
+                vibrato.frequency.setValueAtTime(5.5, startTime);
+                vibratoGain.gain.setValueAtTime(freq * 0.012, startTime);
+                vibrato.connect(osc.frequency);
+                vibrato.start(startTime);
+                vibrato.stop(startTime + noteDuration);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(3200, startTime);
+
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(0.15, startTime + 0.03);
+                gain.gain.setValueAtTime(0.13, startTime + noteDuration - 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + noteDuration);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start(startTime);
+                osc.stop(startTime + noteDuration);
+            });
+
+            setTimeout(() => {
+                isPlayingAudio = false;
+                playBtn.classList.remove('opacity-75', 'cursor-wait');
+                playIcon.className = "fa-solid fa-volume-high";
+            }, completePlaySequence.length * noteDuration * 1000 + 200);
+        }
+    </script>
+</body>
+</html>
