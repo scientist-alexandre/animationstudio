@@ -1088,7 +1088,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     </script>
   </head>
 
-  <body>
+  <body class="mobile-portrait-mode">
     <div id="toolbar">
       <input
         type="file"
@@ -1144,8 +1144,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           <div class="dropdown-divider"></div>
           <div class="dropdown-label">Formato do projeto</div>
           <div class="grid-choice-row" role="group" aria-label="Formato do projeto">
-            <button id="format-landscape" class="grid-choice format-choice active" onclick="setProjectFormat('landscape')">16:9</button>
-            <button id="format-portrait" class="grid-choice format-choice" onclick="setProjectFormat('portrait')">📱 9:16</button>
+            <button id="format-portrait" class="grid-choice format-choice active" onclick="setProjectFormat('portrait')">📱 9:16</button>
           </div>
           <div class="dropdown-divider"></div>
           <div class="dropdown-label">Biblioteca de camadas</div>
@@ -1262,12 +1261,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             oninput="seek(currentFrame); refreshTotalFrames(); renderAudioTimeline()"
         /></label>
       </div>
-      <button id="edit-drawing-tool" onclick="openSelectedDrawing()" title="Editar a pasta selecionada ou o desenho" aria-label="Editar desenho da camada selecionada">Editar</button>
+      <button id="edit-drawing-tool" onclick="openSelectedDrawing()" title="Editar a camada selecionada, mesmo dentro de uma pasta. Para editar a pasta inteira, use o 🖊 da linha da pasta" aria-label="Editar desenho da camada selecionada">Editar</button>
       <div class="shape-warp-toolbar" aria-label="Ferramenta Shape Key 2D">
-        <button id="shape-warp-btn" type="button" onclick="toggleShapeWarpTool()" title="Inicia uma nova Shape Key; use Editar na lista para ajustar uma Shape Key existente">ShapeKey</button>
+        <button id="shape-warp-btn" type="button" onclick="toggleShapeWarpTool()" title="Inicia uma nova Shape Key; use Editar na lista para ajustar uma Shape Key existente">Push Shape</button>
         <div class="shape-brush-control" title="Tamanho do pincel de deformação">
           <span>Pincel</span>
-          <input id="shape-brush-size" type="range" min="12" max="600" step="1" value="90" oninput="setShapeWarpBrushSize(this.value)" />
+          <input id="shape-brush-size" type="range" min="12" max="1200" step="1" value="90" oninput="setShapeWarpBrushSize(this.value)" />
           <span id="shape-brush-value">90</span>
         </div>
         <button id="shape-reset-btn" type="button" onclick="resetEditingShapeKey()" disabled>Resetar</button>
@@ -1993,9 +1992,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       const generateUid = () => Math.random().toString(36).substr(2, 9);
       const FRAME_SPACING = 30;
-      let FW = 1920;
-      let FH = 1080;
-      let projectFormat = "landscape";
+      let FW = 1080;
+      let FH = 1920;
+      let projectFormat = "portrait";
 
       function syncProjectFormatUI() {
         const portrait = projectFormat === "portrait";
@@ -2024,16 +2023,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
 
       function setProjectFormat(format, options = {}) {
-        const next = format === "portrait" ? "portrait" : "landscape";
+        const next = "portrait"; // Esta versão usa somente o modo mobile.
         if (next === projectFormat && !options.force) { syncProjectFormatUI(); return; }
         projectFormat = next;
-        FW = next === "portrait" ? 1080 : 1920;
-        FH = next === "portrait" ? 1920 : 1080;
+        FW = 1080;
+        FH = 1920;
         if (next !== "portrait") document.body.classList.remove("layers-open");
         syncProjectFormatUI();
         resizeProjectRenderers();
         document.getElementById("file-menu-panel")?.classList.remove("open");
-        if (!options.silent) showNotice(next === "portrait" ? "Modo celular 9:16 ativado — 1080 × 1920." : "Formato 16:9 ativado — 1920 × 1080.");
+        if (!options.silent) showNotice("Modo celular 9:16 — 1080 × 1920.");
       }
 
       function toggleMobileLayers() {
@@ -2535,6 +2534,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       let selectedPins = [];
       let hoveredPin = null;
       let dragTarget = null;
+      let rigDragGesture = null;
 
       let draggedLayerIndex = null;
       // Ao clicar no botão de corrente de uma pasta, o próximo clique em
@@ -3971,52 +3971,126 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         draw();
       }
 
+      function scaleLayerMeshToImage(layer, previousImg, nextImg) {
+        if (
+          !layer ||
+          !previousImg?.width ||
+          !previousImg?.height ||
+          !nextImg?.width ||
+          !nextImg?.height
+        )
+          return;
+        if (
+          previousImg.width === nextImg.width &&
+          previousImg.height === nextImg.height
+        )
+          return;
+        const sx = nextImg.width / previousImg.width,
+          sy = nextImg.height / previousImg.height;
+        (layer.mesh || []).forEach((p) => {
+          p.x *= sx;
+          p.ox *= sx;
+          p.y *= sy;
+          p.oy *= sy;
+        });
+        (layer.pins || []).forEach((p) => {
+          p.x *= sx;
+          p.ox *= sx;
+          p.y *= sy;
+          p.oy *= sy;
+        });
+        try {
+          skinBindingCache.delete(layer);
+          if (layer.mesh) skinBindingCache.delete(layer.mesh);
+        } catch (_) {}
+      }
+
+      // Garante que a imagem nova aparece no canvas (GPU/shape keys/malha).
+      function applyLayerAssetImage(layer, asset, image) {
+        if (!layer || !asset || !image) return;
+        const previous = asset.img;
+        image._r2dTextureVersion =
+          (Number(previous && previous._r2dTextureVersion) || 0) + 1;
+        scaleLayerMeshToImage(layer, previous, image);
+        asset.img = image;
+        if (Number.isInteger(activeLayerIndex) && layers[activeLayerIndex] === layer)
+          img = image;
+        try {
+          skinBindingCache.delete(layer);
+          if (layer.mesh) skinBindingCache.delete(layer.mesh);
+        } catch (_) {}
+        invalidateShapeWarp();
+        if (Array.isArray(layer.pins) && layer.pins.length >= 2) updateDeform(layer);
+        else layer._deformVersion = (layer._deformVersion || 0) + 1;
+      }
+
+      // Em pasta switch, a edição só "aparece" se a camada estiver visível.
+      function revealLayerInSwitchFolder(layer) {
+        if (!layer || layer.isFolder || !layer.parentId) return;
+        const folder = layers.find(
+          (item) => item.uid === layer.parentId && item.isFolder,
+        );
+        if (!folder || folder.folderMode === "common") return;
+        layers.forEach((child) => {
+          if (child.parentId === folder.uid && !child.isFolder)
+            child.visible = child === layer;
+        });
+        folder.switchChildUid = layer.uid;
+        selectedFolderUid = folder.uid;
+      }
+
+      function forceCanvasRefresh() {
+        refreshActiveLayerForFrame();
+        updateLayersUI();
+        updateFolderSwitcher();
+        try {
+          updateSavedPosesUI();
+        } catch (_) {}
+        try {
+          updateShapeKeysUI();
+        } catch (_) {}
+        draw(true);
+        // Segundo frame: alguns WebViews só sobem a textura WebGL no próximo tick.
+        requestAnimationFrame(() => draw(true));
+      }
+      window.applyLayerAssetImage = applyLayerAssetImage;
+      window.revealLayerInSwitchFolder = revealLayerInSwitchFolder;
+      window.forceCanvasRefresh = forceCanvasRefresh;
+      window.activateLayerVariant = activateLayerVariant;
+
+
       function activateLayerVariant(layer, nextIndex) {
         nextIndex = Number(nextIndex);
-        if (!Number.isInteger(nextIndex) || nextIndex === layer?.activeAssetIndex)
+        if (!layer || !Array.isArray(layer.assets) || !layer.assets.length) {
+          forceCanvasRefresh();
           return;
-        const next = layer?.assets?.[nextIndex]?.img;
-        const previous = layer?.assets?.[layer.activeAssetIndex]?.img;
+        }
+        if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= layer.assets.length) {
+          forceCanvasRefresh();
+          return;
+        }
+        const next = layer.assets[nextIndex]?.img;
+        const previous = layer.assets[layer.activeAssetIndex]?.img;
         if (!next?.width || !next?.height) {
-          draw();
+          forceCanvasRefresh();
           return;
         }
-        if (
-          previous?.width &&
-          previous?.height &&
-          (previous.width !== next.width || previous.height !== next.height)
-        ) {
-          const sx = next.width / previous.width,
-            sy = next.height / previous.height;
-          (layer.mesh || []).forEach((p) => {
-            p.x *= sx;
-            p.ox *= sx;
-            p.y *= sy;
-            p.oy *= sy;
-          });
-          (layer.pins || []).forEach((p) => {
-            p.x *= sx;
-            p.ox *= sx;
-            p.y *= sy;
-            p.oy *= sy;
-          });
-        }
+        const sameIndex = nextIndex === layer.activeAssetIndex;
+        if (!sameIndex) scaleLayerMeshToImage(layer, previous, next);
         layer.activeAssetIndex = nextIndex;
-        if (activeLayerIndex !== -1 && layers[activeLayerIndex] === layer)
+        if (Number.isInteger(activeLayerIndex) && layers[activeLayerIndex] === layer) {
           img = next;
-        updateDeform(layer);
-        if (activeLayerIndex !== -1 && layers[activeLayerIndex] === layer) {
-          
-          
+          pins = layer.pins || [];
+          mesh = layer.mesh || [];
         }
-        // Cada troca de Switch é uma pose discreta da timeline. setKeyframe
-        // preserva pins, transformações e Z, mudando somente o assetIndex.
+        updateDeform(layer);
+        invalidateShapeWarp();
+        // Cada troca de Switch é uma pose discreta da timeline.
         setKeyframe(false);
-        updateLayersUI();
+        forceCanvasRefresh();
         showNotice(
           `Switch gravado no frame ${Math.round(currentFrame)}: ${layer.assets[nextIndex].name}`,
         );
-        draw();
       }
 
       function deleteAssetFromLayer(lIdx) {
@@ -4116,6 +4190,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return document.getElementById('drawing-dialog')?.classList.contains('open') === true;
       }
       function resetRigPointerGesture() {
+        rigDragGesture = null;
         dragTarget = null;
         hoveredPin = null;
         globalTransformDragging = false;
@@ -4628,7 +4703,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const states = layers.map((l) => ({
           pins: (l.pins || []).map((p) => ({ x:p.x, y:p.y, warpAngle:p.warpAngle, z:p.z||0, extraLinks:p.extraLinks?[...p.extraLinks]:[] })),
           shapeKeyValues: l.isFolder ? {} : captureShapeKeyValues(l),
-          z: Number(l.z || 0), visible: l.visible !== false, parentId: l.parentId, assetIndex: l.activeAssetIndex || 0,
+          z: Number(l.z || 0), visible: l.visible !== false, parentId: l.parentId, assetIndex: Number.isInteger(l.activeAssetIndex) ? l.activeAssetIndex : 0,
         }));
         keyframes = keyframes.filter((k) => k.frame !== frame);
         keyframes.push({ frame, layerStates: states });
@@ -5415,7 +5490,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           l.pins.forEach((p,i)=>{const saved=state.pins?.[i];if(!saved)return;const nextX=saved.x,nextY=saved.y,nextAngle=saved.warpAngle,nextZ=saved.z||0;if(p.x!==nextX||p.y!==nextY||p.warpAngle!==nextAngle)deformChanged=true;p.x=nextX;p.y=nextY;p.warpAngle=nextAngle;p.z=nextZ;});
           if(state.shapeKeyValues){let shapeChanged=false;ensureShapeKeys2D(l).forEach((shape)=>{const nextValue=Math.max(0,Math.min(100,Number(state.shapeKeyValues[shape.uid])||0));if(shape.value!==nextValue){shape.value=nextValue;shapeChanged=true;}});if(shapeChanged)invalidateShapeWarp();}
           l.gPos={...state.gPos};if(state.gPivot)l.gPivot={...state.gPivot};l.gScale=state.gScale;l.gRotation=state.gRotation;
-          l.z=Number(state.z||0);l.visible=state.visible!==false;const savedAssetIdx=state.assetIndex||0;l.activeAssetIndex=l.assets&&l.assets.length>0?Math.min(savedAssetIdx,l.assets.length-1):0;if(deformChanged)updateDeform(l);
+          l.z=Number(state.z||0);l.visible=state.visible!==false;const savedAssetIdx=Number.isInteger(state.assetIndex)?state.assetIndex:(Number(state.assetIndex)||0);const prevAsset=l.activeAssetIndex;l.activeAssetIndex=l.assets&&l.assets.length>0?Math.min(savedAssetIdx,l.assets.length-1):0;if(deformChanged||prevAsset!==l.activeAssetIndex){if(deformChanged)updateDeform(l);else l._deformVersion=(l._deformVersion||0)+1;invalidateShapeWarp();}
         });
         if(activeLayerIndex!==-1&&layers[activeLayerIndex]){const l=layers[activeLayerIndex];pins=l.pins;gPos=l.gPos;gScale=l.gScale;gRotation=l.gRotation;}
       }
@@ -6982,7 +7057,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
 
       function setShapeWarpBrushSize(value) {
-        shapeWarpBrushSize = Math.max(12, Math.min(600, Number(value) || 90));
+        shapeWarpBrushSize = Math.max(12, Math.min(1200, Number(value) || 90));
         const out = document.getElementById("shape-brush-value");
         if (out) out.textContent = String(Math.round(shapeWarpBrushSize));
         scheduleShapeWarpDraw();
@@ -7021,20 +7096,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (!image?.width || !image?.height || points.length < 3) return null;
         const bbox = shapeWarpBBox(points, image);
 
-        // Shape Keys novas usam sempre uma malha 64 × 64 para dar máxima
-        // resolução ao pincel e à deformação, independentemente do GRID geral do rig.
-        const shapeGrid = 64;
-        const cols = shapeGrid;
-        const rows = shapeGrid;
-
-        return {
-          selection: points.map((p) => ({ x: p.x, y: p.y })),
-          bbox,
-          cols,
-          rows,
-          grid: shapeGrid,
-          deltas: Array.from({ length: (cols + 1) * (rows + 1) }, () => ({ dx: 0, dy: 0 })),
-        };
+        return {kind:'push',selection:points.map(p=>({...p})),bbox,pushes:[]};
       }
 
       function shapeWarpVertex(op, x, y) {
@@ -7054,6 +7116,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
       }
 
       function cloneShapeWarpOperation(op) {
+        if(op.kind==='push')return {kind:'push',selection:op.selection.map(p=>({...p})),bbox:{...op.bbox},pushes:op.pushes.map(p=>({...p}))};
         return {
           selection: (op.selection || []).map((p) => ({ x: p.x, y: p.y })),
           bbox: { ...op.bbox },
@@ -7250,7 +7313,73 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         return { available: true, renderInto };
       })();
 
+      // Compile inverse coordinates once; new dabs only update a small field region.
+      const shapePushFields=new WeakMap();
+      const shapePushGPU=(()=>{
+        const surface=document.createElement('canvas'),gl=surface.getContext('webgl2',{alpha:true,premultipliedAlpha:false,antialias:false,preserveDrawingBuffer:true});
+        if(!gl)return null;
+        function shader(type,text){const s=gl.createShader(type);gl.shaderSource(s,text);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))return null;return s;}
+        const vs=shader(gl.VERTEX_SHADER,`#version 300 es
+        in vec2 p;out vec2 uv;void main(){uv=(p+1.)*.5;gl_Position=vec4(p.x,-p.y,0.,1.);}`);
+        const fs=shader(gl.FRAGMENT_SHADER,`#version 300 es
+        precision highp float;uniform sampler2D img;uniform sampler2D field;uniform vec2 size;uniform vec2 grid;uniform float stepSize;uniform float amount;in vec2 uv;out vec4 color;
+        vec2 coord(ivec2 p){return texelFetch(field,clamp(p,ivec2(0),ivec2(grid)-1),0).rg;}
+        void main(){vec2 pixel=uv*size-.5;vec2 g=pixel/stepSize;ivec2 i=ivec2(floor(g));vec2 f=fract(g);vec2 mapped=mix(mix(coord(i),coord(i+ivec2(1,0)),f.x),mix(coord(i+ivec2(0,1)),coord(i+ivec2(1,1)),f.x),f.y);vec2 at=mix(pixel,mapped,amount);if(any(lessThan(at,vec2(-.5)))||any(greaterThan(at,size-.5))){color=vec4(0);return;}color=texture(img,(at+.5)/size);if(color.a>0.)color.rgb/=color.a;}`);
+        if(!vs||!fs)return null;const program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))return null;
+        gl.useProgram(program);const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);const loc=gl.getAttribLocation(program,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+        const image=gl.createTexture(),map=gl.createTexture();let previousSource=null,previousVersion=-1,previousField=null,previousCount=-1;
+        function bind(texture,unit){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,texture);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);}
+        return {render(source,destination,f,weight){if(gl.isContextLost())return false;
+          if(surface.width!==source.width||surface.height!==source.height){surface.width=source.width;surface.height=source.height;}
+          gl.viewport(0,0,surface.width,surface.height);gl.useProgram(program);bind(image,0);
+          const version=source._r2dTextureVersion||0;
+          // Mutable preview canvases can change without identity changing.
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
+          gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+          bind(map,1);if(previousField!==f||previousCount!==f.count){gl.texImage2D(gl.TEXTURE_2D,0,gl.RG32F,f.cols,f.rows,0,gl.RG,gl.FLOAT,f.data);previousField=f;previousCount=f.count;}
+          gl.uniform1i(gl.getUniformLocation(program,'img'),0);gl.uniform1i(gl.getUniformLocation(program,'field'),1);gl.uniform2f(gl.getUniformLocation(program,'size'),source.width,source.height);gl.uniform2f(gl.getUniformLocation(program,'grid'),f.cols,f.rows);gl.uniform1f(gl.getUniformLocation(program,'stepSize'),f.step);gl.uniform1f(gl.getUniformLocation(program,'amount'),weight);
+          gl.disable(gl.BLEND);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+          const ctx2=destination.getContext('2d');ctx2.clearRect(0,0,destination.width,destination.height);ctx2.drawImage(surface,0,0);return true;
+        }};
+      })();
+      function compileShapePush(op,w,h){
+        let f=shapePushFields.get(op);
+        if(!f||f.w!==w||f.h!==h||f.count>op.pushes.length){const step=4,cols=Math.ceil(w/step)+1,rows=Math.ceil(h/step)+1;f={w,h,step,cols,rows,count:0,data:new Float32Array(cols*rows*2)};for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const i=(y*cols+x)*2;f.data[i]=x*step;f.data[i+1]=y*step;}shapePushFields.set(op,f);}
+        const {cols,rows,step,data}=f;
+        for(;f.count<op.pushes.length;f.count++){
+          const d=op.pushes[f.count],r=d.radius;
+          const x0=Math.max(0,Math.floor((d.x-r)/step)),x1=Math.min(cols-1,Math.ceil((d.x+r)/step)),y0=Math.max(0,Math.floor((d.y-r)/step)),y1=Math.min(rows-1,Math.ceil((d.y+r)/step));
+          if(x1<x0||y1<y0)continue;
+          const out=new Float32Array((x1-x0+1)*(y1-y0+1)*2);let n=0;
+          for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+            const i=(y*cols+x)*2,px=x*step,py=y*step,t=((px-d.x)**2+(py-d.y)**2)/(r*r);
+            if(t>=1){out[n++]=data[i];out[n++]=data[i+1];continue;}
+            const fall=(1-t)**2*.75,sx=(px-d.dx*fall)/step,sy=(py-d.dy*fall)/step;
+            const ix=Math.max(0,Math.min(cols-2,Math.floor(sx))),iy=Math.max(0,Math.min(rows-2,Math.floor(sy))),fx=sx-ix,fy=sy-iy;
+            for(let c=0;c<2;c++)out[n++]=(data[(iy*cols+ix)*2+c]*(1-fx)+data[(iy*cols+ix+1)*2+c]*fx)*(1-fy)+(data[((iy+1)*cols+ix)*2+c]*(1-fx)+data[((iy+1)*cols+ix+1)*2+c]*fx)*fy;
+          }
+          n=0;for(let y=y0;y<=y1;y++){data.set(out.subarray(n,n+(x1-x0+1)*2),(y*cols+x0)*2);n+=(x1-x0+1)*2;}
+        }return f;
+      }
+      function renderShapePush(source,destination,op,weight){
+        if(destination.width!==source.width)destination.width=source.width;if(destination.height!==source.height)destination.height=source.height;
+        const dc=destination.getContext('2d',{willReadFrequently:true});dc.setTransform(1,0,0,1,0,0);
+        if(weight<=0||!op.pushes?.length){dc.clearRect(0,0,destination.width,destination.height);dc.drawImage(source,0,0);return;}
+        const f=compileShapePush(op,source.width,source.height);
+        try{if(shapePushGPU?.render(source,destination,f,weight))return;}catch(error){console.warn("Push GPU: usando renderização alternativa",error);}
+        dc.clearRect(0,0,destination.width,destination.height);dc.drawImage(source,0,0);
+        const img=dc.getImageData(0,0,source.width,source.height),out=dc.createImageData(source.width,source.height),data=img.data,dst=out.data,w=source.width,h=source.height;
+        for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+          const gx=x/f.step,gy=y/f.step,ix=Math.floor(gx),iy=Math.floor(gy),fx=gx-ix,fy=gy-iy;let mapped=[];
+          for(let c=0;c<2;c++)mapped[c]=(f.data[(iy*f.cols+ix)*2+c]*(1-fx)+f.data[(iy*f.cols+ix+1)*2+c]*fx)*(1-fy)+(f.data[((iy+1)*f.cols+ix)*2+c]*(1-fx)+f.data[((iy+1)*f.cols+ix+1)*2+c]*fx)*fy;
+          const sx=x+(mapped[0]-x)*weight,sy=y+(mapped[1]-y)*weight,xx=Math.floor(sx),yy=Math.floor(sy),tx=sx-xx,ty=sy-yy,o=(y*w+x)*4;let a=0,red=0,green=0,blue=0;
+          for(let v=0;v<2;v++)for(let u=0;u<2;u++){const px=xx+u,py=yy+v;if(px<0||py<0||px>=w||py>=h)continue;const j=(py*w+px)*4,alpha=data[j+3]*(u?tx:1-tx)*(v?ty:1-ty);a+=alpha;red+=data[j]*alpha;green+=data[j+1]*alpha;blue+=data[j+2]*alpha;}
+          dst[o]=a?red/a:0;dst[o+1]=a?green/a:0;dst[o+2]=a?blue/a:0;dst[o+3]=a;
+        }dc.putImageData(out,0,0);
+      }
       function renderOneShapeWarp(source, destination, op, weight) {
+        if(op?.kind==='push') {renderShapePush(source,destination,op,weight);return;}
+
         const dctx = destination.getContext("2d");
         if (destination.width !== source.width) destination.width = source.width;
         if (destination.height !== source.height) destination.height = source.height;
@@ -7456,9 +7585,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           previewSourceVersion: -1,
         };
         shapeWarpToolActive = true;
-        shapeWarpPhase = editableWarp ? "brush" : "lasso";
+        shapeWarpPhase = "brush";
         shapeWarpLasso = [];
-        shapeWarpTemp = editableWarp;
+        shapeWarpTemp = editableWarp?.kind==='push' ? editableWarp : createTempShapeWarp(layer,[{x:0,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height},{x:0,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height}]);
+        if(editableWarp && editableWarp.kind!=='push')shapeWarpSession.workingWarps.push(editableWarp);
         shapeWarpDragging = false;
         shapeWarpLastLocal = null;
         invalidateShapeWarp();
@@ -7571,11 +7701,12 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           return;
         }
         beginShapeWarpSession(layer, null);
-        showNotice("Nova Shape Key: desenhe um laço livre. A Shape será criada somente ao Confirmar.");
+        showNotice("Push Shape: arraste sobre a imagem para empurrar. Use Confirmar para salvar.");
       }
 
       function commitTempWarpToSession() {
         if (!shapeWarpSession || !shapeWarpTemp) return false;
+        if(shapeWarpTemp.kind==='push' && !shapeWarpTemp.pushes.length)return false;
         shapeWarpSession.workingWarps.push(cloneShapeWarpOperation(shapeWarpTemp));
         shapeWarpSession.commitRevision++;
         shapeWarpSession.previewResult = null;
@@ -7589,6 +7720,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
       function resetEditingShapeKey() {
         if (!shapeWarpSession) return;
+        const layer = activeShapeLayer();
+        if (!layer) return;
         const target = editingShapeKey();
         const originals = shapeWarpSession.originalWarps || [];
         shapeWarpSession.workingWarps = originals.slice(0, -1).map(cloneShapeWarpOperation);
@@ -7599,7 +7732,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         shapeWarpLasso = [];
         shapeWarpDragging = false;
         shapeWarpLastLocal = null;
-        shapeWarpPhase = shapeWarpTemp ? "brush" : "lasso";
+        if(shapeWarpTemp && shapeWarpTemp.kind!=='push'){shapeWarpSession.workingWarps.push(shapeWarpTemp);shapeWarpTemp=null;}
+        if(!shapeWarpTemp)shapeWarpTemp=createTempShapeWarp(layer,[{x:0,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height},{x:0,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height}]);
+        shapeWarpPhase = 'brush';
         invalidateShapeWarp();
         updateShapeWarpToolbar();
         updateShapeKeysUI();
@@ -7711,7 +7846,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         name.textContent = layer.name || "Camada";
         const shapes = ensureShapeKeys2D(layer);
         if (!shapes.length) {
-          list.innerHTML = '<div class="shape-key-empty">Nenhuma Shape Key.<br>Clique em <strong>ShapeKey</strong> na barra, deforme e confirme.</div>';
+          list.innerHTML = '<div class="shape-key-empty">Nenhuma Shape Key.<br>Clique em <strong>Push Shape</strong> na barra, deforme e confirme.</div>';
           return;
         }
         list.innerHTML = "";
@@ -7826,30 +7961,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         const screenScale = Math.max(0.0001, Math.hypot(gMat.a, gMat.b));
         const localRadius = screenRadius / screenScale;
         const op = shapeWarpTemp;
-        const idx = (x, y) => y * (op.cols + 1) + x;
-
-        // Só visita os vértices próximos ao pincel. Em 64 isso reduz drasticamente
-        // o custo em comparação com percorrer a malha inteira a cada pointermove.
-        const minGX = shapeWarpClamp(Math.floor(((local.x - localRadius - op.bbox.x) / op.bbox.w) * op.cols) - 1, 0, op.cols);
-        const maxGX = shapeWarpClamp(Math.ceil(((local.x + localRadius - op.bbox.x) / op.bbox.w) * op.cols) + 1, 0, op.cols);
-        const minGY = shapeWarpClamp(Math.floor(((local.y - localRadius - op.bbox.y) / op.bbox.h) * op.rows) - 1, 0, op.rows);
-        const maxGY = shapeWarpClamp(Math.ceil(((local.y + localRadius - op.bbox.y) / op.bbox.h) * op.rows) + 1, 0, op.rows);
-
-        for (let y = minGY; y <= maxGY; y++) {
-          for (let x = minGX; x <= maxGX; x++) {
-            const i = idx(x, y);
-            const v = shapeWarpVertex(op, x, y);
-            if (!pointInShapeWarpPolygon(v.x, v.y, op.selection)) continue;
-            const delta = op.deltas[i];
-            const screen = new DOMPoint(v.x + delta.dx, v.y + delta.dy).matrixTransform(gMat);
-            const dist = Math.hypot(screen.x - currentCanvas.x, screen.y - currentCanvas.y);
-            if (dist >= screenRadius) continue;
-            const n = 1 - dist / screenRadius;
-            const falloff = n * n * (3 - 2 * n);
-            delta.dx += localDx * falloff;
-            delta.dy += localDy * falloff;
-          }
-        }
+        if(op.kind!=='push')return;
+        const distance=Math.hypot(localDx,localDy),steps=Math.max(1,Math.ceil(distance/Math.max(2,localRadius*.18)));
+        for(let n=1;n<=steps;n++)op.pushes.push({x:shapeWarpLastLocal.x+localDx*n/steps,y:shapeWarpLastLocal.y+localDy*n/steps,dx:localDx/steps,dy:localDy/steps,radius:localRadius});
         shapeWarpLastLocal = local;
         invalidateShapeWarp();
         scheduleShapeWarpDraw();
@@ -7886,7 +8000,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           const layer = activeShapeLayer();
           if (layer && shapeWarpLasso.length >= 4) {
             shapeWarpTemp = createTempShapeWarp(layer, shapeWarpLasso);
-            shapeWarpPhase = shapeWarpTemp ? "brush" : "lasso";
+            if(shapeWarpTemp && shapeWarpTemp.kind!=='push'){shapeWarpSession.workingWarps.push(shapeWarpTemp);shapeWarpTemp=null;}
+        if(!shapeWarpTemp)shapeWarpTemp=createTempShapeWarp(layer,[{x:0,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:0},{x:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.width,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height},{x:0,y:layer.assets[layer.activeAssetIndex>=0?layer.activeAssetIndex:0].img.height}]);
+        shapeWarpPhase = 'brush';
             if (shapeWarpTemp) {
               invalidateShapeWarp();
               showNotice(`Warp temporário criado em ${shapeWarpTemp.cols} × ${shapeWarpTemp.rows}. Agora use o pincel.`);
@@ -7929,41 +8045,6 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
           targetCtx.setLineDash([7, 5]);
           targetCtx.stroke();
           targetCtx.setLineDash([]);
-        }
-        if (shapeWarpPhase === "brush" && shapeWarpTemp) {
-          const op = shapeWarpTemp;
-          shapeWarpTrace(targetCtx, op.selection);
-          targetCtx.strokeStyle = "#39ff14";
-          targetCtx.lineWidth = 1.2 / Math.max(0.0001, Math.hypot(matrix.a, matrix.b));
-          targetCtx.setLineDash([6, 4]);
-          targetCtx.stroke();
-          targetCtx.setLineDash([]);
-
-          targetCtx.save();
-          shapeWarpTrace(targetCtx, op.selection);
-          targetCtx.clip();
-          targetCtx.strokeStyle = "rgba(57,255,20,.32)";
-          targetCtx.lineWidth = 0.75 / Math.max(0.0001, Math.hypot(matrix.a, matrix.b));
-          const idx = (x, y) => y * (op.cols + 1) + x;
-          for (let y = 0; y <= op.rows; y++) {
-            targetCtx.beginPath();
-            for (let x = 0; x <= op.cols; x++) {
-              const s = shapeWarpVertex(op, x, y), d = op.deltas[idx(x, y)] || {dx:0,dy:0};
-              const px = s.x + d.dx, py = s.y + d.dy;
-              if (x === 0) targetCtx.moveTo(px, py); else targetCtx.lineTo(px, py);
-            }
-            targetCtx.stroke();
-          }
-          for (let x = 0; x <= op.cols; x++) {
-            targetCtx.beginPath();
-            for (let y = 0; y <= op.rows; y++) {
-              const s = shapeWarpVertex(op, x, y), d = op.deltas[idx(x, y)] || {dx:0,dy:0};
-              const px = s.x + d.dx, py = s.y + d.dy;
-              if (y === 0) targetCtx.moveTo(px, py); else targetCtx.lineTo(px, py);
-            }
-            targetCtx.stroke();
-          }
-          targetCtx.restore();
         }
         targetCtx.restore();
 
@@ -8150,7 +8231,22 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             if (!shiftActive(e)) selectedPins = [];
           }
         }
-        draw();
+        if (mode === "move" && dragTarget) {
+          const children = new Map();
+          pins.forEach((p, i) => {
+            if (!children.has(p.parentId)) children.set(p.parentId, []);
+            children.get(p.parentId).push(i);
+          });
+          const ids = new Set([pins.indexOf(dragTarget)]);
+          for (const id of ids) for (const child of children.get(id) || []) ids.add(child);
+          ids.delete(dragTarget.parentId);
+          rigDragGesture = {
+            pointerId: e.pointerId, start: c,
+            points: [...ids].map(id => ({pin: pins[id], x: pins[id].x, y: pins[id].y})),
+          };
+          canvas.setPointerCapture(e.pointerId);
+        }
+        scheduleInteractiveRender();
       });
 
 
@@ -8174,6 +8270,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (endCanvasViewPan(e)) return;
         if (influenceMaskToolActive && finishInfluenceMaskLasso(e, false)) return;
         if (shapeWarpToolActive && handleShapeWarpPointerUp(e)) return;
+        if (rigDragGesture && e.pointerId !== rigDragGesture.pointerId) return;
+        rigDragGesture = null;
         const wasGlobalTransformDragging = globalTransformDragging;
         globalTransformDragging = false;
         flushInteractiveRender();
@@ -8203,6 +8301,8 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (endCanvasViewPan(e)) return;
         if (influenceMaskToolActive && finishInfluenceMaskLasso(e, true)) return;
         if (shapeWarpToolActive && handleShapeWarpPointerCancel(e)) return;
+        if (rigDragGesture && e.pointerId !== rigDragGesture.pointerId) return;
+        rigDragGesture = null;
         globalTransformDragging = false;
         flushInteractiveRender();
         dragTarget = null;
@@ -8215,6 +8315,21 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         if (influenceMaskToolActive && moveInfluenceMaskLasso(e)) return;
         if (shapeWarpToolActive) {
           if (handleShapeWarpPointerMove(e)) return;
+        }
+        if (rigDragGesture) {
+          if (e.pointerId !== rigDragGesture.pointerId) return;
+          const samples = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+          const c = getCoords(samples.length ? samples[samples.length - 1] : e);
+          const dx = c.x - rigDragGesture.start.x, dy = c.y - rigDragGesture.start.y;
+          if (Number.isFinite(dx) && Number.isFinite(dy)) {
+            for (const item of rigDragGesture.points) {
+              item.pin.x = item.x + dx;
+              item.pin.y = item.y + dy;
+            }
+            scheduleInteractiveRender(layers[activeLayerIndex]);
+          }
+          lastMousePos = c;
+          return;
         }
         const c = getCoords(e);
         const r = canvas.getBoundingClientRect();
@@ -9843,7 +9958,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
  <div class="drawing-toolbar">
   <strong id="drawing-title">Desenhar</strong><input id="drawing-name" aria-label="Nome do desenho ou switch" value="Desenho">
   
-  <div class="drawing-layer-controls" aria-label="Camadas do desenho"><button id="drawing-line" class="active" aria-pressed="true">🖊 Traço</button><button id="drawing-paint" aria-pressed="false">🎨 Pintura</button></div><button id="drawing-select" title="Contorne uma área para selecionar, mover e redimensionar">◌ Selecionar</button><button id="drawing-warp" title="Warp Puppet" aria-pressed="false">🌀 Warp</button><button id="drawing-3d" title="3D: contorne o desenho e arraste para girar" aria-pressed="false" style="font-size:12px;font-weight:800;min-width:34px">3D</button><button id="drawing-copy-direction">Copiar</button><button id="drawing-paste-direction">Colar</button><button id="drawing-flip-direction" title="Espelhar camada horizontalmente">↔ Flip H</button><button id="drawing-flip-vertical" title="Espelhar camada verticalmente">↕ Flip V</button><button id="drawing-background" title="Mostrar ou esconder o fundo branco" aria-pressed="true">Fundo</button><button id="drawing-eyedropper" title="Conta-gotas: toque no desenho para copiar a cor" aria-label="Conta-gotas" aria-pressed="false">💧</button>
+  <div class="drawing-layer-controls" aria-label="Camadas do desenho"><button id="drawing-line" class="active" aria-pressed="true">🖊 Traço</button><button id="drawing-paint" aria-pressed="false">🎨 Pintura</button></div><button id="drawing-select" title="Contorne uma área para selecionar, mover e redimensionar">◌ Selecionar</button><button id="drawing-warp" title="Push: arraste para empurrar pixels. Tam = área; Força = intensidade" aria-pressed="false">🌀 Push</button><button id="drawing-3d" title="3D: contorne o desenho e arraste para girar" aria-pressed="false" style="font-size:12px;font-weight:800;min-width:34px">3D</button><button id="drawing-copy-direction">Copiar</button><button id="drawing-paste-direction">Colar</button><button id="drawing-flip-direction" title="Espelhar camada horizontalmente">↔ Flip H</button><button id="drawing-flip-vertical" title="Espelhar camada verticalmente">↕ Flip V</button><button id="drawing-background" title="Mostrar ou esconder o fundo branco" aria-pressed="true">Fundo</button><button id="drawing-eyedropper" title="Conta-gotas: toque no desenho para copiar a cor" aria-label="Conta-gotas" aria-pressed="false">💧</button>
   <div id="drawing-colors"><button id="drawing-swatch" title="Paleta de cores" aria-label="Paleta de cores" aria-expanded="false"></button><div id="drawing-palette"><div id="drawing-sb"><span id="drawing-color-cursor"></span></div><input id="drawing-hue" aria-label="Matiz" type="range" min="0" max="360" value="0"><input id="drawing-native" type="color" value="#000000" tabindex="-1" aria-hidden="true"></div></div><button id="drawing-undo" title="Desfazer (Ctrl+Z)">↶</button><button id="drawing-redo" title="Refazer (Ctrl+Shift+Z)">↷</button><button id="drawing-cancel">Cancelar</button><button id="drawing-done">Confirmar ✓</button><button id="drawing-layers-menu" aria-label="Menu de camadas" aria-expanded="false" aria-controls="drawing-directions" title="Camadas">☰</button>
  </div>
 
@@ -10288,7 +10403,52 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
  function resize(){const a=el('area'),scale=Math.max(.01,Math.min((a.clientWidth-12)/W,(a.clientHeight-24)/H));el('surface').style.width=W*scale+'px';el('surface').style.height=H*scale+'px';drawOverlay();}
  // Same lasso controls as desenhar.html: 8 scale handles and 4 rotation handles.
  function drawingCanvasUnitsPerPixel(){const r=paper.getBoundingClientRect();return r.width>0?W/r.width:1;}
- function drawingTouchMetrics(){const unit=drawingCanvasUnitsPerPixel(),touch=('ontouchstart' in window)||navigator.maxTouchPoints>0;return{handle:(touch?11:7)*unit,hit:(touch?26:13)*unit,rotate:(touch?38:30)*unit,line:(touch?27:22)*unit};}
+ function drawingTouchMetrics(){const unit=drawingCanvasUnitsPerPixel(),touch=('ontouchstart' in window)||navigator.maxTouchPoints>0;return{handle:(touch?5.5:3.5)*unit,hit:(touch?13:6.5)*unit,rotate:(touch?19:15)*unit,line:(touch?13.5:11)*unit};}
+        let pushPixels = null, pushOriginal = null, pushLast = null, pushChanged = false;
+        function pushRadius() { return Math.max(4, Number(el('size').value) * 4); }
+        function drawPushCursor(pos) {
+            oc.clearRect(0, 0, W, H);
+            oc.save(); oc.setLineDash([]);
+            oc.beginPath(); oc.arc(pos.x, pos.y, pushRadius(), 0, Math.PI * 2);
+            oc.strokeStyle = '#fff'; oc.lineWidth = 3; oc.stroke();
+            oc.strokeStyle = '#168cce'; oc.lineWidth = 1; oc.stroke(); oc.restore();
+        }
+        function pushDab(cx, cy, dx, dy, radius, strength) {
+            const w = pushPixels.width, h = pushPixels.height, data = pushPixels.data;
+            const x0 = Math.max(0, Math.floor(cx-radius)), y0 = Math.max(0, Math.floor(cy-radius));
+            const x1 = Math.min(w, Math.ceil(cx+radius)), y1 = Math.min(h, Math.ceil(cy+radius));
+            if (x1 <= x0 || y1 <= y0) return;
+            const out = ctx.createImageData(x1-x0, y1-y0), dst = out.data;
+            for (let y=y0; y<y1; y++) for (let x=x0; x<x1; x++) {
+                const i=(y*w+x)*4, o=((y-y0)*out.width+x-x0)*4;
+                const r2=((x-cx)**2+(y-cy)**2)/(radius*radius);
+                if (r2>=1) { for(let c=0;c<4;c++) dst[o+c]=data[i+c]; continue; }
+                const f=(1-r2)**2*strength;
+                const sx=x-dx*f, sy=y-dy*f, ix=Math.floor(sx), iy=Math.floor(sy);
+                const fx=sx-ix, fy=sy-iy;
+                let a=0, red=0, green=0, blue=0;
+                for(let v=0;v<2;v++) for(let u=0;u<2;u++) {
+                    const xx=ix+u, yy=iy+v;
+                    if(xx<0||yy<0||xx>=w||yy>=h) continue;
+                    const j=(yy*w+xx)*4, weight=(u?fx:1-fx)*(v?fy:1-fy), alpha=data[j+3]*weight;
+                    a+=alpha; red+=data[j]*alpha; green+=data[j+1]*alpha; blue+=data[j+2]*alpha;
+                }
+                dst[o]=a>0?red/a:0; dst[o+1]=a>0?green/a:0; dst[o+2]=a>0?blue/a:0; dst[o+3]=a;
+            }
+            // Read all source pixels before updating the affected rectangle.
+            for(let y=0;y<out.height;y++) data.set(dst.subarray(y*out.width*4,(y+1)*out.width*4),((y+y0)*w+x0)*4);
+            ctx.putImageData(out,x0,y0); pushChanged=true; composite();
+        }
+        function pushTo(pos) {
+            const dx=pos.x-pushLast.x, dy=pos.y-pushLast.y, distance=Math.hypot(dx,dy);
+            if(distance<0.1) { drawPushCursor(pos); return; }
+            const radius=pushRadius(), steps=Math.max(1,Math.ceil(distance/Math.max(2,radius*.18)));
+            const strength=Number(el('opacity').value)/100*.75;
+            for(let n=1;n<=steps;n++) pushDab(pushLast.x+dx*n/steps,pushLast.y+dy*n/steps,dx/steps,dy/steps,radius,strength);
+            pushLast={x:pos.x,y:pos.y}; drawPushCursor(pos);
+        }
+
+
  function drawOverlay(){
   oc.clearRect(0,0,W,H);oc.lineWidth=1;oc.strokeStyle='#007aff';oc.fillStyle='#fff';
   if(selection&&tool==='3d')return;
@@ -10308,7 +10468,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   return Math.abs(x)<hw&&Math.abs(y)<hh?'move':null;
  }
  function commitSelection(){flushTransform();cleanupLightweightHead3D();warpMesh=[];selection=null;lasso=[];drawOverlay();}
- function choose(t){if(pointer!==null||busy)return;commitSelection();tool=tool===t&&(t==='select'||t==='3d'||t==='warp')?'brush':t;for(const name of ['brush','eraser','select','3d','warp','eyedropper']){el(name).classList.toggle('active',name===tool);el(name).setAttribute('aria-pressed',name===tool);}if(tool==='warp'){el('size').value=40;el('size').oninput();}paper.style.cursor=tool==='eyedropper'?'copy':'crosshair';}
+ function choose(t){if(pointer!==null||busy)return;commitSelection();tool=tool===t&&(t==='select'||t==='3d'||t==='warp')?'brush':t;for(const name of ['brush','eraser','select','3d','warp','eyedropper']){el(name).classList.toggle('active',name===tool);el(name).setAttribute('aria-pressed',name===tool);}if(tool==='warp'){el('size').value=50;el('size').oninput();}el('opacity').nextElementSibling.firstChild.textContent=tool==='warp'?'Força ':'Opac ';el('opacity').setAttribute('aria-label',tool==='warp'?'Força do Push':'Opacidade do pincel');paper.style.cursor=tool==='eyedropper'?'copy':'crosshair';}
  function selectDrawingLayer(index){if(pointer!==null||busy)return;commitSelection();active=index;ctx=drawingLayers[index].getContext('2d');choose('brush');for(const [name,i] of [['line',1],['paint',0]]){el(name).classList.toggle('active',index===i);el(name).setAttribute('aria-pressed',index===i);}el('active-label').textContent=DIRECTION_NAMES[activeDirection]+' · Desenhando em: '+(index===1?'Traço':'Pintura');}
  el('line').onclick=()=>selectDrawingLayer(1);el('paint').onclick=()=>selectDrawingLayer(0);
  function renderDrawingLayers(){
@@ -10448,6 +10608,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   if(pointer!==null||busy||e.button!==0)return;e.preventDefault();const p=pos(e);closeDrawingPalette();
   if(tool==='eyedropper'){sampleDrawingColor(p);return;}
   pointer=e.pointerId;paper.setPointerCapture(pointer);
+  if(tool==='warp'){commitSelection();remember();pushPixels=ctx.getImageData(0,0,W,H);pushOriginal=new Uint8ClampedArray(pushPixels.data);pushLast=p;pushChanged=false;gesture={kind:'push'};drawPushCursor(p);return;}
   if(tool==='select'||tool==='3d'||tool==='warp'){
    if(tool==='warp'&&selection){const b=selection;if(p.x>=b.x-20&&p.x<=b.x+b.w+20&&p.y>=b.y-20&&p.y<=b.y+b.h+20){gesture={kind:'warp',start:p};return;}commitSelection();}
    if(tool==='3d'&&selection){if(pointInFreePath(p.x,p.y,headSphereFreePath)){gesture={kind:'head3d',start:p,yaw:headSphereYaw,pitch:headSpherePitch};return;}commitSelection();}
@@ -10459,9 +10620,9 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
   else{dc.globalCompositeOperation=gesture.direct&&tool==='eraser'?'destination-out':'source-over';dc.beginPath();dc.arc(p.x,p.y,currentSize/2,0,Math.PI*2);dc.fill();mark([p],currentSize/2+3);}
   dc.restore();
  };
- function move(p,pressure=1){if(gesture.kind==='warp'){const radius=+el('size').value*4,dx=p.x-gesture.start.x,dy=p.y-gesture.start.y;for(const point of warpMesh){const d=Math.hypot(point.x-gesture.start.x,point.y-gesture.start.y);if(d<radius){const weight=1-d/radius;point.x+=dx*weight;point.y+=dy*weight;}}gesture.start=p;queueTransform();return;}if(gesture.kind==='head3d'){headSphereYaw=gesture.yaw+(p.x-gesture.start.x)*.01;headSpherePitch=gesture.pitch-(p.y-gesture.start.y)*.01;updateHeadSphereMesh();queueTransform();return;}if(gesture.kind==='stroke'){segment(p,false,pressure);return;}if(gesture.kind==='lasso'){const last=lasso.at(-1);if(Math.hypot(last.x-p.x,last.y-p.y)>2)lasso.push(p);drawOverlay();return;}const {rect:r,start}=gesture,cx=r.x+r.w/2,cy=r.y+r.h/2;if(gesture.kind==='move'){selection.x=r.x+p.x-start.x;selection.y=r.y+p.y-start.y;}else if(gesture.kind==='rotate'){selection.angle=r.angle+Math.atan2(p.y-cy,p.x-cx)-Math.atan2(start.y-cy,start.x-cx);}else if(gesture.kind==='scale'){const initial=Math.hypot(start.x-cx,start.y-cy);if(initial>0)selection.scale=Math.max(.1,r.scale*Math.hypot(p.x-cx,p.y-cy)/initial);}renderSelection();}
+ function move(p,pressure=1){if(gesture.kind==='push'){pushTo(p);return;}if(gesture.kind==='warp'){const radius=+el('size').value*4,dx=p.x-gesture.start.x,dy=p.y-gesture.start.y;for(const point of warpMesh){const d=Math.hypot(point.x-gesture.start.x,point.y-gesture.start.y);if(d<radius){const weight=1-d/radius;point.x+=dx*weight;point.y+=dy*weight;}}gesture.start=p;queueTransform();return;}if(gesture.kind==='head3d'){headSphereYaw=gesture.yaw+(p.x-gesture.start.x)*.01;headSpherePitch=gesture.pitch-(p.y-gesture.start.y)*.01;updateHeadSphereMesh();queueTransform();return;}if(gesture.kind==='stroke'){segment(p,false,pressure);return;}if(gesture.kind==='lasso'){const last=lasso.at(-1);if(Math.hypot(last.x-p.x,last.y-p.y)>2)lasso.push(p);drawOverlay();return;}const {rect:r,start}=gesture,cx=r.x+r.w/2,cy=r.y+r.h/2;if(gesture.kind==='move'){selection.x=r.x+p.x-start.x;selection.y=r.y+p.y-start.y;}else if(gesture.kind==='rotate'){selection.angle=r.angle+Math.atan2(p.y-cy,p.x-cx)-Math.atan2(start.y-cy,start.x-cx);}else if(gesture.kind==='scale'){const initial=Math.hypot(start.x-cx,start.y-cy);if(initial>0)selection.scale=Math.max(.1,r.scale*Math.hypot(p.x-cx,p.y-cy)/initial);}renderSelection();}
  paper.onpointermove=e=>{if(pointer!==e.pointerId||!gesture)return;e.preventDefault();const pressureOf=ev=>(ev.pointerType==='pen'&&Number.isFinite(ev.pressure))?Math.max(.05,ev.pressure):1;if(gesture.kind==='warp'||gesture.kind==='head3d'){move(pos(e),pressureOf(e));return;}const samples=e.getCoalescedEvents?.();for(const sample of samples?.length?samples:[e])move(pos(sample),pressureOf(sample));};
- function finish(e){if(pointer!==e.pointerId)return;const kind=gesture?.kind;if(e.type==='pointerup'){const pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?Math.max(.05,e.pressure):1;if(kind==='stroke')segment(pos(e),true,pressure);else move(pos(e),pressure);}if(kind==='stroke')flush();flushTransform();const id=pointer;pointer=null;gesture=null;if(kind==='lasso'){const path=lasso;lasso=[];if(e.type==='pointerup')createSelection(path);drawOverlay();}if(paper.hasPointerCapture(id))paper.releasePointerCapture(id);}
+ function finish(e){if(pointer!==e.pointerId)return;const kind=gesture?.kind;if(kind==='push'){if(e.type==='pointerup')pushTo(pos(e));else{pushPixels.data.set(pushOriginal);ctx.putImageData(pushPixels,0,0);composite();}if(!pushChanged||e.type!=='pointerup'){undo.pop();historyUI();}pushPixels=null;pushOriginal=null;pushLast=null;}if(e.type==='pointerup'){const pressure=(e.pointerType==='pen'&&Number.isFinite(e.pressure))?Math.max(.05,e.pressure):1;if(kind==='stroke')segment(pos(e),true,pressure);else if(kind!=='push')move(pos(e),pressure);}if(kind==='stroke')flush();if(kind==='push')drawOverlay();flushTransform();const id=pointer;pointer=null;gesture=null;if(kind==='lasso'){const path=lasso;lasso=[];if(e.type==='pointerup')createSelection(path);drawOverlay();}if(paper.hasPointerCapture(id))paper.releasePointerCapture(id);}
  paper.onpointerup=paper.onpointercancel=paper.onlostpointercapture=finish;
  function history(from,to){if(pointer!==null||busy||!from.length)return;commitSelection();const entry=from.pop();
   if(entry.kind){
@@ -10533,15 +10694,15 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
     if(item.original){
      if(asSwitch){
       const layer=item.original.layer,base=item.name+' · switch',used=new Set(layer.assets.map(a=>a.name));let name=base,n=2;while(used.has(name))name=base+' '+n++;
-      layer.assets.push({name,img:item.image});layer.activeAssetIndex=layer.assets.length-1;updateDeform(layer);
-     }else{item.original.asset.img=item.image;item.original.asset.name=item.name;item.original.layer.name=item.name;}
+      item.image._r2dTextureVersion=1;layer.assets.push({name,img:item.image});layer.activeAssetIndex=layer.assets.length-1;try{skinBindingCache.delete(layer);if(layer.mesh)skinBindingCache.delete(layer.mesh);}catch(_){}updateDeform(layer);invalidateShapeWarp();
+     }else{item.original.asset.name=item.name;item.original.layer.name=item.name;applyLayerAssetImage(item.original.layer,item.original.asset,item.image);}
     }
     else{addLayer(item.name,item.image);layers[layers.length-1].parentId=editingFolder.uid;}
    }
    if(!asSwitch)for(const original of folderOriginals)if(!retained.has(original.layer)){const index=layers.indexOf(original.layer);if(index>=0)deleteLayer(index);}
    if(!asSwitch)editingFolder.name=el('name').value.trim()||editingFolder.name;
    if(!layers.some(l=>l.uid===editingFolder.switchChildUid))editingFolder.switchChildUid=layers.find(l=>l.parentId===editingFolder.uid&&!l.isFolder)?.uid||null;
-   selectedFolderUid=editingFolder.uid;refreshActiveLayerForFrame();if(asSwitch)setKeyframe(false);updateLayersUI();updateFolderSwitcher();draw();close();showNotice(asSwitch?'Edições salvas como novos switches. Originais preservados.':'Pasta e camadas atualizadas.');
+   selectedFolderUid=editingFolder.uid;refreshActiveLayerForFrame();if(asSwitch)setKeyframe(false);forceCanvasRefresh();close();showNotice(asSwitch?'Edições salvas como novos switches. Originais preservados.':'Pasta e camadas atualizadas.');
   }catch(error){console.error(error);showNotice('Não foi possível salvar a pasta. A edição continua aberta.');}
   finally{busy=false;el('done').disabled=false;}
  }
@@ -10604,18 +10765,28 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
      addLayer(layerName,image);
      const created=layers[layers.length-1];
      created.gPos=gPos=position;created.gScale=gScale=scale;created.gRotation=gRotation=rotation;
-     created.z=targetLayer.z||0;created.visible=true;
-     updateLayersUI();draw();
+     created.z=targetLayer.z||0;
+     // Dentro de pasta, a cópia fica na mesma pasta. Em pasta switch só uma
+     // filha pode ficar visível, então a cópia nasce oculta (escolha no slider).
+     const copyFolder=layers.find(l=>l.uid===targetLayer.parentId&&l.isFolder)||null;
+     if(copyFolder){created.parentId=copyFolder.uid;copyFolder.expanded=true;selectedFolderUid=copyFolder.uid;}
+     created.visible=!(copyFolder&&copyFolder.folderMode!=="common");
+     updateLayersUI();updateFolderSwitcher();draw();
     }else if(asSwitch){
      // Same-size images preserve pin and mesh coordinates.
      const used=new Set(targetLayer.assets.map(a=>a.name));let switchName=name,count=2;
      while(used.has(switchName))switchName=name+' '+count++;
+     image._r2dTextureVersion=1;
      targetLayer.assets.push({name:switchName,img:image});
-     selectLayer(index);
-     activateLayerVariant(targetLayer,targetLayer.assets.length-1);
+     revealLayerInSwitchFolder(targetLayer);
+     selectLayer(index, true);
+     activateLayerVariant(targetLayer, targetLayer.assets.length-1);
     }else{
-     targetAsset.name=name;targetAsset.img=image;
-     selectLayer(index);updateLayersUI();draw();
+     targetAsset.name=name;
+     applyLayerAssetImage(targetLayer, targetAsset, image);
+     revealLayerInSwitchFolder(targetLayer);
+     selectLayer(index);
+     forceCanvasRefresh();
     }
     if(!asSwitch&&!asNewLayer)for(const item of images.slice(1)){
      addLayer(DIRECTION_NAMES[item.direction],item.image);
@@ -10645,6 +10816,10 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
  el('save-copy').onchange=()=>{if(el('save-copy').checked)el('as-switch').checked=false;};
  el('as-switch').onchange=()=>{if(el('as-switch').checked)el('save-copy').checked=false;};
  window.openSelectedDrawing=()=>{
+  // Switch é por camada: se há uma camada de imagem selecionada, edita somente
+  // ela, mesmo dentro de uma pasta. A pasta inteira abre pelo 🖊 da própria pasta.
+  const active=Number.isInteger(activeLayerIndex)?layers[activeLayerIndex]:null;
+  if(active&&!active.isFolder)return openDrawingLayer(activeLayerIndex);
   const folderIndex=layers.findIndex(l=>l.isFolder&&l.uid===selectedFolderUid);
   return openDrawingLayer(folderIndex>=0?folderIndex:activeLayerIndex);
  };
