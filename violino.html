@@ -175,7 +175,6 @@
             </div>
         </div>
 
-
         <!-- Partitura -->
         <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-2.5">
             <div class="flex justify-between items-center">
@@ -467,7 +466,6 @@
                 tip: 'Faça a nota cromática soar como passagem, mantendo o pulso regular.',
                 intervals: [0, 2, 4, 5, 7, 9, 10, 11, 12]
             },
-
 
             // Escalas avançadas para repertório virtuoso
             {
@@ -866,7 +864,6 @@
             return st.intervals.map(interval => rootMidi + interval);
         }
 
-
         function getCompletePlaySequence(midiNotes) {
             let fullSequence = [];
             for (let octaveOffset = 0; octaveOffset < 2; octaveOffset++) {
@@ -878,14 +875,20 @@
             return [...fullSequence, ...[...fullSequence].reverse().slice(1)];
         }
 
-        // Posição vertical robusta: mantém notas agudas dentro da área visível
-        // e deixa espaço para linhas suplementares acima e abaixo da pauta.
         function midiToStaffY(midi) {
+            // Updated diatonic mapping logic.
+            // A line is mapped every 10 pixels. 
+            // A diatonic step moves the note by 5 pixels (from line to space, or space to line).
             const diatonicSteps = { C:0, D:1, E:2, F:3, G:4, A:5, B:6 };
             const name = semitoneToNoteName[midi % 12];
             const octave = Math.floor(midi / 12) - 1;
+            
+            // E4 (bottom line of staff) is step 0. 
+            // Diatonic steps from E4 up to the note being mapped:
             const step = (octave - 4) * 7 + (diatonicSteps[name[0]] - diatonicSteps.E);
-            return 110 - step * 7;
+            
+            // Base Y for E4 is 170. Each step moves UP by 5 pixels (decreases Y by 5).
+            return 170 - step * 5;
         }
 
         function renderMusicScore(sequence) {
@@ -893,29 +896,69 @@
             if (!container) return;
             const perMeasure = 8, measureW = 190;
             const measures = Math.max(1, Math.ceil(sequence.length / perMeasure));
-            const width = 58 + measures * measureW, height = 220;
-            const lineYs = [96,103,110,117,124];
+            const width = 58 + measures * measureW;
+            const height = 240; // Increased SVG height to ensure high F fits well without cutting
+            
+            // The 5 standard lines of the treble staff properly spaced by 10px each
+            const lineYs = [130, 140, 150, 160, 170]; 
+            
             let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" aria-label="Partitura da sequência atual">`;
             svg += `<rect width="100%" height="100%" fill="#faf7ef"/>`;
-            svg += `<text x="28" y="101" font-family="serif" font-size="54" fill="#1e293b">𝄞</text>`;
+            
+            // Centered G-Clef
+            svg += `<text x="25" y="166" font-family="serif" font-size="64" fill="#1e293b">𝄞</text>`;
+            
             lineYs.forEach(y => svg += `<line x1="55" y1="${y}" x2="${width-12}" y2="${y}" stroke="#334155" stroke-width="1"/>`);
+            
             for (let m=0; m<measures; m++) {
-                const x0=58+m*measureW;
-                svg += `<line x1="${x0}" y1="93" x2="${x0}" y2="127" stroke="#64748b"/>`;
-                const start=m*perMeasure, end=Math.min(sequence.length,start+perMeasure);
-                for(let i=start;i<end;i++){
-                    const midi=sequence[i], x=x0+22+(i-start)*20, y=midiToStaffY(midi);
-                    const noteName=semitoneToNoteName[midi%12], accidental=noteName.includes('#')?'♯':'';
-                    if(y<96||y>124){ const first=y<96?89:131, step=y<96?-7:7; for(let ly=first;(y<96?ly>=y:ly<=y);ly+=step) svg+=`<line x1="${x-8}" y1="${ly}" x2="${x+8}" y2="${ly}" stroke="#475569"/>`; }
-                    svg+=`<g id="score-note-${i}" class="score-note">`;
-                    if(accidental) svg+=`<text x="${x-12}" y="${y+4}" font-family="serif" font-size="13" fill="#334155">${accidental}</text>`;
-                    svg+=`<ellipse class="note-head" cx="${x}" cy="${y}" rx="6" ry="4.2" transform="rotate(-18 ${x} ${y})" fill="#1e293b"/>`;
-                    svg+=`<line class="note-stem" x1="${x+5}" y1="${y}" x2="${x+5}" y2="${y-27}" stroke="#1e293b" stroke-width="1.5"/>`;
-                    svg+=`<text x="${x-5}" y="${y+20}" font-family="sans-serif" font-size="6" fill="#64748b">${noteName}</text></g>`;
+                const x0 = 58 + m * measureW;
+                svg += `<line x1="${x0}" y1="130" x2="${x0}" y2="170" stroke="#64748b"/>`;
+                
+                const start = m * perMeasure;
+                const end = Math.min(sequence.length, start + perMeasure);
+                
+                for(let i=start; i<end; i++){
+                    const midi = sequence[i];
+                    const x = x0 + 22 + (i - start) * 20;
+                    const y = midiToStaffY(midi);
+                    
+                    const noteName = semitoneToNoteName[midi%12];
+                    const accidental = noteName.includes('#') ? '♯' : '';
+                    
+                    // Logic for ledger lines (linhas suplementares)
+                    // Top line is 130, bottom is 170.
+                    // Lines outside are mapped in steps of 10.
+                    if(y <= 120 || y >= 180) { 
+                        const first = y <= 120 ? 120 : 180;
+                        const step = y <= 120 ? -10 : 10;
+                        for(let ly = first; (y <= 120 ? ly >= y : ly <= y); ly += step) { 
+                            svg += `<line x1="${x-9}" y1="${ly}" x2="${x+9}" y2="${ly}" stroke="#475569" stroke-width="1.2"/>`; 
+                        } 
+                    }
+                    
+                    svg += `<g id="score-note-${i}" class="score-note">`;
+                    
+                    if(accidental) {
+                        svg += `<text x="${x-14}" y="${y+4}" font-family="serif" font-size="14" fill="#334155">${accidental}</text>`;
+                    }
+                    
+                    // Note head
+                    svg += `<ellipse class="note-head" cx="${x}" cy="${y}" rx="5.5" ry="4" transform="rotate(-15 ${x} ${y})" fill="#1e293b"/>`;
+                    
+                    // Stem direction logic
+                    // Middle line is B4 (y=150). Notes above middle line (y < 150) have stem pointing DOWN.
+                    const stemDir = y < 150 ? 1 : -1; 
+                    const stemX = y < 150 ? x - 5 : x + 5;
+                    const stemY2 = y + (30 * stemDir);
+                    
+                    svg += `<line class="note-stem" x1="${stemX}" y1="${y}" x2="${stemX}" y2="${stemY2}" stroke="#1e293b" stroke-width="1.2"/>`;
+                    
+                    // Unified text label location below the staff to avoid UI clutter
+                    svg += `<text x="${x-6}" y="222" font-family="sans-serif" font-size="8" fill="#64748b">${noteName}</text></g>`;
                 }
-                svg+=`<line x1="${x0+measureW}" y1="93" x2="${x0+measureW}" y2="127" stroke="#334155" stroke-width="2"/>`;
+                svg += `<line x1="${x0+measureW}" y1="130" x2="${x0+measureW}" y2="170" stroke="#334155" stroke-width="2"/>`;
             }
-            container.innerHTML=svg+'</svg>';
+            container.innerHTML = svg + '</svg>';
         }
 
         function renderScale() {
@@ -940,21 +983,17 @@
 
             let twoOctaveMidiSet = new Set(twoOctaveSequence);
 
-            // Escolhe UMA posição física para cada nota realmente presente
-            // na sequência. Isso evita mostrar a mesma nota em várias cordas.
             const playedPositions = new Map();
 
             twoOctaveSequence.forEach((midi) => {
                 if (playedPositions.has(midi)) return;
 
-                // Preferir corda solta quando a nota puder ser tocada assim.
                 const openIndex = violinStrings.findIndex(str => str.midi === midi);
                 if (openIndex >= 0) {
                     playedPositions.set(midi, { stringIdx: openIndex, fret: 0, midi });
                     return;
                 }
 
-                // Caso contrário, usar a menor casa disponível (1-12).
                 const candidates = [];
                 violinStrings.forEach((str, stringIdx) => {
                     const fret = midi - str.midi;
@@ -967,7 +1006,6 @@
                 if (candidates.length) playedPositions.set(midi, candidates[0]);
             });
 
-            // Render Open Strings Section
             const openContainer = document.getElementById('openStringsContainer');
             openContainer.innerHTML = '';
             violinStrings.forEach((str, sIdx) => {
@@ -986,7 +1024,6 @@
                 openContainer.appendChild(stringBtn);
             });
 
-            // Clear tracks for frets 1 to 12
             const tracks = document.querySelectorAll('.notes-track');
             tracks.forEach(track => track.innerHTML = '');
 
@@ -1026,7 +1063,6 @@
             });
 
 
-            // Sequence pills for 2 octaves ida e volta
             const seqContainer = document.getElementById('notesSequenceContainer');
             seqContainer.innerHTML = '';
 
@@ -1082,7 +1118,6 @@
                 const freq = 440 * Math.pow(2, (midi - 69) / 12);
                 const startTime = now + index * noteDuration;
 
-                // Visual lighting triggers (ONLY the specific active note lights up)
                 setTimeout(() => {
                     let noteEl = document.getElementById(`finger-note-${midi}`);
                     let openEl = document.getElementById(`open-string-${midi}`);
