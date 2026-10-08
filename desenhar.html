@@ -1923,6 +1923,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <button class="icon-btn" id="copyBtn" title="Copiar">📑</button>
             <button class="icon-btn" id="cutBtn" title="Recortar">✂️</button>
             <button class="icon-btn" id="pasteBtn" title="Colar">📋</button>
+            <button class="icon-btn" id="durationToFramesBtn" title="Converter a duração de cada frame em frames individuais (animação inteira)">🎞️</button>
             <button class="icon-btn" id="undoBtn" title="Desfazer">↺</button>
             <button class="icon-btn" id="redoBtn" title="Refazer">↻</button>
             <button class="icon-btn" id="clearBtn" title="Limpar Canvas">🗑️</button>
@@ -5476,6 +5477,81 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 if (duplicateBtn) duplicateBtn.disabled = false;
             }
         }
+
+        // --- DURAÇÃO -> FRAMES ---
+        // Cada frame com duração N vira N frames de duração 1 (cópias idênticas).
+        // O tempo total da animação não muda, então áudio e fundo 3D continuam em sincronia.
+        let isExpandingDurations = false;
+        async function convertDurationsToFrames() {
+            if (isPlaying || isExporting || isDuplicatingFrames || isExpandingDurations) return;
+            isExpandingDurations = true;
+            const btn = document.getElementById('durationToFramesBtn');
+            if (btn) btn.disabled = true;
+            const createdBitmaps = [];
+            try {
+                await finishSelection();
+                if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+
+                const holds = frames.map(f => Math.max(1, Math.round(Number(f.duration) || 1)));
+                const extra = holds.reduce((sum, h) => sum + (h - 1), 0);
+                if (extra === 0) { showNotification('Nenhum frame com duração maior que 1'); return; }
+
+                const newFrames = [];
+                const groups = [];
+                let newCurrentIndex = 0, done = 0;
+                for (let i = 0; i < frames.length; i++) {
+                    const frame = frames[i];
+                    if (i === currentFrameIndex) newCurrentIndex = newFrames.length;
+                    const group = [frame];
+                    for (let c = 1; c < holds[i]; c++) {
+                        const layers = await Promise.all(frame.layers.map(layer => layer ? createImageBitmap(layer) : null));
+                        layers.forEach(bmp => { if (bmp) createdBitmaps.push(bmp); });
+                        group.push({ layers, duration: 1, camera3DKeyframe: false, camera3DInterpolation: false });
+                        done++;
+                        if (done % 8 === 0) { showNotification(`Convertendo… ${done}/${extra}`); await new Promise(r => setTimeout(r, 0)); }
+                    }
+                    groups.push(group);
+                    newFrames.push(...group);
+                }
+
+                // Tudo pronto: aplica as mudanças de uma vez.
+                groups.forEach((group, i) => {
+                    const frame = group[0];
+                    if (group.length > 1) {
+                        // Keyframe 3D suave fica no instante final do frame original; o corte seco fica no início.
+                        const keyAtEnd = frame.camera3DKeyframe && i > 0 && frame.camera3DInterpolation !== false;
+                        if (keyAtEnd) {
+                            const last = group[group.length - 1];
+                            last.camera3D = frame.camera3D ? { ...frame.camera3D } : { yaw: 0, pitch: 0, fov: 75 };
+                            last.camera3DKeyframe = true;
+                            last.camera3DInterpolation = true;
+                            frame.camera3DKeyframe = false;
+                            frame.camera3DInterpolation = false;
+                            delete frame.camera3D;
+                        }
+                    }
+                    frame.duration = 1;
+                });
+                frames.splice(0, frames.length, ...newFrames);
+                createdBitmaps.length = 0;
+                selectedFrames.clear();
+
+                isHistoryAction = true;
+                await loadFrame(newCurrentIndex);
+                isHistoryAction = false;
+                renderTimeline();
+                showNotification(`Pronto: ${frames.length} frames (${extra} criados)`);
+            } catch (error) {
+                console.error('Erro ao converter duração em frames:', error);
+                createdBitmaps.forEach(bmp => { try { bmp.close(); } catch (e) {} });
+                showNotification('Não foi possível converter a duração em frames');
+            } finally {
+                isHistoryAction = false;
+                isExpandingDurations = false;
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('durationToFramesBtn').addEventListener('click', convertDurationsToFrames);
 
         onionToggle.addEventListener('change', updateOnionSkin); onionOpacitySlider.addEventListener('input', (e) => onionCanvas.style.opacity = e.target.value / 100);
 

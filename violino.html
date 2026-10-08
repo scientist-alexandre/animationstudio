@@ -86,7 +86,7 @@
 
             <!-- Description -->
             <p id="scaleDescription" class="text-xs text-slate-400 leading-relaxed bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50">
-                Selecione o tom e a escala/arpejo para visualizar em 2 oitavas.
+                Selecione o tom e a escala/arpejo para estudar em 2 oitavas no padrão 123, 234, 345...
             </p>
         </div>
 
@@ -182,20 +182,20 @@
                 <span class="text-[10px] score-label">Clave de Sol</span>
             </div>
             <div id="musicScore" class="music-score rounded-xl overflow-x-auto shadow-inner"></div>
-            <p class="text-[10px] text-slate-400">A partitura acompanha a mesma sequência de 2 oitavas e a volta usada no exemplo. A nota atual fica destacada durante a reprodução.</p>
+            <p class="text-[10px] text-slate-400">A partitura segue o padrão de grupos de 3 notas voltando 1 nota (123, 234, 345...) em 2 oitavas, e depois o espelho na descida (321, 432, 543...). A nota atual fica destacada durante a reprodução.</p>
         </div>
 
         <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-3">
             <div class="flex justify-between items-center">
                 <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <i class="fa-solid fa-list-ol"></i> Sequência (2 Oitavas Ida e Volta)
+                    <i class="fa-solid fa-list-ol"></i> Padrão 123 · 234 · 345 (Ida e Volta)
                 </label>
                 <button onclick="playScaleAudio()" id="playButton" class="bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-amber-600/20 active:scale-95 transition-all">
                     <i class="fa-solid fa-volume-high" id="playIcon"></i> Ouvir Exemplo
                 </button>
             </div>
             
-            <div id="notesSequenceContainer" class="flex flex-wrap gap-1.5 pt-1 max-h-32 overflow-y-auto">
+            <div id="notesSequenceContainer" class="flex flex-wrap gap-1.5 pt-1 max-h-56 overflow-y-auto">
                 <!-- Populated via JS -->
             </div>
         </div>
@@ -864,15 +864,39 @@
             return st.intervals.map(interval => rootMidi + interval);
         }
 
-        function getCompletePlaySequence(midiNotes) {
-            let fullSequence = [];
-            for (let octaveOffset = 0; octaveOffset < 2; octaveOffset++) {
-                midiNotes.forEach((m, i) => {
-                    if (i < midiNotes.length - 1 || octaveOffset === 0) fullSequence.push(m + (octaveOffset * 12));
-                });
+        // Padrão de estudo: grupos de 3 notas voltando sempre 1 nota (123, 234, 345...)
+        const PATTERN_GROUP_SIZE = 3;
+
+        // Notas "limpas" da escala/arpejo em 2 oitavas, sem repetições, da fundamental até +24
+        function getAscendingSequence(midiNotes) {
+            const root = midiNotes[0];
+            const rel = [...new Set(midiNotes.map(m => m - root))];
+            const set = new Set();
+            for (let k = 0; k <= 2; k++) {
+                rel.forEach(r => { if (r + 12 * k <= 24) set.add(r + 12 * k); });
             }
-            fullSequence.push(midiNotes[midiNotes.length - 1] + 12);
-            return [...fullSequence, ...[...fullSequence].reverse().slice(1)];
+            set.add(0); set.add(24);
+            return [...set].sort((a, b) => a - b).map(r => root + r);
+        }
+
+        // Subida: 123, 234, 345... | Descida (espelho): 321, 432, 543...
+        function getPatternGroups(midiNotes) {
+            const asc = getAscendingSequence(midiNotes);
+            const n = PATTERN_GROUP_SIZE;
+            const groups = [];
+            for (let i = 0; i + n <= asc.length; i++) {
+                groups.push(asc.slice(i, i + n));
+            }
+            for (let i = asc.length - 1; i - (n - 1) >= 0; i--) {
+                const g = [];
+                for (let k = 0; k < n; k++) g.push(asc[i - k]);
+                groups.push(g);
+            }
+            return groups;
+        }
+
+        function getCompletePlaySequence(midiNotes) {
+            return getPatternGroups(midiNotes).flat();
         }
 
         function midiToStaffY(midi) {
@@ -894,7 +918,7 @@
         function renderMusicScore(sequence) {
             const container = document.getElementById('musicScore');
             if (!container) return;
-            const perMeasure = 8, measureW = 190;
+            const perMeasure = PATTERN_GROUP_SIZE * 2, measureW = 165;
             const measures = Math.max(1, Math.ceil(sequence.length / perMeasure));
             const width = 58 + measures * measureW;
             const height = 240; // Increased SVG height to ensure high F fits well without cutting
@@ -902,7 +926,7 @@
             // The 5 standard lines of the treble staff properly spaced by 10px each
             const lineYs = [130, 140, 150, 160, 170]; 
             
-            let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" aria-label="Partitura da sequência atual">`;
+            let svg = `<svg viewBox="0 0 ${width} ${height}" style="min-width:${Math.round(width * 0.8)}px" xmlns="http://www.w3.org/2000/svg" aria-label="Partitura da sequência atual">`;
             svg += `<rect width="100%" height="100%" fill="#faf7ef"/>`;
             
             // Centered G-Clef
@@ -919,7 +943,8 @@
                 
                 for(let i=start; i<end; i++){
                     const midi = sequence[i];
-                    const x = x0 + 22 + (i - start) * 20;
+                    const pos = i - start;
+                    const x = x0 + 22 + pos * 20 + Math.floor(pos / PATTERN_GROUP_SIZE) * 12;
                     const y = midiToStaffY(midi);
                     
                     const noteName = semitoneToNoteName[midi%12];
@@ -971,15 +996,7 @@
 
             const midiNotes = getMidiNotesForCurrentSelection();
 
-            let twoOctaveSequence = [];
-            for(let oct=0; oct<2; oct++) {
-                midiNotes.forEach((m, i) => {
-                    if (i < midiNotes.length - 1 || oct === 0) {
-                        twoOctaveSequence.push(m + (oct * 12));
-                    }
-                });
-            }
-            twoOctaveSequence.push(midiNotes[midiNotes.length - 1] + 12);
+            const twoOctaveSequence = getAscendingSequence(midiNotes);
 
             let twoOctaveMidiSet = new Set(twoOctaveSequence);
 
@@ -1066,20 +1083,26 @@
             const seqContainer = document.getElementById('notesSequenceContainer');
             seqContainer.innerHTML = '';
 
-            twoOctaveSequence.forEach((m, idx) => {
-                const semitone = m % 12;
-                const octave = Math.floor(m / 12) - 1;
-                const noteName = semitoneToNoteName[semitone] + octave;
-
-                const pill = document.createElement('div');
-                pill.id = `seq-pill-${idx}`;
-                pill.className = 'px-2 py-0.5 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-semibold flex items-center gap-1 shadow-sm transition-all';
-                pill.innerHTML = `<span class="text-[8px] text-amber-500/70 font-sans">${idx + 1}</span> ${noteName}`;
-                seqContainer.appendChild(pill);
-            });
+            const playSeq = getCompletePlaySequence(midiNotes);
+            for (let g = 0; g * PATTERN_GROUP_SIZE < playSeq.length; g++) {
+                const wrap = document.createElement('div');
+                wrap.className = 'flex items-center gap-1 px-1.5 py-1 rounded-xl bg-slate-950/50 border border-slate-800';
+                for (let k = 0; k < PATTERN_GROUP_SIZE; k++) {
+                    const idx = g * PATTERN_GROUP_SIZE + k;
+                    if (idx >= playSeq.length) break;
+                    const m = playSeq[idx];
+                    const noteName = semitoneToNoteName[m % 12] + (Math.floor(m / 12) - 1);
+                    const pill = document.createElement('div');
+                    pill.id = `seq-pill-${idx}`;
+                    pill.className = 'px-2 py-0.5 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-semibold flex items-center gap-1 shadow-sm transition-all';
+                    pill.innerHTML = `<span class="text-[8px] text-amber-500/70 font-sans">${k + 1}</span> ${noteName}`;
+                    wrap.appendChild(pill);
+                }
+                seqContainer.appendChild(wrap);
+            }
 
             renderMusicScore(getCompletePlaySequence(midiNotes));
-            document.getElementById('activeNotesCount').textContent = `${twoOctaveSequence.length} notas (2 oitavas)`;
+            document.getElementById('activeNotesCount').textContent = `${twoOctaveSequence.length} notas (2 oitavas) · ${playSeq.length / PATTERN_GROUP_SIZE} grupos`;
         }
 
         function toggleInfoModal() {
@@ -1127,11 +1150,17 @@
                     if (noteEl) noteEl.classList.add('active-playing-note');
                     if (openEl) openEl.classList.add('scale-105', 'bg-amber-400', 'text-slate-950');
                     if (seqEl) seqEl.classList.add('bg-amber-500', 'text-slate-950', 'scale-105', 'shadow-md', 'shadow-amber-500/50');
-                    if (scoreEl) scoreEl.classList.add('active');
+                    if (scoreEl) {
+                        scoreEl.classList.add('active');
+                        const sc = document.getElementById('musicScore');
+                        const r = scoreEl.getBoundingClientRect(), cr = sc.getBoundingClientRect();
+                        sc.scrollTo({ left: sc.scrollLeft + (r.left - cr.left) - sc.clientWidth / 3, behavior: 'smooth' });
+                    }
 
+                    const sameNext = completePlaySequence[index + 1] === midi;
                     setTimeout(() => {
-                        if (noteEl) noteEl.classList.remove('active-playing-note');
-                        if (openEl) openEl.classList.remove('scale-105', 'bg-amber-400', 'text-slate-950');
+                        if (noteEl && !sameNext) noteEl.classList.remove('active-playing-note');
+                        if (openEl && !sameNext) openEl.classList.remove('scale-105', 'bg-amber-400', 'text-slate-950');
                         if (seqEl) seqEl.classList.remove('bg-amber-500', 'text-slate-950', 'scale-105', 'shadow-md', 'shadow-amber-500/50');
                         if (scoreEl) scoreEl.classList.remove('active');
                     }, noteDuration * 1000);
