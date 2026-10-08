@@ -1629,6 +1629,35 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
         #cloneBtn.active { color: #fff; border-color: #34c759; background: rgba(52,199,89,.24); }
         #canvasContainer.clone-tool-active { cursor: crosshair; }
 
+        /* --- GUIA DE ROSTO --- */
+        .face-guide-control { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+        .face-guide-control .fg-row { display: flex; align-items: center; gap: 8px; }
+        .face-guide-control .fg-label { min-width: 62px; color: #bbb; font-size: 11px; font-weight: 700; }
+        body.mobile-mode .mobile-edit-settings .face-guide-control {
+            width: 100%; margin: 0; padding: 7px 9px;
+            border: 1px solid #484848; border-radius: 9px; background: #303030; color: #ddd; font-size: 12px;
+        }
+        body.mobile-mode .mobile-edit-settings #faceGuideBtn {
+            flex: 0 0 auto; width: auto; height: auto; min-width: 0; padding: 8px 12px;
+            font-size: 12px; font-weight: 700; white-space: nowrap;
+            border: 1px solid #484848; border-radius: 8px; background: #3a3a3a; color: #ddd;
+        }
+        body.mobile-mode .mobile-edit-settings #faceGuideBtn.active { color: var(--active-blue); border-color: var(--active-blue); background: #19354a; }
+        .face-guide-control input[type=range] { flex: 1; width: auto; min-width: 80px; }
+        #faceGuideOverlay { position: absolute; inset: 0; z-index: 35; display: none; pointer-events: none; overflow: hidden; }
+        #faceGuideOverlay.show { display: block; }
+        #faceGuideSvg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+        .face-guide-grip {
+            position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+            font: 700 11px/1 system-ui, sans-serif; color: #fff; background: rgba(30,167,255,.9);
+            border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.55);
+            pointer-events: auto; touch-action: none; cursor: ns-resize; user-select: none; -webkit-user-select: none;
+        }
+        .face-guide-grip.vertical { background: rgba(255,59,107,.92); cursor: ew-resize; }
+        .face-guide-grip.dragging { transform: scale(1.2); }
+        body.mobile-mode #mobileEditPanel.fg-adjusting { opacity: .15; transition: opacity .08s; }
+
         /* --- ANIMATION ASSIST (RODAPÉ) --- */
         .bottom-bar {
             height: 118px; background-color: var(--panel-bg); display: flex; align-items: center;
@@ -1980,6 +2009,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
                 </button>
                 <input type="range" id="bucketToleranceSlider" min="0" max="100" value="50" title="Tolerância">
             </div>
+            <div class="face-guide-control">
+                <div class="fg-row">
+                    <button type="button" class="icon-btn" id="faceGuideBtn" aria-pressed="false" title="Mostrar/ocultar guia de rosto">Guia de rosto</button>
+                    <input type="range" id="faceGuideOpacity" min="5" max="100" value="60" aria-label="Opacidade da guia de rosto" title="Opacidade">
+                </div>
+                <div class="fg-row">
+                    <span class="fg-label">Tamanho</span>
+                    <input type="range" id="faceGuideSize" min="30" max="200" value="100" aria-label="Tamanho da guia de rosto" title="Tamanho">
+                </div>
+            </div>
             <button class="icon-btn" id="selectionBtn" title="Seleção Lasso">◌</button>
             <button class="icon-btn" id="selectAllBtn" title="Selecionar Tudo">⛶</button>
             <button class="icon-btn" id="perspectiveBtn" title="Perspectiva">📐</button>
@@ -1990,6 +2029,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <button class="icon-btn" id="copyBtn" title="Copiar">📑</button>
             <button class="icon-btn" id="cutBtn" title="Recortar">✂️</button>
             <button class="icon-btn" id="pasteBtn" title="Colar">📋</button>
+            <button class="icon-btn" id="durationToFramesBtn" title="Converter a duração de cada frame em frames individuais (animação inteira)">🎞️</button>
         </div>
         <div class="top-right">
             <div class="three-controls">
@@ -2136,6 +2176,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             <canvas id="mainCanvas" width="1080" height="1920"></canvas>
             <canvas id="playbackCanvas" width="1080" height="1920"></canvas>
             <canvas id="drawingCanvas" width="1080" height="1920"></canvas>
+            <div id="faceGuideOverlay" aria-label="Guia de rosto"></div>
         </div>
     </div>
 
@@ -2363,14 +2404,16 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             ['selectionBtn', 'Seleção'], ['selectAllBtn', 'Selecionar tudo'],
             ['perspectiveBtn', 'Perspectiva'], ['warpBtn', 'Push'], ['headSphereBtn', '3D'],
             ['flipHBtn', 'Inverter H'], ['flipVBtn', 'Inverter V'],
-            ['copyBtn', 'Copiar'], ['cutBtn', 'Recortar'], ['pasteBtn', 'Colar']
+            ['copyBtn', 'Copiar'], ['cutBtn', 'Recortar'], ['pasteBtn', 'Colar'],
+            ['durationToFramesBtn', 'Dur → Frames']
         ]);
         const mobileToolMarkers = new Map();
         const mobileSettingItems = [
             { selector: '.onion-control', label: 'Onion Skin' },
             { selector: '.bucket-control', label: 'Balde' },
             { selector: '.three-controls', label: 'Mover background' },
-            { selector: '.bg-control', label: 'Background 3D' }
+            { selector: '.bg-control', label: 'Background 3D' },
+            { selector: '.face-guide-control', label: 'Guia de rosto' }
         ];
         const mobileSettingMarkers = new Map();
 
@@ -5294,6 +5337,81 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             }
         }
 
+        // --- DURAÇÃO -> FRAMES ---
+        // Cada frame com duração N vira N frames de duração 1 (cópias idênticas).
+        // O tempo total da animação não muda, então áudio e fundo 3D continuam em sincronia.
+        let isExpandingDurations = false;
+        async function convertDurationsToFrames() {
+            if (isPlaying || isExporting || isProjectSaving || isDuplicatingFrames || isExpandingDurations) return;
+            isExpandingDurations = true;
+            const btn = document.getElementById('durationToFramesBtn');
+            if (btn) btn.disabled = true;
+            const createdBitmaps = [];
+            try {
+                await finishSelection();
+                if (hasUnsavedChanges) await saveFrameState(currentFrameIndex);
+
+                const holds = frames.map(f => Math.max(1, Math.round(Number(f.duration) || 1)));
+                const extra = holds.reduce((sum, h) => sum + (h - 1), 0);
+                if (extra === 0) { showNotification('Nenhum frame com duração maior que 1'); return; }
+
+                const newFrames = [];
+                const groups = [];
+                let newCurrentIndex = 0, done = 0;
+                for (let i = 0; i < frames.length; i++) {
+                    const frame = frames[i];
+                    if (i === currentFrameIndex) newCurrentIndex = newFrames.length;
+                    const group = [frame];
+                    for (let c = 1; c < holds[i]; c++) {
+                        const layers = await Promise.all(frame.layers.map(layer => layer ? createImageBitmap(layer) : null));
+                        layers.forEach(bmp => { if (bmp) createdBitmaps.push(bmp); });
+                        group.push({ layers, duration: 1, camera3DKeyframe: false, camera3DInterpolation: false });
+                        done++;
+                        if (done % 8 === 0) { showNotification(`Convertendo… ${done}/${extra}`); await new Promise(r => setTimeout(r, 0)); }
+                    }
+                    groups.push(group);
+                    newFrames.push(...group);
+                }
+
+                // Tudo pronto: aplica as mudanças de uma vez.
+                groups.forEach((group, i) => {
+                    const frame = group[0];
+                    if (group.length > 1) {
+                        // Keyframe 3D suave fica no instante final do frame original; o corte seco fica no início.
+                        const keyAtEnd = frame.camera3DKeyframe && i > 0 && frame.camera3DInterpolation !== false;
+                        if (keyAtEnd) {
+                            const last = group[group.length - 1];
+                            last.camera3D = frame.camera3D ? { ...frame.camera3D } : { yaw: 0, pitch: 0, fov: 75 };
+                            last.camera3DKeyframe = true;
+                            last.camera3DInterpolation = true;
+                            frame.camera3DKeyframe = false;
+                            frame.camera3DInterpolation = false;
+                            delete frame.camera3D;
+                        }
+                    }
+                    frame.duration = 1;
+                });
+                frames.splice(0, frames.length, ...newFrames);
+                createdBitmaps.length = 0;
+                selectedFrames.clear();
+
+                isHistoryAction = true;
+                await loadFrame(newCurrentIndex);
+                isHistoryAction = false;
+                renderTimeline();
+                showNotification(`Pronto: ${frames.length} frames (${extra} criados)`);
+            } catch (error) {
+                console.error('Erro ao converter duração em frames:', error);
+                createdBitmaps.forEach(bmp => { try { bmp.close(); } catch (e) {} });
+                showNotification('Não foi possível converter a duração em frames');
+            } finally {
+                isHistoryAction = false;
+                isExpandingDurations = false;
+                if (btn) btn.disabled = false;
+            }
+        }
+        document.getElementById('durationToFramesBtn').addEventListener('click', convertDurationsToFrames);
+
         onionToggle.addEventListener('change', updateOnionSkin); onionOpacitySlider.addEventListener('input', (e) => onionCanvas.style.opacity = e.target.value / 100);
 
         function updateOnionSkin() {
@@ -5315,6 +5433,129 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
             };
             reader.readAsDataURL(file);
         };
+
+        // --- GUIA DE ROSTO: 5 linhas horizontais + 3 verticais ---
+        (function initFaceGuide() {
+            const btn = document.getElementById('faceGuideBtn');
+            const slider = document.getElementById('faceGuideOpacity');
+            const sizeSlider = document.getElementById('faceGuideSize');
+            const overlay = document.getElementById('faceGuideOverlay');
+            const NS = 'http://www.w3.org/2000/svg';
+            const MIN_GAP = 0.006;
+            const state = { on: false, xs: [0.22, 0.5, 0.78], ys: [0.26, 0.33, 0.40, 0.47, 0.56] };
+            let lastScale = 100;
+
+            const svg = document.createElementNS(NS, 'svg');
+            svg.id = 'faceGuideSvg';
+            svg.setAttribute('viewBox', '0 0 100 100');
+            svg.setAttribute('preserveAspectRatio', 'none');
+            const makeLine = (color) => {
+                const l = document.createElementNS(NS, 'line');
+                l.setAttribute('stroke', color); l.setAttribute('stroke-width', '1');
+                l.setAttribute('vector-effect', 'non-scaling-stroke');
+                svg.appendChild(l); return l;
+            };
+            const hLines = state.ys.map(() => makeLine('#1ea7ff'));
+            const vLines = state.xs.map(() => makeLine('#ff3b6b'));
+            overlay.appendChild(svg);
+
+            const makeGrip = (text, vertical) => {
+                const g = document.createElement('div');
+                g.className = 'face-guide-grip' + (vertical ? ' vertical' : '');
+                g.textContent = text;
+                overlay.appendChild(g); return g;
+            };
+            const hGrips = state.ys.map((_, i) => makeGrip(String(i + 1), false));
+            const vGrips = state.xs.map(() => makeGrip('↔', true));
+
+            function render() {
+                hLines.forEach((l, i) => {
+                    const y = state.ys[i] * 100;
+                    l.setAttribute('x1', 0); l.setAttribute('x2', 100);
+                    l.setAttribute('y1', y); l.setAttribute('y2', y);
+                    hGrips[i].style.left = '96%'; hGrips[i].style.top = y + '%';
+                });
+                vLines.forEach((l, i) => {
+                    const x = state.xs[i] * 100;
+                    l.setAttribute('x1', x); l.setAttribute('x2', x);
+                    l.setAttribute('y1', 0); l.setAttribute('y2', 100);
+                    vGrips[i].style.left = x + '%'; vGrips[i].style.top = '4%';
+                });
+                svg.style.opacity = String(Number(slider.value) / 100);
+            }
+
+            function bindDrag(grip, onMove) {
+                grip.addEventListener('pointerdown', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+                    grip.classList.add('dragging');
+                });
+                grip.addEventListener('pointermove', (e) => {
+                    if (!grip.classList.contains('dragging')) return;
+                    e.preventDefault(); e.stopPropagation();
+                    const r = canvasContainer.getBoundingClientRect();
+                    onMove((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+                    render();
+                });
+                const end = (e) => {
+                    grip.classList.remove('dragging');
+                    try { grip.releasePointerCapture(e.pointerId); } catch (err) {}
+                };
+                grip.addEventListener('pointerup', end);
+                grip.addEventListener('pointercancel', end);
+            }
+
+            hGrips.forEach((grip, i) => bindDrag(grip, (fx, fy) => {
+                const lo = i === 0 ? 0.0 : state.ys[i - 1] + MIN_GAP;
+                const hi = i === state.ys.length - 1 ? 1.0 : state.ys[i + 1] - MIN_GAP;
+                state.ys[i] = Math.min(hi, Math.max(lo, fy));
+            }));
+            vGrips.forEach((grip, i) => bindDrag(grip, (fx) => {
+                const lo = i === 0 ? 0.0 : state.xs[i - 1] + MIN_GAP;
+                const hi = i === state.xs.length - 1 ? 1.0 : state.xs[i + 1] - MIN_GAP;
+                state.xs[i] = Math.min(hi, Math.max(lo, fx));
+            }));
+
+            // Tamanho: aumenta/diminui toda a guia a partir da linha central.
+            sizeSlider.addEventListener('input', () => {
+                let k = Number(sizeSlider.value) / lastScale;
+                const px = state.xs[1], py = state.ys[2];
+                if (k > 1) {
+                    const lim = (v, p) => { const d = v - p; return d > 0 ? (0.99 - p) / d : d < 0 ? (0.01 - p) / d : Infinity; };
+                    const kmax = Math.min(...state.xs.map(x => lim(x, px)), ...state.ys.map(y => lim(y, py)));
+                    k = Math.min(k, kmax);
+                }
+                state.xs = state.xs.map(x => px + (x - px) * k);
+                state.ys = state.ys.map(y => py + (y - py) * k);
+                lastScale *= k;
+                sizeSlider.value = Math.round(lastScale);
+                render();
+            });
+
+            btn.addEventListener('click', () => {
+                state.on = !state.on;
+                overlay.classList.toggle('show', state.on);
+                btn.classList.toggle('active', state.on);
+                btn.setAttribute('aria-pressed', String(state.on));
+            });
+            slider.addEventListener('input', render);
+
+            // Ao ajustar os sliders o painel fica quase transparente (dá pra ver as
+            // linhas) e, ao soltar, fecha para liberar a área de desenho.
+            [slider, sizeSlider].forEach((el) => {
+                const release = () => mobileEditPanel.classList.remove('fg-adjusting');
+                el.addEventListener('pointerdown', () => mobileEditPanel.classList.add('fg-adjusting'));
+                el.addEventListener('pointerup', release);
+                el.addEventListener('pointercancel', release);
+                el.addEventListener('change', () => { release(); closeMobileEditPanel(); });
+            });
+            // O app bloqueia o "click" gerado por toques no canvas, então o painel
+            // Editar nunca fechava ao desenhar. Fecha ao tocar em qualquer lugar fora dele.
+            window.addEventListener('pointerdown', (e) => {
+                if (!mobileEditBtn.contains(e.target) && !mobileEditPanel.contains(e.target)) closeMobileEditPanel();
+            }, true);
+            render();
+        })();
 
         menuBtn.addEventListener('click', (e) => { e.stopPropagation(); closeMobileEditPanel(); assetLibraryDropdown.classList.remove('show'); menuDropdown.classList.toggle('show'); });
         mobileEditBtn.addEventListener('click', (e) => {
