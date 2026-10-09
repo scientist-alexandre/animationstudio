@@ -1063,30 +1063,51 @@
             document.querySelectorAll('.score-note.active').forEach(e => e.classList.remove('active'));
         }
 
-        // Exporta a sequência selecionada como arquivo WAV local.
+        // Exporta o mesmo exercício/timbre do botão de exemplo para WAV.
+        // A sequência depende da tonalidade e escala selecionadas.
         function downloadScaleAudio() {
             const midiNotes = getMidiNotesForCurrentSelection();
             if (!midiNotes || midiNotes.length === 0) return;
+
             const sequence = getCompletePlaySequence(midiNotes);
-            const sampleRate = 22050, noteDuration = 0.16;
-            const pcm = new Int16Array(Math.ceil(sequence.length * noteDuration * sampleRate));
+            const sampleRate = 44100;
+            const noteDuration = 0.16; // igual ao exemplo tocado na página
+            const gapDuration = 0.012;
+            const samplesPerNote = Math.floor(noteDuration * sampleRate);
+            const gapSamples = Math.floor(gapDuration * sampleRate);
+            const stride = samplesPerNote + gapSamples;
+            const totalSamples = sequence.length * stride;
+            const pcm = new Int16Array(totalSamples);
 
             sequence.forEach((midi, index) => {
                 const freq = 440 * Math.pow(2, (midi - 69) / 12);
-                const start = Math.floor(index * noteDuration * sampleRate);
-                const end = Math.min(pcm.length, Math.floor((index + 1) * noteDuration * sampleRate));
-                for (let i = start; i < end; i++) {
-                    const t = (i - start) / sampleRate;
-                    const envelope = Math.min(1, t / 0.025) * Math.min(1, (noteDuration - t) / 0.035);
-                    const phase = 2 * Math.PI * freq * t + 0.08 * Math.sin(2 * Math.PI * 5.5 * t);
+                const offset = index * stride;
+                for (let j = 0; j < samplesPerNote; j++) {
+                    const t = j / sampleRate;
+                    // Aproxima o timbre do exemplo: dente-de-serra filtrado e vibrato.
+                    const vibrato = Math.sin(2 * Math.PI * 5.5 * t) * freq * 0.012;
+                    const phase = 2 * Math.PI * (freq * t + (vibrato / (2 * Math.PI * 5.5)) * (1 - Math.cos(2 * Math.PI * 5.5 * t)) / Math.max(freq, 1));
                     let sample = 0;
-                    for (let h = 1; h <= 8; h++) sample += Math.sin(phase * h) / h;
-                    pcm[i] = Math.max(-32768, Math.min(32767, sample / 2.72 * envelope * 0.72 * 32767));
+                    const maxHarmonic = Math.min(35, Math.floor((sampleRate / 2) / freq));
+                    for (let h = 1; h <= maxHarmonic; h++) {
+                        const harmonicFreq = freq * h;
+                        // Low-pass parecido com o filtro de 3200 Hz do áudio ao vivo.
+                        const filterGain = 1 / Math.sqrt(1 + Math.pow(harmonicFreq / 3200, 4));
+                        sample += (2 / Math.PI) * (Math.pow(-1, h + 1) / h) * filterGain * Math.sin(phase * h);
+                    }
+                    const attack = Math.min(1, t / 0.03);
+                    const release = Math.min(1, (noteDuration - t) / 0.04);
+                    const envelope = Math.max(0, Math.min(attack, release));
+                    const value = sample * envelope * 0.36;
+                    pcm[offset + j] = Math.max(-32768, Math.min(32767, Math.round(value * 32767)));
                 }
             });
 
-            const buffer = new ArrayBuffer(44 + pcm.length * 2), view = new DataView(buffer);
-            const writeText = (offset, value) => { for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i)); };
+            const buffer = new ArrayBuffer(44 + pcm.length * 2);
+            const view = new DataView(buffer);
+            const writeText = (offset, value) => {
+                for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+            };
             writeText(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true);
             writeText(8, 'WAVE'); writeText(12, 'fmt ');
             view.setUint32(16, 16, true); view.setUint16(20, 1, true);
@@ -1104,7 +1125,7 @@
             const link = document.createElement('a');
             link.href = url; link.download = `${safeName}.wav`;
             document.body.appendChild(link); link.click(); link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
         }
 
         function playScaleAudio() {
