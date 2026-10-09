@@ -112,7 +112,7 @@
             </div>
 
             <!-- Fingerboard Container representing up to 2 octaves across the fingerboard -->
-            <div class="w-full overflow-hidden">
+            <div id="fingerboardScroll" class="w-full overflow-x-auto">
                 <div id="fingerboardContainer" class="relative fingerboard-bg rounded-xl w-full h-44 border-2 border-amber-900/40 shadow-2xl flex flex-col justify-between py-2 px-1">
                     
                     <!-- Nut (Pestana) indicator -->
@@ -120,27 +120,7 @@
                         <span class="text-[6px] font-bold text-amber-950 -rotate-90 tracking-widest uppercase select-none">Pestana</span>
                     </div>
 
-                    <!-- Fret position dots -->
-                    <div class="absolute left-[30%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
-                    <div class="absolute left-[50%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
-                    <div class="absolute left-[70%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
-                    <div class="absolute left-[90%] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-600/40 pointer-events-none"></div>
-
-                    <!-- Frets lines (12 positions for 2 octaves coverage) -->
-                    <div class="absolute inset-0 pointer-events-none flex justify-between px-8">
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                        <div class="w-px h-full bg-amber-900/20"></div>
-                    </div>
+                    <div id="fretLines" class="absolute inset-0 pointer-events-none flex justify-between px-8"></div>
 
                     <!-- Strings: E, A, D, G -->
                     <div class="relative h-1/4 flex items-center string-row" data-string="E">
@@ -170,7 +150,7 @@
             </div>
 
             <div class="flex items-center justify-between w-full mt-2 text-[10px] text-slate-400 px-1">
-                <span>Casas 1 a 12 (2 Oitavas)</span>
+                <span id="fretRangeLabel">Casas 1 a 12 (2 Oitavas)</span>
                 <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50"></span> Bolinha (Nota Ativa)</span>
             </div>
         </div>
@@ -207,6 +187,22 @@
             <p id="executionTip" class="text-xs text-slate-300 leading-relaxed">
                 Pratique com arco longo e estabilidade rítmica cobrindo as duas oitavas.
             </p>
+        </div>
+
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3.5 shadow-xl backdrop-blur-sm space-y-2.5">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-headphones"></i> Que escala ou arpejo estou ouvindo?
+                </span>
+                <span class="text-[10px] text-slate-400">Paganini · 24 Caprichos</span>
+            </div>
+            <div class="relative">
+                <select id="pieceSelect" onchange="renderPieceHint()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-200 appearance-none focus:outline-none focus:border-amber-500 font-medium shadow-inner"></select>
+                <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400"><i class="fa-solid fa-chevron-down text-xs"></i></div>
+            </div>
+            <p id="pieceHint" class="text-xs text-slate-300 leading-relaxed bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/50"></p>
+            <div id="pieceChips" class="flex flex-wrap gap-1.5"></div>
+            <p class="text-[10px] text-slate-500">Sugestões de estudo pela tonalidade e pelo tipo de passagem da obra. Toque em uma sugestão para carregá-la no app.</p>
         </div>
 
     </main>
@@ -353,22 +349,8 @@
                 tip: 'Mantenha os dedos abaixados no espelho o máximo possível.',
                 intervals: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
             },
-            {
-                id: 'diminished_hw',
-                name: 'Escala Diminuta (Tom-Semitom)',
-                category: 'Escalas Especiais',
-                description: 'Escala simétrica intercalando tons e semitons.',
-                tip: 'Foque na precisão rítmica exata em cada mudança de casa.',
-                intervals: [0, 1, 3, 4, 6, 7, 9, 10, 12]
-            },
-            {
-                id: 'diminished_wh',
-                name: 'Escala Diminuta (Semitom-Tom)',
-                category: 'Escalas Especiais',
-                description: 'Variante simétrica com início em semitom.',
-                tip: 'Mantenha a suavidade nos saltos curtos.',
-                intervals: [0, 2, 3, 5, 6, 8, 9, 11, 12]
-            },
+            
+            
             {
                 id: 'whole_tone',
                 name: 'Escala de Tons Inteiros',
@@ -402,15 +384,7 @@
                 tip: 'Pratique com igualdade entre os dedos e atenção às mudanças de corda.',
                 intervals: [0, 3, 5, 7, 10, 12]
             },
-            {
-                id: 'blues',
-                name: 'Escala Blues',
-                category: 'Escalas Especiais',
-                description: 'Pentatônica menor com a quinta diminuta, formando a blue note.',
-                tip: 'Dê atenção especial à quinta diminuta sem perder a afinação.',
-                intervals: [0, 3, 5, 6, 7, 10, 12]
-            },
-            {
+                        {
                 id: 'harmonic_major',
                 name: 'Escala Maior Harmônica',
                 category: 'Escalas Especiais',
@@ -450,54 +424,13 @@
                 tip: 'A terça maior deve permanecer firme apesar da segunda menor.',
                 intervals: [0, 1, 4, 5, 7, 8, 10, 12]
             },
-            {
-                id: 'altered',
-                name: 'Escala Alterada',
-                category: 'Escalas de Jazz',
-                description: 'Superlócria, usada sobre acordes dominantes alterados.',
-                tip: 'Pratique devagar para ouvir cada tensão antes de acelerar.',
-                intervals: [0, 1, 3, 4, 6, 8, 10, 12]
-            },
-            {
-                id: 'bebop_dom',
-                name: 'Escala Bebop Dominante',
-                category: 'Escalas de Jazz',
-                description: 'Escala dominante com uma nota cromática adicional para facilitar a passagem rítmica.',
-                tip: 'Faça a nota cromática soar como passagem, mantendo o pulso regular.',
-                intervals: [0, 2, 4, 5, 7, 9, 10, 11, 12]
-            },
-
+                        
             // Escalas avançadas para repertório virtuoso
-            {
-                id: 'pent_major', name: 'Pentatônica Maior', category: 'Escalas Especiais',
-                description: 'Cinco graus, útil para coordenação, mudanças de corda e padrões melódicos.',
-                tip: 'Pratique em várias posições e com diferentes articulações.', intervals: [0,2,4,7,9,12]
-            },
-            {
-                id: 'pent_minor', name: 'Pentatônica Menor', category: 'Escalas Especiais',
-                description: 'Pentatônica menor para agilidade e controle de mudanças de corda.',
-                tip: 'Alterne détaché, legato e acentos rítmicos.', intervals: [0,3,5,7,10,12]
-            },
-            {
-                id: 'blues', name: 'Escala Blues', category: 'Escalas Especiais',
-                description: 'Pentatônica menor com quinta diminuta.',
-                tip: 'Use para independência dos dedos e afinação cromática.', intervals: [0,3,5,6,7,10,12]
-            },
-            {
-                id: 'major_bebop', name: 'Bebop Maior', category: 'Escalas Especiais',
-                description: 'Escala maior com sétima menor de passagem.',
-                tip: 'Treine a nota cromática sem perder o centro tonal.', intervals: [0,2,4,5,7,9,10,11,12]
-            },
-            {
-                id: 'dominant_bebop', name: 'Bebop Dominante', category: 'Escalas Especiais',
-                description: 'Dominante com oitava nota cromática de passagem.',
-                tip: 'Mantenha a pulsação regular nas passagens rápidas.', intervals: [0,2,4,5,7,9,10,11,12]
-            },
-            {
-                id: 'altered', name: 'Escala Alterada', category: 'Escalas Avançadas',
-                description: 'Material cromático sobre dominante, útil para afinação e extensões alteradas.',
-                tip: 'Estude devagar antes de aplicar velocidade.', intervals: [0,1,3,4,6,8,10,12]
-            },
+            
+            
+            
+                        
+            
             {
                 id: 'whole_half', name: 'Diminuta Tom-Semitom (8 notas)', category: 'Escalas Avançadas',
                 description: 'Padrão simétrico de oito notas para sequências virtuosas.',
@@ -508,31 +441,11 @@
                 description: 'Forma complementar da escala diminuta.',
                 tip: 'Compare a afinação dos semitons em todas as cordas.', intervals: [0,1,3,4,6,7,9,10,12]
             },
-            {
-                id: 'augmented', name: 'Escala Aumentada', category: 'Escalas Avançadas',
-                description: 'Estrutura simétrica de semitons e terças maiores.',
-                tip: 'Treine a mudança de posição sem tensão.', intervals: [0,3,4,7,8,11,12]
-            },
-            {
-                id: 'hungarian_minor', name: 'Menor Húngara', category: 'Escalas Avançadas',
-                description: 'Escala menor com quarta aumentada e sétima maior.',
-                tip: 'Atenção especial à segunda aumentada.', intervals: [0,2,3,6,7,8,11,12]
-            },
-            {
-                id: 'double_harmonic', name: 'Dupla Harmônica Maior', category: 'Escalas Avançadas',
-                description: 'Escala de forte caráter modal, com duas segundas aumentadas.',
-                tip: 'Pratique lentamente as distâncias aumentadas.', intervals: [0,1,4,5,7,8,11,12]
-            },
-            {
-                id: 'phrygian_dominant', name: 'Frígio Dominante', category: 'Escalas Avançadas',
-                description: 'Quinto modo da menor harmônica, frequente em passagens virtuosísticas.',
-                tip: 'Controle a segunda menor e a terça maior.', intervals: [0,1,4,5,7,8,10,12]
-            },
-            {
-                id: 'lydian_dominant', name: 'Lídio Dominante', category: 'Modos Modais',
-                description: 'Modo com quarta aumentada e sétima menor.',
-                tip: 'Afine a quarta aumentada com estabilidade.', intervals: [0,2,4,6,7,9,10,12]
-            },
+            
+            
+            
+            
+            
             {
                 id: 'mixolydian_b6', name: 'Mixolídio b6', category: 'Modos Modais',
                 description: 'Modo de caráter dominante derivado da menor melódica.',
@@ -543,262 +456,128 @@
                 description: 'Modo simétrico em tensão, útil para controle de intervalos.',
                 tip: 'Não acelere antes de estabilizar a quinta diminuta.', intervals: [0,1,3,5,6,9,10,12]
             },
-            {
-                id: 'chromatic_two_oct', name: 'Cromática em 2 Oitavas', category: 'Escalas Virtuosísticas',
-                description: 'Sequência cromática completa para coordenação da mão esquerda.',
-                tip: 'Use ritmos variados e diferentes acentos.', intervals: [0,1,2,3,4,5,6,7,8,9,10,11,12]
-            },
-            {
-                id: 'major_thirds', name: 'Escala Maior em Terças', category: 'Padrões Virtuosísticos',
-                description: 'Padrão melódico em terças para independência e afinação.',
-                tip: 'Não trate como uma escala simples: mantenha cada salto afinado.', intervals: [0,4,2,5,4,7,5,9,7,11,9,12]
-            },
-            {
-                id: 'major_fourths', name: 'Escala Maior em Quartas', category: 'Padrões Virtuosísticos',
-                description: 'Padrão de quartas para coordenação e extensão.',
-                tip: 'Pratique primeiro em ritmo lento e separado.', intervals: [0,5,2,7,4,9,5,11,7,12]
-            },
-            {
-                id: 'major_sixths', name: 'Escala Maior em Sextas', category: 'Padrões Virtuosísticos',
-                description: 'Padrão de sextas para afinação avançada.',
-                tip: 'Mantenha a mão relaxada nos saltos.', intervals: [0,9,2,11,4,12]
-            },
-            {
-                id: 'octave_pattern', name: 'Escala Maior em Oitavas', category: 'Padrões Virtuosísticos',
-                description: 'Treino de oitavas para segurança de afinação e deslocamentos.',
-                tip: 'Priorize a afinação antes da velocidade.', intervals: [0,12,2,14,4,16,5,17,7,19,9,21,11,23,12,24]
-            },
+            
+            
+            
+            
+            
             // Arpejos Completos
-            {
-                id: 'arp_maj',
-                name: 'Arpejo Maior (Tríade)',
-                category: 'Arpejos',
-                description: 'Estudo fundamental de arpejos maiores para abertura de mão.',
-                tip: 'Prepare o próximo dedo antes de soltar o anterior.',
-                intervals: [0, 4, 7, 12]
-            },
-            {
-                id: 'arp_min',
-                name: 'Arpejo Menor (Tríade)',
-                category: 'Arpejos',
-                description: 'Essencial para a tessitura expressiva e melancólica.',
-                tip: 'Aterrise com precisão absoluta no 3º grau menor.',
-                intervals: [0, 3, 7, 12]
-            },
-            {
-                id: 'arp_dom7',
-                name: 'Arpejo de Sétima da Dominante (V7)',
-                category: 'Arpejos',
-                description: 'Gera tensão harmônica resolutiva nas cadências.',
-                tip: 'Atenção especial à afinação da sétima menor.',
-                intervals: [0, 4, 7, 10, 12]
-            },
-            {
-                id: 'arp_maj7',
-                name: 'Arpejo de Sétima Maior (Maj7)',
-                category: 'Arpejos',
-                description: 'Sonoridade rica e expandida com sétima maior.',
-                tip: 'Extrema delicadeza na nota superior.',
-                intervals: [0, 4, 7, 11, 12]
-            },
-            {
-                id: 'arp_min7',
-                name: 'Arpejo de Sétima Menor (m7)',
-                category: 'Arpejos',
-                description: 'Arpejo menor com sétima menor.',
-                tip: 'Fluidez impecável nas passagens de corda.',
-                intervals: [0, 3, 7, 10, 12]
-            },
-            {
-                id: 'arp_dim7',
-                name: 'Arpejo de Sétima Diminuída (dim7)',
-                category: 'Arpejos',
-                description: 'Simetria perfeita de terças menores para passagens velozes.',
-                tip: 'Mantenha a mesma distância exata entre todos os dedos.',
-                intervals: [0, 3, 6, 9, 12]
-            },
-            {
-                id: 'arp_m7b5',
-                name: 'Arpejo Meio-Diminuto (m7b5)',
-                category: 'Arpejos',
-                description: 'Tríade diminuta com sétima menor.',
-                tip: 'Controle de afinação rigoroso na quinta diminuta.',
-                intervals: [0, 3, 6, 10, 12]
-            },
-            {
-                id: 'arp_aug',
-                name: 'Arpejo Aumentado (+)',
-                category: 'Arpejos',
-                description: 'Tríade construída sobre terças maiores empilhadas.',
-                tip: 'Afine com precisão a quinta aumentada.',
-                intervals: [0, 4, 8, 12]
-            },
-            {
-                id: 'arp_sus4',
-                name: 'Arpejo Suspenso (sus4)',
-                category: 'Arpejos',
-                description: 'Arpejo com substituição da terça pela quarta justa.',
-                tip: 'Sonoridade aberta e suspensa.',
-                intervals: [0, 5, 7, 12]
-            },
-            {
-                id: 'arp_sus2',
-                name: 'Arpejo Suspenso 2 (sus2)',
-                category: 'Arpejos',
-                description: 'Arpejo com segundo grau suspenso.',
-                tip: 'Leveza na articulação digital.',
-                intervals: [0, 2, 7, 12]
-            },
-            {
-                id: 'arp_maj9',
-                name: 'Arpejo com Nona Maior (Maj9)',
-                category: 'Arpejos',
-                description: 'Extensão harmônica avançada.',
-                tip: 'Aproveite toda a extensão das posições no braço.',
-                intervals: [0, 4, 7, 11, 14]
-            },
-            {
-                id: 'arp_min9',
-                name: 'Arpejo com Nona Menor (m9)',
-                category: 'Arpejos',
-                description: 'Tríade menor com sétima menor e nona.',
-                tip: 'Suavidade nos saltos de registro.',
-                intervals: [0, 3, 7, 10, 14]
-            },
-            {
-                id: 'arp_6',
-                name: 'Arpejo de Sexta (6)',
-                category: 'Arpejos',
-                description: 'Tríade maior com adição da sexta maior.',
-                tip: 'Sonoridade aconchegante e cantante.',
-                intervals: [0, 4, 7, 9, 12]
-            },
-            {
-                id: 'arp_m6',
-                name: 'Arpejo de Sexta Menor (m6)',
-                category: 'Arpejos',
-                description: 'Tríade menor com sexta maior.',
-                tip: 'Excelente para passagens expressivas.',
-                intervals: [0, 3, 7, 9, 12]
-            },
-            {
-                id: 'arp_dim',
-                name: 'Arpejo Diminuto (Tríade)',
-                category: 'Arpejos',
-                description: 'Tríade formada por fundamental, terça menor e quinta diminuta.',
-                tip: 'Mantenha a distância entre os dedos extremamente precisa.',
-                intervals: [0, 3, 6, 12]
-            },
-            {
-                id: 'arp_min_maj7',
-                name: 'Arpejo Menor com Sétima Maior (mMaj7)',
-                category: 'Arpejos',
-                description: 'Tríade menor combinada com sétima maior.',
-                tip: 'Ouça com cuidado o contraste entre a terça menor e a sétima maior.',
-                intervals: [0, 3, 7, 11, 12]
-            },
-            {
-                id: 'arp_7b5',
-                name: 'Arpejo Dominante com Quinta Diminuta (7b5)',
-                category: 'Arpejos',
-                description: 'Acorde dominante com quinta diminuta, de forte tensão.',
-                tip: 'Afine a quinta diminuta antes de aumentar a velocidade.',
-                intervals: [0, 4, 6, 10, 12]
-            },
-            {
-                id: 'arp_7sharp5',
-                name: 'Arpejo Dominante com Quinta Aumentada (7#5)',
-                category: 'Arpejos',
-                description: 'Acorde dominante com quinta aumentada.',
-                tip: 'Controle a afinação da quinta aumentada e resolva a sétima com suavidade.',
-                intervals: [0, 4, 8, 10, 12]
-            },
-            {
-                id: 'arp_maj7sharp5',
-                name: 'Arpejo Maior com Sétima Maior e Quinta Aumentada',
-                category: 'Arpejos',
-                description: 'Sonoridade maior expandida com quinta aumentada.',
-                tip: 'Estude lentamente a distância entre a quinta aumentada e a sétima maior.',
-                intervals: [0, 4, 8, 11, 12]
-            },
-            {
-                id: 'arp_7sus4',
-                name: 'Arpejo Dominante Suspenso (7sus4)',
-                category: 'Arpejos',
-                description: 'Dominante com quarta suspensa no lugar da terça.',
-                tip: 'Mantenha a quarta justa estável antes da resolução.',
-                intervals: [0, 5, 7, 10, 12]
-            },
-            {
-                id: 'arp_maj7b5',
-                name: 'Arpejo Maior com Sétima Maior e Quinta Diminuta',
-                category: 'Arpejos',
-                description: 'Sonoridade maior tensa combinando terça maior, quinta diminuta e sétima maior.',
-                tip: 'Afine com cuidado a quinta diminuta antes de acelerar.',
-                intervals: [0, 4, 6, 11, 12]
-            },
-            {
-                id: 'arp_min_maj7b5',
-                name: 'Arpejo Menor com Sétima Maior e Quinta Diminuta',
-                category: 'Arpejos',
-                description: 'Estrutura menor sofisticada com quinta diminuta e sétima maior.',
-                tip: 'Separe claramente a terça menor da quinta diminuta.',
-                intervals: [0, 3, 6, 11, 12]
-            }
-            ,{
-                id: 'arp_maj6', name: 'Arpejo Maior com Sexta', category: 'Arpejos Virtuosísticos',
-                description: 'Tríade maior com sexta maior, excelente para padrões rápidos.', tip: 'Use diferentes inversões e acentos.', intervals: [0,4,7,9,12]
-            },
-            {
-                id: 'arp_m7b5_2', name: 'Meio-Diminuto com Oitava', category: 'Arpejos Virtuosísticos',
-                description: 'Arpejo m7b5 para controle de intervalos e mudanças de corda.', tip: 'Ouça cada terça menor e quinta diminuta.', intervals: [0,3,6,10,12]
-            },
-            {
-                id: 'arp_dom9', name: 'Dominante com Nona', category: 'Arpejos Virtuosísticos',
-                description: 'Dominante estendido com nona maior.', tip: 'Pratique os deslocamentos de posição entre os registros.', intervals: [0,4,7,10,14,12]
-            },
-            {
-                id: 'arp_dom7b9', name: 'Dominante 7ª com b9', category: 'Arpejos Virtuosísticos',
-                description: 'Arpejo dominante com nona menor.', tip: 'A segunda menor exige afinação muito precisa.', intervals: [0,4,7,10,13,12]
-            },
-            {
-                id: 'arp_dom7sharp9', name: 'Dominante 7ª com #9', category: 'Arpejos Virtuosísticos',
-                description: 'Dominante com nona aumentada.', tip: 'Diferencie claramente a terça da nona aumentada.', intervals: [0,4,7,10,15,12]
-            },
-            {
-                id: 'arp_aug7', name: 'Arpejo Aumentado com 7ª', category: 'Arpejos Virtuosísticos',
-                description: 'Estrutura aumentada com sétima menor.', tip: 'Estude lentamente a quinta aumentada.', intervals: [0,4,8,10,12]
-            },
-            {
-                id: 'arp_maj9', name: 'Maj9 Expandido', category: 'Arpejos Virtuosísticos',
-                description: 'Arpejo maior com sétima maior e nona.', tip: 'Trabalhe as mudanças de posição sem interromper o arco.', intervals: [0,4,7,11,14,12]
-            },
-            {
-                id: 'arp_min9', name: 'm9 Expandido', category: 'Arpejos Virtuosísticos',
-                description: 'Arpejo menor com sétima e nona.', tip: 'Mantenha o centro da mão durante a extensão.', intervals: [0,3,7,10,14,12]
-            },
-            {
-                id: 'arp_dim7_3oct', name: 'Diminuto 7ª em Extensão', category: 'Arpejos Virtuosísticos',
-                description: 'Arpejo simétrico para deslocamentos rápidos.', tip: 'Use como exercício de mudança de posição.', intervals: [0,3,6,9,12,15,18,21,24]
-            },
-            {
-                id: 'arp_major_triads_cycle', name: 'Tríade Maior com Oitava', category: 'Arpejos',
-                description: 'Fundamental, terça, quinta e oitava.', tip: 'Pratique em todas as tonalidades e cordas.', intervals: [0,4,7,12]
-            },
-            {
-                id: 'arp_minor_triads_cycle', name: 'Tríade Menor com Oitava', category: 'Arpejos',
-                description: 'Fundamental, terça menor, quinta e oitava.', tip: 'Controle a terça menor com precisão.', intervals: [0,3,7,12]
-            },
-            {
-                id: 'arp_major_thirds', name: 'Arpejo em Terças', category: 'Padrões de Arpejo',
-                description: 'Padrão intervalar para agilidade e independência.', tip: 'Comece em semínimas e aumente gradualmente.', intervals: [0,4,7,11,12]
-            },
-            {
-                id: 'arp_four_note_cycle', name: 'Arpejo de Quatro Notas', category: 'Padrões de Arpejo',
-                description: 'Célula de quatro notas para sequências virtuosísticas.', tip: 'Repita em diferentes regiões do braço.', intervals: [0,4,7,10,12]
-            }
 
         ];
+
+        // ===== Escalas adicionais =====
+        (function buildExtraScales() {
+            const MM = 'Modos da Menor Melódica', HM = 'Modos da Menor Harmônica', EX = 'Escalas Exóticas';
+            const tips = {};
+            tips[MM] = 'Compare com a menor melódica e perceba a nota que muda.';
+            tips[HM] = 'Compare com a menor harmônica e perceba a nota que muda.';
+            tips[EX] = 'Cante a escala antes de tocar para fixar o intervalo característico.';
+            [
+                [MM,'dorian_b2','Dórico ♭2 (Frígio ♮6)',[0,1,3,5,7,9,10,12]],
+                [MM,'lydian_aug','Lídio Aumentado',[0,2,4,6,8,9,11,12]],
+                [MM,'locrian_nat2','Lócrio ♮2',[0,2,3,5,6,8,10,12]],
+                [HM,'ionian_s5','Jônico ♯5',[0,2,4,5,8,9,11,12]],
+                [HM,'dorian_s4','Dórico ♯4 (Ucraniano)',[0,2,3,6,7,9,10,12]],
+                [HM,'lydian_s2','Lídio ♯2',[0,3,4,6,7,9,11,12]],
+                [HM,'superlocrian_bb7','Super-Lócrio ♭♭7',[0,1,3,4,6,8,9,12]],
+                [EX,'neapolitan_minor','Napolitana Menor',[0,1,3,5,7,8,11,12]],
+                [EX,'neapolitan_major','Napolitana Maior',[0,1,3,5,7,9,11,12]],
+                [EX,'persian','Escala Persa',[0,1,4,5,6,8,11,12]],
+                [EX,'enigmatic','Escala Enigmática',[0,1,4,6,8,10,11,12]],
+                [EX,'prometheus','Escala Prometeu',[0,2,4,6,9,10,12]],
+                [EX,'hungarian_major','Maior Húngara',[0,3,4,6,7,9,10,12]],
+                [EX,'oriental','Escala Oriental',[0,1,4,5,6,9,10,12]],
+                [EX,'hirajoshi','Hirajoshi (Pentatônica Japonesa)',[0,2,3,7,8,12]],
+                [EX,'iwato','Iwato',[0,1,5,6,10,12]],
+                [EX,'insen','In-Sen',[0,1,5,7,10,12]],
+                [EX,'pent_dominant','Pentatônica Dominante',[0,2,4,7,10,12]],
+                [EX,'pent_dorian','Pentatônica Menor com 6ª',[0,3,5,7,9,12]],
+                [EX,'pent_egyptian','Pentatônica Egípcia (Suspensa)',[0,2,5,7,10,12]]
+            ].forEach(([category, id, name, intervals]) => baseScaleTypes.push({
+                id, name, category, intervals, tip: tips[category],
+                description: `${name}: ${intervals.length - 1} notas por oitava.`
+            }));
+        })();
+
+        // ===== Catálogo de arpejos (gerado) =====
+        (function buildArpeggios() {
+            const tips = {
+                'Arpejos — Tríades': 'Toque devagar, com arco longo, e confira cada nota com as cordas soltas.',
+                'Arpejos — Sétimas': 'Mantenha a mão esquerda relaxada nas mudanças de corda e afine a sétima com cuidado.',
+                'Arpejos — Dominantes Alterados': 'Ouça a tensão da nota alterada e resolva mentalmente na tônica.',
+                'Arpejos — Extensões': 'As notas acima da oitava pedem mudança de posição: prepare o dedo antes.',
+                'Arpejos — Inversões': 'Conheça bem a nota de partida; o desenho dos dedos muda a cada inversão.'
+            };
+            const out = [], base = {};
+            const add = (cat, id, name, iv, formula, note) => out.push({
+                id: 'arp_' + id, name, category: cat, intervals: iv,
+                description: `Fórmula: ${formula}. ${note}`, tip: tips[cat]
+            });
+            const T = 'Arpejos — Tríades', S = 'Arpejos — Sétimas', A = 'Arpejos — Dominantes Alterados', E = 'Arpejos — Extensões';
+            [
+                [T,'maj','Tríade Maior (M)',[0,4,7],'1 · 3 · 5','A base de todos os arpejos.'],
+                [T,'min','Tríade Menor (m)',[0,3,7],'1 · ♭3 · 5','Cuide da terça menor, mais baixa.'],
+                [T,'dim','Tríade Diminuta (dim)',[0,3,6],'1 · ♭3 · ♭5','Quinta diminuta: afine com atenção.'],
+                [T,'aug','Tríade Aumentada (+)',[0,4,8],'1 · 3 · ♯5','Simétrica: todos os saltos de 4 semitons.'],
+                [T,'sus2','Suspensa 2 (sus2)',[0,2,7],'1 · 2 · 5','Sonoridade aberta, sem terça.'],
+                [T,'sus4','Suspensa 4 (sus4)',[0,5,7],'1 · 4 · 5','Sonoridade aberta, tende a resolver na terça.'],
+                [T,'majb5','Maior com Quinta Diminuta (M♭5)',[0,4,6],'1 · 3 · ♭5','Terça maior com quinta rebaixada.'],
+                [S,'dom7','Dominante com Sétima (V7 / 7)',[0,4,7,10],'1 · 3 · 5 · ♭7','O arpejo de dominante, que resolve na tônica.'],
+                [S,'maj7','Sétima Maior (Maj7)',[0,4,7,11],'1 · 3 · 5 · 7','Sétima maior a um semitom da oitava.'],
+                [S,'m7','Sétima Menor (m7)',[0,3,7,10],'1 · ♭3 · 5 · ♭7','Tríade menor com sétima menor.'],
+                [S,'mmaj7','Menor com Sétima Maior (mMaj7)',[0,3,7,11],'1 · ♭3 · 5 · 7','Sétima maior sobre tríade menor.'],
+                [S,'m7b5','Meio-Diminuto (m7♭5)',[0,3,6,10],'1 · ♭3 · ♭5 · ♭7','Típico do segundo grau em tom menor.'],
+                [S,'dim7','Sétima Diminuta (dim7)',[0,3,6,9],'1 · ♭3 · ♭5 · ♭♭7','Simétrica: todos os saltos de 3 semitons.'],
+                [S,'dimmaj7','Diminuta com Sétima Maior (dim Maj7)',[0,3,6,11],'1 · ♭3 · ♭5 · 7','Muita tensão entre quinta e sétima.'],
+                [S,'7b5','Dominante com Quinta Diminuta (7♭5)',[0,4,6,10],'1 · 3 · ♭5 · ♭7','Dominante com quinta rebaixada.'],
+                [S,'7s5','Dominante com Quinta Aumentada (7♯5)',[0,4,8,10],'1 · 3 · ♯5 · ♭7','Dominante aumentado.'],
+                [S,'maj7s5','Maj7 com Quinta Aumentada (Maj7♯5)',[0,4,8,11],'1 · 3 · ♯5 · 7','Sonoridade lídia aumentada.'],
+                [S,'maj7b5','Maj7 com Quinta Diminuta (Maj7♭5)',[0,4,6,11],'1 · 3 · ♭5 · 7','Quinta rebaixada sobre sétima maior.'],
+                [S,'7sus4','Dominante Suspenso (7sus4)',[0,5,7,10],'1 · 4 · 5 · ♭7','Dominante sem terça.'],
+                [S,'7sus2','Dominante Suspenso 2 (7sus2)',[0,2,7,10],'1 · 2 · 5 · ♭7','Dominante com segunda no lugar da terça.'],
+                [S,'maj7sus4','Maj7 Suspenso (Maj7sus4)',[0,5,7,11],'1 · 4 · 5 · 7','Quarta no lugar da terça.'],
+                [S,'6','Sexta Maior (6)',[0,4,7,9],'1 · 3 · 5 · 6','Tríade maior com sexta.'],
+                [S,'m6','Sexta Menor (m6)',[0,3,7,9],'1 · ♭3 · 5 · 6','Tríade menor com sexta maior.'],
+                [A,'7b9','Dominante com ♭9 (7♭9)',[0,4,7,10,13],'1 · 3 · 5 · ♭7 · ♭9','Nona menor, muito usada em tom menor.'],
+                [A,'7s9','Dominante com ♯9 (7♯9)',[0,4,7,10,15],'1 · 3 · 5 · ♭7 · ♯9','O acorde "Hendrix".'],
+                [A,'7b5b9','Dominante 7♭5(♭9)',[0,4,6,10,13],'1 · 3 · ♭5 · ♭7 · ♭9','Dominante bem alterado.'],
+                [A,'7b5s9','Dominante 7♭5(♯9)',[0,4,6,10,15],'1 · 3 · ♭5 · ♭7 · ♯9','Dominante bem alterado.'],
+                [A,'7s5b9','Dominante 7♯5(♭9)',[0,4,8,10,13],'1 · 3 · ♯5 · ♭7 · ♭9','Dominante bem alterado.'],
+                [A,'7s5s9','Dominante 7♯5(♯9)',[0,4,8,10,15],'1 · 3 · ♯5 · ♭7 · ♯9','Dominante bem alterado.'],
+                [A,'7s11','Dominante com ♯11 (7♯11)',[0,4,7,10,18],'1 · 3 · 5 · ♭7 · ♯11','Dominante lídio.'],
+                [A,'7b13','Dominante com ♭13 (7♭13)',[0,4,7,10,20],'1 · 3 · 5 · ♭7 · ♭13','Dominante mixolídio ♭6.'],
+                [E,'add9','Maior com Nona (add9)',[0,4,7,14],'1 · 3 · 5 · 9','Tríade maior com nona, sem sétima.'],
+                [E,'madd9','Menor com Nona (m add9)',[0,3,7,14],'1 · ♭3 · 5 · 9','Tríade menor com nona, sem sétima.'],
+                [E,'69','Sexta com Nona (6/9)',[0,4,7,9,14],'1 · 3 · 5 · 6 · 9','Maior sem sétima, sonoridade aberta.'],
+                [E,'m69','Menor Sexta com Nona (m6/9)',[0,3,7,9,14],'1 · ♭3 · 5 · 6 · 9','Menor sem sétima, sonoridade aberta.'],
+                [E,'dom9','Dominante com Nona (9)',[0,4,7,10,14],'1 · 3 · 5 · ♭7 · 9','V7 estendido.'],
+                [E,'maj9','Maj9',[0,4,7,11,14],'1 · 3 · 5 · 7 · 9','Maj7 estendido.'],
+                [E,'m9','Menor com Nona (m9)',[0,3,7,10,14],'1 · ♭3 · 5 · ♭7 · 9','m7 estendido.'],
+                [E,'mmaj9','Menor Maj9 (mMaj9)',[0,3,7,11,14],'1 · ♭3 · 5 · 7 · 9','mMaj7 estendido.'],
+                [E,'9sus4','Dominante 9sus4',[0,5,7,10,14],'1 · 4 · 5 · ♭7 · 9','7sus4 estendido.'],
+                [E,'maj7s11','Maj7♯11',[0,4,7,11,18],'1 · 3 · 5 · 7 · ♯11','Sonoridade lídia.'],
+                [E,'maj9s11','Maj9♯11',[0,4,7,11,14,18],'1 · 3 · 5 · 7 · 9 · ♯11','Maj7 lídio estendido.'],
+                [E,'dom11','Dominante com Décima Primeira (11)',[0,4,7,10,14,17],'1 · 3 · 5 · ♭7 · 9 · 11','Seis notas, ampla extensão.'],
+                [E,'m11','Menor com Décima Primeira (m11)',[0,3,7,10,14,17],'1 · ♭3 · 5 · ♭7 · 9 · 11','Seis notas, ampla extensão.'],
+                [E,'dom13','Dominante com Décima Terceira (13)',[0,4,7,10,14,21],'1 · 3 · 5 · ♭7 · 9 · 13','Chega à 13ª, bem acima da oitava.'],
+                [E,'maj13','Maj13',[0,4,7,11,14,21],'1 · 3 · 5 · 7 · 9 · 13','Maj7 até a 13ª.'],
+                [E,'m13','Menor com Décima Terceira (m13)',[0,3,7,10,14,17,21],'1 · ♭3 · 5 · ♭7 · 9 · 11 · 13','Sete notas, o acorde mais extenso.']
+            ].forEach(r => { add(...r); base[r[1]] = r; });
+
+            // Inversões (a nota de partida muda; o tom escolhido segue sendo a fundamental)
+            const inv = [['maj',2],['min',2],['dim',2],['dom7',3],['maj7',3],['m7',3],['m7b5',3]];
+            const lbl = ['', '1ª Inversão', '2ª Inversão', '3ª Inversão'];
+            const from = ['', 'Começa na 3ª', 'Começa na 5ª', 'Começa na 7ª'];
+            inv.forEach(([k, n]) => {
+                const [, id, name, iv] = base[k];
+                for (let i = 1; i <= n; i++) {
+                    const rot = [...iv.slice(i), ...iv.slice(0, i).map(x => x + 12)];
+                    add('Arpejos — Inversões', `${id}_inv${i}`, `${name} — ${lbl[i]}`, rot, from[i], 'A fundamental do acorde é o tom escolhido.');
+                }
+            });
+            baseScaleTypes.push(...out);
+        })();
+
 
         const noteNameToSemitone = {
             'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5,
@@ -811,7 +590,90 @@
             renderToneGrid();
             populateScaleSelector();
             renderScale();
+            buildPieceSelect();
         });
+
+
+        // ===== Repertório clássico: que escala/arpejo combina com a obra =====
+        const pt = { E:'Mi', B:'Si', C:'Dó', A:'Lá', G:'Sol', Eb:'Mib', D:'Ré', F:'Fá', Ab:'Láb', Bb:'Sib' };
+        const dominantOf = { E:'B', B:'F#', C:'G', A:'E', G:'D', Eb:'Bb', D:'A', F:'C', Ab:'Eb', Bb:'F' };
+        // [nº, tom, M/m, apelido, dica]
+        const caprices = [
+            [1,'E','M','O Arpejo','Arpejos de Mi maior em ondulação de cordas, com a dominante (Si7).'],
+            [2,'B','m','','Arpejos com saltos de corda em Si menor.'],
+            [3,'E','m','','Introdução em cadência e Presto em Mi menor, com oitavas e escalas rápidas.'],
+            [4,'C','m','','Terças e sextas em cordas duplas, com escalas e arpejos de Dó menor.'],
+            [5,'A','m','','Escalas e arpejos velozes em Lá menor.'],
+            [6,'G','m','O Trilo','Melodia sobre trêmulo em Sol menor.'],
+            [7,'A','m','','Figuras rápidas sobre escalas e arpejos de Lá menor.'],
+            [8,'Eb','M','','Oitavas e acordes de caráter majestoso em Mib maior.'],
+            [9,'E','M','A Caça','Evoca trompas de caça, com escalas e arpejos em Mi maior.'],
+            [10,'G','m','','Escalas e arpejos com arco saltado em Sol menor.'],
+            [11,'C','M','','Abertura lenta seguida de Presto com escalas e arpejos de Dó maior.'],
+            [12,'Ab','M','','Arpejos e escalas com saltos em Láb maior.'],
+            [13,'Bb','M','A Risada do Diabo','Terças e sextas em Sib maior.'],
+            [14,'Eb','M','','Acordes e oitavas de marcha em Mib maior.'],
+            [15,'E','m','','Escalas e arpejos de Mi menor.'],
+            [16,'G','m','','Movimento perpétuo de notas rápidas em Sol menor.'],
+            [17,'Eb','M','','Oitavas e arpejos em Mib maior.'],
+            [18,'C','M','','Dança tipo corrente em Dó maior, com escalas e arpejos.'],
+            [19,'Eb','M','','Introdução lenta e Allegro com escalas e arpejos de Mib maior.'],
+            [20,'D','M','','Bordão (corda solta contínua) com escala e arpejo de Ré maior.'],
+            [21,'A','M','','Melodia amorosa e Presto com escalas e arpejos de Lá maior.'],
+            [22,'F','M','','Escalas e arpejos com arco marcato em Fá maior.'],
+            [23,'Eb','M','','Arpejos e escalas de Mib maior.'],
+            [24,'A','m','','Tema e variações em Lá menor: escalas, arpejos e a dominante (Mi7).']
+        ];
+        const classicalPieces = caprices.map(([n, t, mode, nick, hint]) => [
+            'Paganini — 24 Caprichos',
+            `Capricho nº ${n} (${pt[t]} ${mode === 'M' ? 'maior' : 'menor'})${nick ? ' · ' + nick : ''}`,
+            hint,
+            (mode === 'M'
+                ? [[t,'major'],[t,'arp_maj']]
+                : [[t,'minor_harm'],[t,'minor_nat'],[t,'arp_min']]
+            ).concat([[dominantOf[t],'arp_dom7']])
+        ]);
+
+        function buildPieceSelect() {
+            const sel = document.getElementById('pieceSelect');
+            sel.innerHTML = '';
+            const groups = {};
+            classicalPieces.forEach((pc, i) => {
+                if (!groups[pc[0]]) {
+                    groups[pc[0]] = document.createElement('optgroup');
+                    groups[pc[0]].label = pc[0];
+                    sel.appendChild(groups[pc[0]]);
+                }
+                const o = document.createElement('option');
+                o.value = i; o.textContent = pc[1];
+                groups[pc[0]].appendChild(o);
+            });
+            renderPieceHint();
+        }
+
+        function renderPieceHint() {
+            const pc = classicalPieces[parseInt(document.getElementById('pieceSelect').value, 10) || 0];
+            document.getElementById('pieceHint').textContent = pc[2];
+            const box = document.getElementById('pieceChips');
+            box.innerHTML = '';
+            pc[3].forEach(([tone, id]) => {
+                const st = baseScaleTypes.find(x => x.id === id);
+                if (!st) return;
+                const b = document.createElement('button');
+                b.className = 'px-2.5 py-1 rounded-lg bg-slate-950 border border-amber-500/30 text-amber-300 text-[11px] font-medium hover:bg-amber-500/10 active:scale-95 transition-all';
+                b.textContent = `${tone} · ${st.name}`;
+                b.onclick = () => loadExercise(tone, id);
+                box.appendChild(b);
+            });
+        }
+
+        function loadExercise(tone, id) {
+            selectedTone = tone;
+            document.getElementById('scaleSelect').value = baseScaleTypes.findIndex(x => x.id === id);
+            renderToneGrid();
+            renderScale();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         function renderToneGrid() {
             const grid = document.getElementById('toneButtonsGrid');
@@ -837,11 +699,18 @@
         function populateScaleSelector() {
             const select = document.getElementById('scaleSelect');
             select.innerHTML = '';
+            const groups = {};
             baseScaleTypes.forEach((st, index) => {
+                if (!groups[st.category]) {
+                    const g = document.createElement('optgroup');
+                    g.label = st.category;
+                    groups[st.category] = g;
+                    select.appendChild(g);
+                }
                 const opt = document.createElement('option');
                 opt.value = index;
-                opt.textContent = `${st.name} (${st.category})`;
-                select.appendChild(opt);
+                opt.textContent = st.name;
+                groups[st.category].appendChild(opt);
             });
         }
 
@@ -854,7 +723,7 @@
             const st = baseScaleTypes[parseInt(select.value, 0) || 0];
             
             const baseSemi = noteNameToSemitone[selectedTone] || 0;
-            let baseOctave = (['C', 'C#', 'D', 'D#', 'E', 'F', 'F#'].includes(selectedTone)) ? 4 : 3;
+            let baseOctave = (['C', 'C#', 'D', 'D#', 'Eb', 'E', 'F', 'F#'].includes(selectedTone)) ? 4 : 3;
             if (['G', 'Ab', 'A', 'A#', 'Bb', 'B'].includes(selectedTone)) {
                 baseOctave = 3;
             }
@@ -1000,6 +869,8 @@
 
             let twoOctaveMidiSet = new Set(twoOctaveSequence);
 
+            // Se as 2 oitavas passam da casa 12 (corda Mi), o braço se estende até a nota mais aguda
+            const maxFret = Math.max(12, ...twoOctaveSequence.map(m => m - violinStrings[0].midi));
             const playedPositions = new Map();
 
             twoOctaveSequence.forEach((midi) => {
@@ -1014,7 +885,7 @@
                 const candidates = [];
                 violinStrings.forEach((str, stringIdx) => {
                     const fret = midi - str.midi;
-                    if (fret >= 1 && fret <= 12) {
+                    if (fret >= 1 && fret <= maxFret) {
                         candidates.push({ stringIdx, fret, midi });
                     }
                 });
@@ -1041,12 +912,24 @@
                 openContainer.appendChild(stringBtn);
             });
 
+            const fretLines = document.getElementById('fretLines');
+            fretLines.innerHTML = '';
+            for (let i = 0; i < maxFret; i++) {
+                const d = document.createElement('div');
+                d.className = 'w-px h-full ' + (i === 11 ? 'bg-amber-400/60' : 'bg-amber-900/20');
+                fretLines.appendChild(d);
+            }
+            document.getElementById('fingerboardContainer').style.minWidth = (64 + maxFret * 24) + 'px';
+            document.getElementById('fretRangeLabel').textContent = maxFret > 12
+                ? `Casas 1 a ${maxFret} (linha dourada = casa 12; além dela, posições altas)`
+                : 'Casas 1 a 12 (2 Oitavas)';
+
             const tracks = document.querySelectorAll('.notes-track');
             tracks.forEach(track => track.innerHTML = '');
 
             const stringNotesData = violinStrings.map((str, sIdx) => {
                 let slots = [];
-                for (let f = 1; f <= 12; f++) {
+                for (let f = 1; f <= maxFret; f++) {
                     slots.push({
                         stringIdx: sIdx,
                         fret: f,
@@ -1147,7 +1030,14 @@
                     let seqEl = document.getElementById(`seq-pill-${index}`);
                     let scoreEl = document.getElementById(`score-note-${index}`);
 
-                    if (noteEl) noteEl.classList.add('active-playing-note');
+                    if (noteEl) {
+                        noteEl.classList.add('active-playing-note');
+                        const fb = document.getElementById('fingerboardScroll');
+                        const nr = noteEl.getBoundingClientRect(), fr = fb.getBoundingClientRect();
+                        if (nr.left < fr.left + 20 || nr.right > fr.right - 20) {
+                            fb.scrollTo({ left: fb.scrollLeft + (nr.left - fr.left) - fb.clientWidth / 2, behavior: 'smooth' });
+                        }
+                    }
                     if (openEl) openEl.classList.add('scale-105', 'bg-amber-400', 'text-slate-950');
                     if (seqEl) seqEl.classList.add('bg-amber-500', 'text-slate-950', 'scale-105', 'shadow-md', 'shadow-amber-500/50');
                     if (scoreEl) {
